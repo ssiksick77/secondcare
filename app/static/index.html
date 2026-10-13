@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>센터 회계대장</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<a class="skip" href="#main">본문 바로가기</a>
+
+<header class="top">
+  <h1>의료인공지능센터 회계대장</h1>
+  <div class="top-status" id="file-status" aria-live="polite"></div>
+  <button type="button" class="btn btn-ghost" id="btn-reload">새로고침</button>
+<button type="button" class="btn btn-ghost btn-icon" id="btn-settings" aria-label="설정" title="설정 (구글 드라이브 연결 · AI)">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+  </svg>
+</button>
+  <button type="button" class="btn btn-primary" id="btn-ai" aria-controls="ai-drawer" aria-expanded="false" hidden>AI 도우미</button>
+</header>
+
+<nav class="tabs" aria-label="주요 메뉴">
+  <ul role="tablist">
+    <li><button role="tab" id="tab-dash" aria-controls="panel-dash" aria-selected="true">대시보드</button></li>
+    <li><button role="tab" id="tab-exec" aria-controls="panel-exec" aria-selected="false">집행내역</button></li>
+    <li><button role="tab" id="tab-req" aria-controls="panel-req" aria-selected="false">품의내역</button></li>
+    <li><button role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false">예산변동</button></li>
+    <li><button role="tab" id="tab-deposit" aria-controls="panel-deposit" aria-selected="false">적립금</button></li>
+    <li><button role="tab" id="tab-tags" aria-controls="panel-tags" aria-selected="false">태그</button></li>
+    <li><button role="tab" id="tab-funds" aria-controls="panel-funds" aria-selected="false">재원</button></li>
+  </ul>
+</nav>
+
+<main id="main" tabindex="-1">
+  <div id="alert" class="alert" role="alert" hidden></div>
+
+  <!-- 대시보드 -->
+  <section id="panel-dash" role="tabpanel" aria-labelledby="tab-dash">
+    <div class="toolbar">
+      <div class="subtabs" role="tablist" aria-label="대시보드 보기">
+        <button type="button" role="tab" id="sub-budget" aria-selected="true" aria-controls="dash-budget">결의</button>
+        <button type="button" role="tab" id="sub-tags" aria-selected="false" aria-controls="dash-tags">태그</button>
+      </div>
+      <label>재원 <select id="dash-fund"><option value="">전체</option></select></label>
+      <label>연도 <select id="dash-year"></select></label>
+      <label>월 <select id="dash-month"><option value="">전체</option></select></label>
+      <span class="toolbar-note" id="dash-note"></span>
+      <button type="button" class="btn" id="dash-csv" title="아래 표를 CSV 파일로 저장">CSV 저장</button>
+      <button type="button" class="btn" id="dash-print" title="브라우저 인쇄 (대시보드만)">인쇄</button>
+    </div>
+    <div id="dash-budget" role="tabpanel" aria-labelledby="sub-budget">
+    <h2 class="sr-only">예산목별 가용잔액</h2>
+    <div class="cards items" id="dash-cards" role="list"></div>
+    <p class="toolbar-note defs" id="dash-defs"></p>
+    <div class="two-col wide">
+      <div>
+        <h2>월별 집행 추이</h2>
+        <div id="dash-chart" class="chart"></div>
+      </div>
+      <div>
+        <h2>거래처별 적립금 잔액</h2>
+        <table class="grid compact" id="dash-deposit"></table>
+      </div>
+    </div>
+    <h2>재원별 · 예산목별 집행 현황</h2>
+    <div class="table-wrap"><table class="grid" id="dash-table"></table></div>
+    </div>
+    <div id="dash-tags" role="tabpanel" aria-labelledby="sub-tags" hidden>
+      <p class="toolbar-note" id="tag-note" style="margin:0 0 8px"></p>
+      <div class="cards" id="tag-cards"></div>
+      <p class="toolbar-note defs" id="tag-recon"></p>
+      <h2>태그(내부 계정)별 집행</h2>
+      <div class="table-wrap"><table class="grid" id="tag-table"></table></div>
+      <h2>태그 × 월별</h2>
+      <div class="table-wrap"><table class="grid" id="tag-month"></table></div>
+    </div>
+  </section>
+
+  <!-- 집행내역 -->
+  <section id="panel-exec" role="tabpanel" aria-labelledby="tab-exec" hidden>
+    <div class="cards quick" id="exec-tiles" role="group" aria-label="빠른 필터"></div>
+    <div class="toolbar">
+      <label>재원 <select data-filter="재원" data-kind="exec"><option value="">전체</option></select></label>
+      <label>연도 <select data-filter="year" data-kind="exec"><option value="">전체</option></select></label>
+      <label>월 <select data-filter="month" data-kind="exec"><option value="">전체</option></select></label>
+      <label>예산목 <select data-filter="예산목" data-kind="exec"><option value="">전체</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="exec" placeholder="거래처, 적요, 번호, 태그"></label>
+      <label class="chk"><input type="checkbox" data-filter="unpaid" data-kind="exec"> 미완료만</label>
+      <label class="chk" title="관리번호·세세목·사용자·비고 열 표시"><input type="checkbox" id="exec-cols-all"> 상세 열</label>
+      <span class="toolbar-sum" id="exec-sum"></span>
+      <button type="button" class="btn" data-csv="exec" title="현재 필터의 목록을 CSV로 저장">CSV</button>
+      <button type="button" class="btn btn-primary" data-add="exec">집행 추가</button>
+    </div>
+    <p class="toolbar-note" style="margin:0 0 6px">행을 클릭하면 오른쪽에 상세·증빙 패널이 열립니다.</p>
+    <div class="table-wrap"><table class="grid clickable" id="exec-table"></table></div>
+  </section>
+
+  <!-- 품의내역 -->
+  <section id="panel-req" role="tabpanel" aria-labelledby="tab-req" hidden>
+    <div class="toolbar">
+      <label>재원 <select data-filter="재원" data-kind="req"><option value="">전체</option></select></label>
+      <label>연도 <select data-filter="year" data-kind="req"><option value="">전체</option></select></label>
+      <label>상태 <select data-filter="상태" data-kind="req"><option value="">전체</option><option>대기</option><option>집행완료</option><option>취소</option></select></label>
+      <label>월 <select data-filter="month" data-kind="req"><option value="">전체</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="req" placeholder="거래처, 적요, 번호, 태그"></label>
+      <span class="toolbar-sum" id="req-sum"></span>
+      <button type="button" class="btn" data-csv="req" title="현재 필터의 목록을 CSV로 저장">CSV</button>
+      <button type="button" class="btn btn-primary" data-add="req">품의 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="req-table"></table></div>
+  </section>
+
+  <!-- 예산변동 -->
+  <section id="panel-budget" role="tabpanel" aria-labelledby="tab-budget" hidden>
+    <div class="toolbar">
+      <label>재원 <select data-filter="재원" data-kind="budget"><option value="">전체</option></select></label>
+      <span class="toolbar-note">변경회차: <b>이월</b>(이월금) · <b>당초</b>(당초액) · 숫자(변경 회차). 예산현액 = 이월 + 당초 + 변경 합계</span>
+      <button type="button" class="btn btn-primary" data-add="budget">예산 행 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="budget-table"></table></div>
+    <h2>재원별 예산현액 요약</h2>
+    <div class="table-wrap"><table class="grid" id="budget-summary"></table></div>
+  </section>
+
+  <!-- 적립금 -->
+  <section id="panel-deposit" role="tabpanel" aria-labelledby="tab-deposit" hidden>
+    <h2 style="margin-top:0">거래처별 적립금 잔액</h2>
+    <div class="table-wrap"><table class="grid" id="deposit-summary"></table></div>
+    <h2>적립 · 사용 내역</h2>
+    <div class="toolbar">
+      <label>거래처 <select data-filter="거래처" data-kind="deposit"><option value="">전체</option></select></label>
+      <label>구분 <select data-filter="구분" data-kind="deposit"><option value="">전체</option><option>적립</option><option>사용</option></select></label>
+      <label>연도 <select data-filter="year" data-kind="deposit"><option value="">전체</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="deposit" placeholder="적요, 사용자, 증빙번호"></label>
+      <span class="toolbar-note">적립 시 '집행내역에 기록'을 켜면 선결제 금액이 집행내역에 한 건 추가되어 예산에서 차감됩니다. 사용은 적립금 잔액만 줄입니다.</span>
+      <button type="button" class="btn btn-primary" data-add="deposit">적립/사용 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="deposit-table"></table></div>
+  </section>
+
+  <!-- 태그 -->
+  <section id="panel-tags" role="tabpanel" aria-labelledby="tab-tags" hidden>
+    <div class="toolbar">
+      <span class="toolbar-note">태그는 센터 내부 계정입니다. 집행·품의·적립금 사용 건에 이 목록의 태그 1개를 붙이고, 대시보드 [태그] 탭에서 집계합니다. 태그명을 바꾸면 기존 행의 태그도 함께 바뀝니다.</span>
+      <button type="button" class="btn btn-primary" data-add="tags">태그 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="tags-table"></table></div>
+  </section>
+
+  <!-- 재원 -->
+  <section id="panel-funds" role="tabpanel" aria-labelledby="tab-funds" hidden>
+    <div class="toolbar">
+      <span class="toolbar-note">재원코드는 거래번호·품의번호(YYYY-코드-000)에 사용됩니다. 짧게, '-' 없이 입력하세요.</span>
+      <button type="button" class="btn btn-primary" data-add="funds">재원 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="funds-table"></table></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="foot-path"></span>
+</footer>
+
+<!-- 입력 폼 대화상자 -->
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <form id="dlg-form" method="dialog" novalidate>
+    <h2 id="dlg-title"></h2>
+    <div id="dlg-ai" class="dlg-ai" hidden>
+      <button type="button" class="btn btn-sm" id="dlg-receipt-btn">영수증에서 채우기</button><input type="file" id="dlg-receipt" accept="image/*,application/pdf" hidden aria-hidden="true">
+      <button type="button" class="btn btn-sm" id="dlg-suggest">AI 추천·검증</button>
+      <span id="dlg-ai-msg" class="dlg-ai-msg" aria-live="polite"></span>
+    </div>
+    <div id="dlg-fields" class="fields"></div>
+    <p id="dlg-error" class="field-error" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <span class="toolbar-note" id="dlg-keys">Enter: 다음 칸 · Ctrl+Enter: 저장</span>
+      <span style="flex:1"></span>
+      <button type="button" class="btn btn-ghost" id="dlg-cancel">취소</button>
+      <button type="button" class="btn" id="dlg-save-more" title="저장하고 같은 종류의 다음 건을 바로 입력 (재원·예산목·날짜 유지)">저장 후 계속</button>
+      <button type="submit" class="btn btn-primary" id="dlg-save">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<aside id="exec-drawer" class="drawer" aria-label="집행 상세" hidden>
+  <div class="drawer-head">
+    <strong id="xd-title">집행 상세</strong>
+    <span class="drawer-model" id="xd-sub"></span>
+    <button type="button" class="btn btn-sm btn-x" id="xd-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="drawer-body" id="xd-body"></div>
+</aside>
+
+<aside id="ai-drawer" class="drawer" aria-label="AI 도우미" hidden>
+  <div class="drawer-head">
+    <strong>AI 도우미</strong>
+    <span class="drawer-model" id="ai-model"></span>
+    <button type="button" class="btn btn-sm" id="ai-clear">대화 지우기</button>
+    <button type="button" class="btn btn-sm btn-x" id="ai-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <details id="report-box" class="ai-report" hidden>
+    <summary>보고서 초안 생성</summary>
+    <div class="ai-report-body">
+      <div class="fields three">
+        <label>재원<select id="rep-fund"><option value="">전체</option></select></label>
+        <label>연도<select id="rep-year"></select></label>
+        <label>월<select id="rep-month"><option value="">전체</option></select></label>
+        <label>종류<select id="rep-style"><option value="monthly">월별 집행 보고</option><option value="project">과제별 현황 보고</option><option value="summary">센터 전체 요약</option></select></label>
+      </div>
+      <div class="ai-report-actions">
+        <span class="toolbar-note">생성에 수십 초가 걸릴 수 있습니다.</span>
+        <button type="button" class="btn btn-sm" id="rep-copy" hidden>복사</button>
+        <button type="button" class="btn btn-sm btn-primary" id="rep-run">생성</button>
+      </div>
+      <p class="toolbar-note" id="rep-caveat" hidden>AI 초안입니다. 수치는 대시보드 표와 대조한 뒤 사용하세요.</p>
+      <div id="rep-out" class="report-out md" hidden></div>
+    </div>
+  </details>
+  <div class="drawer-body" id="ai-log" aria-live="polite">
+    <div class="ai-hint">
+      <p style="margin:0 0 6px"><b>조회</b> 예: <button type="button" class="chip-ex">3월 연구활동비 얼마 썼어?</button> <button type="button" class="chip-ex">미완료 건 정리해줘</button> <button type="button" class="chip-ex">ABC식당 적립금 잔액은?</button></p>
+      <p style="margin:0 0 6px"><b>입력 제안</b> 예: <button type="button" class="chip-ex">5/20 ABC식당 회의 식대 85,000원 집행 기록해줘</button> <button type="button" class="chip-ex">품의 2026-AI01-001 집행으로 전환해줘</button></p>
+      <p style="margin:0">제안은 카드로 표시되고 "검토 후 저장"을 눌러야 장부에 반영됩니다. 금액·날짜는 꼭 확인하세요. 질문마다 장부 전체가 AI 서버로 전송되어 사용량(비용)이 발생하고 첫 응답은 느릴 수 있습니다. 긴 대화는 "대화 지우기" 후 새로 시작하세요.</p>
+    </div>
+  </div>
+  <form class="drawer-foot" id="ai-form">
+    <textarea id="ai-input" rows="2" placeholder="질문이나 입력 요청 (Enter 전송, Shift+Enter 줄바꿈)" aria-label="질문"></textarea>
+    <button type="submit" class="btn btn-primary" id="ai-send">전송</button>
+  </form>
+</aside>
+
+<!-- 관리 패널 -->
+
+<dialog id="dlg-settings" aria-labelledby="settings-title">
+  <form id="settings-form" method="dialog" novalidate>
+    <h2 id="settings-title">설정</h2>
+    <fieldset class="wide s-group" id="s-drive" style="margin:0 0 14px">
+      <legend>구글 드라이브 (증빙 저장 · 증빙 업로드에 필요)</legend>
+      <p class="toolbar-note" id="drive-status" style="margin:4px 0 8px"></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button type="button" class="btn btn-sm" id="drive-secret-btn">OAuth 클라이언트 JSON 업로드</button>
+        <input type="file" id="drive-secret" accept="application/json,.json" hidden aria-hidden="true">
+        <button type="button" class="btn btn-sm btn-primary" id="drive-connect">드라이브 연결 (브라우저 로그인)</button>
+        <button type="button" class="btn btn-sm" id="drive-disconnect">연결 해제</button>
+        <span class="toolbar-note" id="drive-why"></span>
+      </div>
+      <p class="toolbar-note" style="margin:8px 0 0">버튼을 누르면 바로 적용됩니다(아래 저장 버튼과 무관). 앱이 만든 '증빙관리' 폴더만 접근합니다. 발급 절차: <a href="/readme#drive" target="_blank" rel="noopener">사용 안내 열기</a></p>
+    </fieldset>
+    <p class="toolbar-note" style="margin:0 0 8px"><b>AI 도우미 (선택 · 유료)</b> — 장부 데이터가 선택한 AI 서버로 전송되며 사용량에 따라 과금됩니다. 저장하면 <code>app/.env</code>에 기록되고 즉시 적용됩니다. 키는 이 PC에만 저장됩니다.</p>
+    <div class="fields">
+      <label class="wide" for="s-provider">AI 제공자
+        <select id="s-provider" name="LEDGER_PROVIDER">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI 호환 (OpenAI, Ollama, vLLM 등)</option>
+        </select>
+      </label>
+
+      <fieldset class="wide s-group" data-provider="anthropic">
+        <legend>Anthropic</legend>
+        <div class="fields">
+          <label class="mid" for="s-ak">API 키 <small id="s-ak-hint"></small> <small>(발급: <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>)</small>
+            <input id="s-ak" name="ANTHROPIC_API_KEY" type="password" autocomplete="off" placeholder="sk-ant-… 형태의 키 붙여넣기">
+          </label>
+          <label for="s-amodel">모델
+            <input id="s-amodel" name="LEDGER_MODEL" type="text" list="dl-amodels" autocomplete="off">
+            <datalist id="dl-amodels"><option value="claude-sonnet-5-5"><option value="claude-opus-5-5"><option value="claude-haiku-5-5"></datalist>
+          </label>
+          <label for="s-effort">응답 품질 <small>(비용·속도 순)</small>
+            <select id="s-effort" name="LEDGER_EFFORT"><option value="low">빠름 (low)</option><option value="medium">보통 (medium, 권장)</option><option value="high">정확 (high)</option></select>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="wide s-group" data-provider="openai">
+        <legend>OpenAI 호환</legend>
+        <div class="fields">
+          <p class="toolbar-note wide" style="margin:0;grid-column:span 3;color:var(--warn)">OpenAI 호환 경로의 제약: 모델이 도구 호출(function calling)과 JSON 스키마 출력을 지원해야 거래 제안·영수증·추천이 동작합니다. 영수증 PDF는 OpenAI 공식 API에서만, 로컬 서버는 이미지만. 장부가 크면 로컬 모델의 컨텍스트(num_ctx)를 키우세요. 추론 수준은 추론 모델(o-시리즈 등)에서만 켜고, 그 외에는 '미전송'으로 두세요.</p>
+          <label class="mid" for="s-ok">API 키 <small id="s-ok-hint"></small>
+            <input id="s-ok" name="OPENAI_API_KEY" type="password" autocomplete="off" placeholder="sk-… 붙여넣기 (로컬 서버는 비워도 됨)">
+          </label>
+          <label for="s-omodel">모델
+            <input id="s-omodel" name="OPENAI_MODEL" type="text" list="dl-omodels" autocomplete="off">
+            <datalist id="dl-omodels"><option value="gpt-4.1"><option value="gpt-4.1-mini"><option value="gpt-5"><option value="o4-mini"></datalist>
+          </label>
+          <label class="mid" for="s-obase">엔드포인트 (Base URL) <small>(비우면 api.openai.com. 예: http://localhost:11434/v1)</small>
+            <input id="s-obase" name="OPENAI_BASE_URL" type="url" autocomplete="off" placeholder="https://api.openai.com/v1">
+          </label>
+          <label for="s-oreason">추론 수준 <small>(추론 모델에서만)</small>
+            <select id="s-oreason" name="OPENAI_REASONING_EFFORT"><option value="">미전송</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+          </label>
+        </div>
+      </fieldset>
+    </div>
+    <p id="settings-msg" class="dlg-ai-msg" aria-live="polite" style="margin:10px 0 0"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="s-clear-key">현재 제공자 키 삭제</button>
+      <span style="flex:1"></span>
+      <button type="button" class="btn" id="s-test" title="입력한 값으로 짧은 호출을 보내 확인하고, 성공하면 저장합니다">연결 확인 후 저장</button>
+      <button type="button" class="btn btn-ghost" id="s-cancel">닫기</button>
+      <button type="submit" class="btn btn-primary" id="s-save" title="AI 설정 저장">AI 설정 저장</button>
+    </div>
+  </form>
+</dialog>
+
+<datalist id="dl-거래처"></datalist>
+<datalist id="dl-사용자"></datalist>
+<datalist id="dl-태그"></datalist>
+<datalist id="dl-세목"></datalist>
+<datalist id="dl-세세목"></datalist>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>컬럼너 패드 — 집행내역</title>
+<style>
+*{box-sizing:border-box;margin:0}body{width:1440px;height:900px;overflow:hidden;font-family:"Pretendard GOV","Pretendard","Malgun Gothic",sans-serif;color:#1E2124;background:#FFFFFF;font-size:13px}
+.top{height:56px;border-bottom:1px solid #BFD9D4;display:flex;align-items:center;padding:0 24px;gap:16px}.top h1{font-size:17px;font-weight:700}
+.tabs{height:42px;border-bottom:1px solid #BFD9D4;display:flex;padding:0 16px}.tabs span{padding:12px 16px;color:#5A5C60;font-weight:600}.tabs span.on{color:#1E2124;border-bottom:3px solid #B3261E}
+main{padding:14px 24px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.tile{border:1px solid #BFD9D4;border-radius:3px;padding:10px 14px;background:#fff}.tile b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.bar{border:1px solid #BFD9D4;padding:10px 14px;margin-bottom:10px;display:flex;gap:12px;color:#5A5C60;background:#F1F7F6}.bar .btn{margin-left:auto;background:#1E2124;color:#fff;padding:8px 14px;border-radius:3px;font-weight:700}
+table{width:100%;border-collapse:collapse;background:#F1F7F6;font-variant-numeric:tabular-nums;border:1px solid #BFD9D4}
+th{text-align:left;font-size:12px;padding:7px 10px;border-bottom:2px solid #BFD9D4;color:#2F4B46;background:#DCEEEA}td{padding:6px 10px;border-bottom:1px solid #BFD9D4;white-space:nowrap}
+td.num,th.num{text-align:right}td.amt,th.amt{border-left:2px solid #B3261E}td.bal,th.bal{font-weight:700}
+tr.total td{border-top:1px solid #1E2124;border-bottom:3px double #1E2124;font-weight:700;background:#DCEEEA}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px}
+</style></head><body>
+<div class="top"><h1>의료인공지능센터 회계대장</h1><span style="margin-left:auto;color:#5A5C60">파일 수정 2026-10-13 19:52 · 드라이브 연결됨</span></div>
+<div class="tabs"><span>대시보드</span><span class="on">집행내역</span><span>품의내역</span><span>예산변동</span><span>적립금</span><span>태그</span><span>재원</span></div>
+<main>
+<div class="tiles"><div class="tile">미청구<b>3건</b></div><div class="tile">보완필요<b style="color:#B3261E">1건</b></div><div class="tile">증빙 없음<b>5건</b></div><div class="tile">완료<b>12건</b></div></div>
+<div class="bar">재원 전체 · 2026년 · 전체 월 · 예산목 전체 · 검색 <span class="btn">집행 추가</span></div>
+<table><thead><tr><th>거래번호</th><th>상태</th><th>원인발생일</th><th>청구일</th><th>완료일</th><th>재원</th><th>예산목</th><th>거래처</th><th>적요</th><th class="num amt">금액</th><th class="num bal">예산목 잔액</th><th>태그</th><th>증빙</th></tr></thead><tbody>
+<tr><td>2026-AI01-012</td><td><span class="dot" style="background:#B3261E"></span>보완필요</td><td>10/12</td><td>10/13</td><td>—</td><td>AI01</td><td>연구활동비</td><td>ABC식당</td><td>10월 정기 연구회의 식대</td><td class="num amt">85,000</td><td class="num bal">3,584,000</td><td>회의비</td><td>2</td></tr>
+<tr><td>2026-SDM-031</td><td><span class="dot" style="background:#3F7D3A"></span>완료</td><td>10/09</td><td>10/10</td><td>10/13</td><td>SDM</td><td>연구재료비</td><td>시그마알드리치</td><td>실험용 시약</td><td class="num amt">1,240,000</td><td class="num bal">1,160,000</td><td>재료</td><td>3</td></tr>
+<tr><td>2026-융합-007</td><td><span class="dot" style="background:#9A9A9A"></span>미청구</td><td>10/08</td><td>—</td><td>—</td><td>융합인재</td><td>연구시설.장비비</td><td>하이마트 야탑점</td><td>교육용 노트북 5대</td><td class="num amt">6,750,000</td><td class="num bal">-250,000</td><td>인프라</td><td>0</td></tr>
+<tr><td>2026-AI01-011</td><td><span class="dot" style="background:#246BEB"></span>청구중</td><td>10/06</td><td>10/07</td><td>—</td><td>AI01</td><td>연구활동비</td><td>코레일</td><td>추계학회 국내여비</td><td class="num amt">428,600</td><td class="num bal">3,669,000</td><td>출장</td><td>1</td></tr>
+<tr><td>2026-바이오-004</td><td><span class="dot" style="background:#3F7D3A"></span>완료</td><td>09/30</td><td>10/01</td><td>10/08</td><td>바이오</td><td>연구활동비</td><td>김OO</td><td>외부 자문료</td><td class="num amt">500,000</td><td class="num bal">2,100,000</td><td>자문</td><td>4</td></tr>
+<tr><td>2026-SDM-030</td><td><span class="dot" style="background:#3F7D3A"></span>완료</td><td>09/28</td><td>09/29</td><td>10/02</td><td>SDM</td><td>연구활동비</td><td>프린트나라</td><td>중간보고서 인쇄 30부</td><td class="num amt">315,000</td><td class="num bal">4,085,000</td><td>인쇄</td><td>3</td></tr>
+<tr><td>2026-융합-006</td><td><span class="dot" style="background:#3F7D3A"></span>완료</td><td>09/25</td><td>09/26</td><td>09/30</td><td>융합인재</td><td>연구활동비</td><td>㈜이벤트원</td><td>하계 워크숍 운영</td><td class="num amt">2,300,000</td><td class="num bal">1,700,000</td><td>행사</td><td>4</td></tr>
+<tr><td>2026-AI01-010</td><td><span class="dot" style="background:#3F7D3A"></span>완료</td><td>09/22</td><td>09/23</td><td>09/29</td><td>AI01</td><td>연구재료비</td><td>오피스디포</td><td>사무용품 일괄 구매</td><td class="num amt">87,400</td><td class="num bal">2,412,600</td><td>소모품</td><td>2</td></tr>
+<tr><td>2026-바이오-003</td><td><span class="dot" style="background:#3F7D3A"></span>완료</td><td>09/18</td><td>09/19</td><td>09/25</td><td>바이오</td><td>연구활동비</td><td>대한의료정보학회</td><td>학회 등록비 2인</td><td class="num amt">600,000</td><td class="num bal">2,600,000</td><td>학회</td><td>2</td></tr>
+<tr class="total"><td colspan="9">합계 9건</td><td class="num amt">12,306,000</td><td class="num bal"></td><td colspan="2"></td></tr>
+</tbody></table>
+<p style="margin-top:8px;color:#5A5C60">세로 마진 괘선 오른쪽 = 금액·잔액(항상 같은 자리) · 합계 행 이중선 · 표 안만 연두 괘선 톤</p>
+</main></body></html>
