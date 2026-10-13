@@ -29,6 +29,11 @@ SHEET_REQ = "품의내역"
 SHEET_DEP = "적립금"
 SHEET_TAG = "태그"
 SHEET_EVID = "증빙"
+SHEET_PEOPLE = "인원"
+SHEET_SALARY = "기준급여"
+SHEET_PAYEE = "지급처"
+SHEET_LABOR = "인건비지급"
+SHEET_LADJ = "인건비조정"
 
 BUDGET_ITEMS = [
     "내부인건비(공통)", "외부인건비(공통)", "연구시설.장비비", "연구활동비",
@@ -38,7 +43,17 @@ PAY_METHODS = ["연구비카드", "계좌이체", "연구자선지출", "공금�
 REQ_STATUS = ["대기", "집행완료", "취소"]
 BUDGET_ROUNDS = ["이월", "당초"]  # 그 외에는 1,2,3... 숫자 회차
 
-FUND_COLS = ["재원코드", "과제명", "시작일", "종료일", "비고"]
+FUND_COLS = ["재원코드", "과제명", "시작일", "종료일", "비고", "인건비예산"]
+# 인건비 (인건비_설계_2026-10-13.md)
+PEOPLE_COLS = ["이름", "인건비구분", "입사일", "퇴사일", "이월선급", "비고"]
+SALARY_COLS = ["이름", "시작월", "종료월", "월액", "비고"]
+PAYEE_COLS = ["지급처코드", "지급처명", "인건비예산", "비고"]
+LABOR_COLS = ["지급월", "귀속월", "이름", "지급처", "금액", "상태", "지급일", "연결거래번호", "비고"]
+LADJ_COLS = ["월", "이름", "금액", "사유"]
+LABOR_KINDS = ["내부", "외부"]
+LABOR_STATUS = ["예정", "확정"]
+LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(공통)"}
+MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
 EXEC_COLS = ["거래번호", "관리번호", "원인발생일", "지급청구일", "지출완료일", "재원", "예산목", "세목",
              "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록"]
 EXEC_STATUS = ["발생", "청구", "보완", "완료"]  # 날짜에서 계산, '보완'만 수동
@@ -51,13 +66,15 @@ DEP_TYPES = ["적립", "사용"]
 BUDGET_HEAD_ROW = 8
 BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS  # A~D + E~M
 
-DATE_COLS = {"원인발생일", "지급청구일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자"}
-NUM_COLS = {"금액"} | set(BUDGET_ITEMS)
+DATE_COLS = {"원인발생일", "지급청구일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일"}
+NUM_COLS = {"금액", "인건비예산", "월액", "이월선급"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
 IDENT_COLS = {
     "funds": ["재원코드"], "exec": ["거래번호"], "req": ["품의번호"], "tags": ["태그명"],
     "budget": ["재원", "변경회차", "신청일자"], "deposit": ["일자", "거래처", "구분", "금액"],
     "evidence": ["거래번호", "파일명"],
+    "people": ["이름"], "salary": ["이름", "시작월"], "payee": ["지급처코드"],
+    "labor": ["지급월", "귀속월", "이름", "지급처"], "ladj": ["월", "이름", "금액"],
 }
 
 _lock = threading.RLock()
@@ -102,6 +119,28 @@ def _to_date(v: Any) -> str | None:
     return s or None
 
 
+_YM = re.compile(r"^\d{4}-\d{2}$")
+
+
+def _to_month(v: Any) -> str | None:
+    """셀/입력값 -> 'YYYY-MM'. 날짜·일련번호면 그 달, 해석 불가하면 원문."""
+    if v is None or v == "":
+        return None
+    if isinstance(v, (dt.datetime, dt.date, int, float)) and not isinstance(v, bool):
+        d = _to_date(v)
+        return d[:7] if d and _ISO.match(d) else str(v)
+    s = str(v).strip()
+    m = re.match(r"^(\d{4})[-./](\d{1,2})(?:[-./]\d{1,2})?$", s)
+    if m:
+        return f"{m[1]}-{int(m[2]):02d}"
+    return s or None
+
+
+def _valid_month(v: Any) -> bool:
+    m = _to_month(v)
+    return m is None or (bool(_YM.match(m)) and 1 <= int(m[5:]) <= 12)
+
+
 def _valid_date(v: Any) -> bool:
     d = _to_date(v)
     if d is None:
@@ -142,6 +181,8 @@ def _cell_in(col: str, v: Any) -> Any:
     """API 값 -> 셀 값"""
     if v is None or v == "":
         return None
+    if col in MONTH_COLS:
+        return _to_month(v)
     if col in DATE_COLS:
         d = _to_date(v)
         if d and _ISO.match(d):
@@ -157,6 +198,8 @@ def _cell_in(col: str, v: Any) -> Any:
 
 
 def _cell_out(col: str, v: Any) -> Any:
+    if col in MONTH_COLS:
+        return _to_month(v) or ""
     if col in DATE_COLS:
         return _to_date(v)
     if col in NUM_COLS:
@@ -274,7 +317,21 @@ def _ensure_structure(wb) -> bool:
         ws.freeze_panes = "A2"
         changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14),
+    for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30)),
+                               (SHEET_SALARY, SALARY_COLS, (14, 10, 10, 14, 30)),
+                               (SHEET_PAYEE, PAYEE_COLS, (14, 30, 16, 30)),
+                               (SHEET_LABOR, LABOR_COLS, (10, 10, 14, 16, 14, 8, 12, 18, 30)),
+                               (SHEET_LADJ, LADJ_COLS, (10, 14, 14, 30))):
+        if name not in wb.sheetnames:
+            ws = wb.create_sheet(name)
+            for i, c in enumerate(cols, 1):
+                cell = ws.cell(1, i, c)
+                cell.font, cell.fill = head_font, head_fill
+                ws.column_dimensions[get_column_letter(i)].width = widths[i - 1]
+            ws.freeze_panes = "A2"
+            changed = True
+
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_FUND, "인건비예산", 16),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30)):
         ws = wb[sheet]
         heads = _headers(ws)
@@ -415,10 +472,21 @@ def read_all() -> dict:
             "deposit": _rows(wb[SHEET_DEP], DEP_COLS, 1, formulas),
             "tags": _rows(wb[SHEET_TAG], TAG_COLS, 1, formulas),
             "evidence": _rows(wb[SHEET_EVID], EVID_COLS, 1, formulas),
+            "people": _rows(wb[SHEET_PEOPLE], PEOPLE_COLS, 1, formulas),
+            "salary": _rows(wb[SHEET_SALARY], SALARY_COLS, 1, formulas),
+            "payee": _rows(wb[SHEET_PAYEE], PAYEE_COLS, 1, formulas),
+            "labor": _rows(wb[SHEET_LABOR], LABOR_COLS, 1, formulas),
+            "ladj": _rows(wb[SHEET_LADJ], LADJ_COLS, 1, formulas),
         }
+        for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력
+            r["인건비예산"] = None if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산") else r["인건비예산"]
+        for r in data["payee"]:
+            r["인건비예산"] = None if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산") else r["인건비예산"]
         for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용)
             r["상태"] = exec_status(r)
         data["meta"] = {
+            "labor_kinds": LABOR_KINDS,
+            "labor_status": LABOR_STATUS,
             "dep_types": DEP_TYPES,
             "budget_items": BUDGET_ITEMS,
             "pay_methods": PAY_METHODS,
@@ -433,7 +501,17 @@ def read_all() -> dict:
         return data
 
 
+def _has_value(ws, row: int, col: str) -> bool:
+    heads = _headers(ws)
+    return col in heads and ws.cell(row, heads.index(col) + 1).value not in (None, "")
+
+
 _SHEETS = {
+    "people": (SHEET_PEOPLE, PEOPLE_COLS, 1, "이름"),
+    "salary": (SHEET_SALARY, SALARY_COLS, 1, None),
+    "payee": (SHEET_PAYEE, PAYEE_COLS, 1, "지급처코드"),
+    "labor": (SHEET_LABOR, LABOR_COLS, 1, None),
+    "ladj": (SHEET_LADJ, LADJ_COLS, 1, None),
     "funds": (SHEET_FUND, FUND_COLS, 1, "재원코드"),
     "exec": (SHEET_EXEC, EXEC_COLS, 1, "거래번호"),
     "req": (SHEET_REQ, REQ_COLS, 1, "품의번호"),
@@ -464,6 +542,10 @@ def _check_expect(kind: str, existing: dict, expect: dict | None):
     for c in IDENT_COLS[kind]:
         if c in expect and _cell_out(c, expect[c]) != existing.get(c):
             raise NotFound("다른 곳에서 장부가 바뀌어 행이 일치하지 않습니다. 새로고침 후 다시 시도하세요.")
+
+
+def _labor_refs(wb) -> set[str]:
+    return {str(r.get("연결거래번호")) for r in _rows(wb[SHEET_LABOR], LABOR_COLS) if r.get("연결거래번호")}
 
 
 def _number_refs(wb, key: str) -> set[str]:
@@ -537,9 +619,18 @@ def _validate_dates(rec: dict, cols):
             raise ValueError(f"{c} 형식이 올바르지 않습니다 (YYYY-MM-DD): {rec[c]}")
 
 
+def _validate_months(rec: dict, cols):
+    for c in cols:
+        if c in MONTH_COLS and rec.get(c) not in (None, "") and not _valid_month(rec[c]):
+            raise ValueError(f"{c} 형식이 올바르지 않습니다 (YYYY-MM): {rec[c]}")
+        if c in MONTH_COLS and rec.get(c) not in (None, ""):
+            rec[c] = _to_month(rec[c])
+
+
 def _validate(kind: str, rec: dict):
     cols = _SHEETS[kind][1]
     _validate_dates(rec, cols)
+    _validate_months(rec, cols)
     if kind == "evidence":
         if not str(rec.get("거래번호") or "").strip() or not str(rec.get("파일명") or "").strip():
             raise ValueError("거래번호와 파일명은 필수입니다.")
@@ -589,6 +680,88 @@ def _validate(kind: str, rec: dict):
         rnd = str(rec.get("변경회차") or "").strip()
         if not (rnd in BUDGET_ROUNDS or rnd.isdigit()):
             raise ValueError("변경회차는 '이월', '당초' 또는 숫자여야 합니다.")
+    elif kind == "people":
+        if not str(rec.get("이름") or "").strip():
+            raise ValueError("이름은 필수입니다.")
+        rec["인건비구분"] = rec.get("인건비구분") or "내부"
+        if rec["인건비구분"] not in LABOR_KINDS:
+            raise ValueError("인건비구분은 내부/외부 중 하나여야 합니다.")
+        if rec.get("입사일") and rec.get("퇴사일") and _to_date(rec["퇴사일"]) < _to_date(rec["입사일"]):
+            raise ValueError("퇴사일은 입사일 이후여야 합니다.")
+    elif kind == "salary":
+        if not str(rec.get("이름") or "").strip():
+            raise ValueError("이름은 필수입니다.")
+        if not rec.get("시작월") or not rec.get("종료월"):
+            raise ValueError("시작월과 종료월은 필수입니다.")
+        if rec["시작월"] > rec["종료월"]:
+            raise ValueError("종료월은 시작월 이후여야 합니다.")
+        if _to_num(rec.get("월액")) < 0:
+            raise ValueError("월액은 0 이상이어야 합니다.")
+    elif kind == "payee":
+        code = str(rec.get("지급처코드") or "").strip()
+        if not code:
+            raise ValueError("지급처코드는 필수입니다.")
+        if "-" in code:
+            raise ValueError("지급처코드에는 '-'를 사용할 수 없습니다 (번호 체계와 충돌).")
+    elif kind == "labor":
+        if not rec.get("지급월"):
+            raise ValueError("지급월은 필수입니다.")
+        rec["귀속월"] = rec.get("귀속월") or rec["지급월"]
+        if not str(rec.get("이름") or "").strip():
+            raise ValueError("이름은 필수입니다.")
+        if not str(rec.get("지급처") or "").strip():
+            raise ValueError("지급처는 필수입니다.")
+        if _to_num(rec.get("금액")) <= 0:
+            raise ValueError("금액은 0보다 커야 합니다.")
+        rec["상태"] = rec.get("상태") or "예정"
+        if rec["상태"] not in LABOR_STATUS:
+            raise ValueError("상태는 예정/확정 중 하나여야 합니다.")
+    elif kind == "ladj":
+        if not rec.get("월"):
+            raise ValueError("월은 필수입니다.")
+        if not str(rec.get("이름") or "").strip():
+            raise ValueError("이름은 필수입니다.")
+        if _to_num(rec.get("금액")) == 0:
+            raise ValueError("금액은 0이 될 수 없습니다 (+ 선급, − 미지급).")
+
+
+def _person(wb, name: str) -> dict:
+    p = next((x for x in _rows(wb[SHEET_PEOPLE], PEOPLE_COLS) if _same_key(x["이름"], name)), None)
+    if p is None:
+        raise ValueError(f"'{name}' 은 인원 목록에 없습니다. 인원 탭에서 먼저 등록하세요.")
+    return p
+
+
+def _check_person_period(p: dict, month: str, label: str):
+    if p.get("입사일") and month < p["입사일"][:7]:
+        raise ValueError(f"{p['이름']}: {label} {month} 은 입사월({p['입사일'][:7]}) 이전입니다.")
+    if p.get("퇴사일") and month > p["퇴사일"][:7]:
+        raise ValueError(f"{p['이름']}: {label} {month} 은 퇴사월({p['퇴사일'][:7]}) 이후입니다.")
+
+
+def _payee_exists(wb, code: str) -> bool:
+    return any(_same_key(f["재원코드"], code) for f in _rows(wb[SHEET_FUND], FUND_COLS)) or \
+        any(_same_key(p["지급처코드"], code) for p in _rows(wb[SHEET_PAYEE], PAYEE_COLS))
+
+
+def _validate_labor_refs(wb, rec: dict, others: list[dict]):
+    """인원·지급처 존재, 재직 기간, 같은 지급월·귀속월·이름·지급처 중복."""
+    p = _person(wb, rec["이름"])
+    rec["이름"] = p["이름"]
+    _check_person_period(p, rec["귀속월"], "귀속월")
+    if not _payee_exists(wb, rec["지급처"]):
+        raise ValueError(f"지급처 '{rec['지급처']}' 는 재원·지급처 목록에 없습니다.")
+    for o in others:
+        if all(str(o.get(c) or "") == str(rec.get(c) or "") for c in ("지급월", "귀속월", "이름", "지급처")):
+            raise ValueError(f"{rec['지급월']} {rec['이름']} · {rec['지급처']} 지급 건이 이미 있습니다 ({o['상태']} {int(o['금액'] or 0):,}원). 원장에서 금액을 수정하세요.")
+
+
+def _validate_salary_refs(wb, rec: dict, others: list[dict]):
+    p = _person(wb, rec["이름"])
+    rec["이름"] = p["이름"]
+    for o in others:
+        if _same_key(o["이름"], rec["이름"]) and o["시작월"] <= rec["종료월"] and o["종료월"] >= rec["시작월"]:
+            raise ValueError(f"{rec['이름']} 기준급여 적용 기간이 {o['시작월']}~{o['종료월']} 구간과 겹칩니다.")
 
 
 def create(kind: str, rec: dict) -> dict:
@@ -598,9 +771,21 @@ def create(kind: str, rec: dict) -> dict:
         _validate(kind, rec)
         if kind in ("exec", "req", "deposit"):
             _validate_tag(rec, wb)
-        if key and kind not in ("funds", "tags"):
+        if kind == "labor":
+            if rec["상태"] == "확정":
+                raise ValueError("새 지급 건은 '예정'으로 추가한 뒤 원장에서 확정하세요.")
+            _validate_labor_refs(wb, rec, _rows(ws, cols))
+        if kind == "salary":
+            _validate_salary_refs(wb, rec, _rows(ws, cols))
+        if kind == "ladj":
+            rec["이름"] = _person(wb, rec["이름"])["이름"]
+        if kind == "payee":
+            rec[key] = str(rec[key]).strip()
+            if any(_same_key(f["재원코드"], rec[key]) for f in _rows(wb[SHEET_FUND], FUND_COLS)):
+                raise ValueError("재원코드와 같은 지급처코드는 쓸 수 없습니다 (재원은 그대로 지급처로 사용 가능).")
+        if key and kind not in ("funds", "tags", "people", "payee"):
             _assign_number(wb, ws, cols, head_row, key, rec)
-        if kind in ("funds", "tags"):
+        if kind in ("funds", "tags", "people", "payee"):
             rec[key] = str(rec[key]).strip()
             if any(_same_key(r[key], rec[key]) for r in _rows(ws, cols)):
                 raise ValueError(f"이미 존재하는 {key}입니다 (대소문자·공백만 다른 값 포함).")
@@ -646,15 +831,28 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None) -> dict:
             _validate_tag(rec, wb)  # 태그를 바꿀 때만 검증 (기존 미등록 태그는 유지 가능)
         if kind == "budget":
             _check_budget_round(rec, [r for r in cur if r["_row"] != row])
+        if kind == "labor":
+            if existing["상태"] == "확정":
+                raise ValueError("확정된 지급 건은 수정할 수 없습니다. 먼저 '확정 취소'를 하세요.")
+            rec["상태"] = "예정"; rec["지급일"] = None; rec["연결거래번호"] = None
+            _validate_labor_refs(wb, rec, [r for r in cur if r["_row"] != row])
+        if kind == "salary":
+            _validate_salary_refs(wb, rec, [r for r in cur if r["_row"] != row])
+        if kind == "ladj":
+            rec["이름"] = _person(wb, rec["이름"])["이름"]
+        if kind == "people" and existing["이름"] != str(rec["이름"]).strip() and _person_usage(wb, existing["이름"]):
+            raise ValueError(f"'{existing['이름']}' 은 지급·기준급여·조정 내역에서 사용 중이라 이름을 바꿀 수 없습니다.")
+        if kind == "payee" and existing[key] != str(rec[key]).strip() and _payee_usage(wb, existing[key]):
+            raise ValueError(f"지급처코드 '{existing[key]}' 는 지급 내역에서 사용 중이라 바꿀 수 없습니다.")
         if key:
-            if kind in ("funds", "tags"):
+            if kind in ("funds", "tags", "people", "payee"):
                 rec[key] = str(rec[key]).strip()
                 if any(_same_key(r[key], rec[key]) and r["_row"] != row for r in cur):
                     raise ValueError(f"이미 존재하는 {key}입니다 (대소문자·공백만 다른 값 포함).")
                 if existing[key] != rec[key]:
                     if kind == "tags":
                         _rename_tag(wb, existing[key], rec[key])
-                    elif _fund_usage(wb, existing[key]):
+                    elif kind == "funds" and _fund_usage(wb, existing[key]):
                         raise ValueError(f"재원코드 '{existing[key]}' 는 집행·품의·예산에서 사용 중이라 바꿀 수 없습니다.")
             else:
                 rec[key] = existing[key]  # 번호는 불변
@@ -694,6 +892,16 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
                 raise ValueError(f"연결된 집행 {existing['연결거래번호']} 이 있습니다. '연결 집행도 함께 삭제'를 선택하거나 집행을 먼저 정리하세요.")
         if kind == "exec" and existing["거래번호"] in _number_refs(wb, "거래번호"):
             raise ValueError("적립금 적립과 연결된 집행입니다. 적립금 탭에서 해당 적립 행을 먼저 처리하세요.")
+        if kind == "exec" and existing["거래번호"] in _labor_refs(wb):
+            raise ValueError("인건비 지급 확정으로 생긴 집행입니다. 인건비 원장에서 '확정 취소' 또는 삭제로 처리하세요.")
+        if kind == "people" and _person_usage(wb, existing["이름"]):
+            raise ValueError(f"'{existing['이름']}' 은 지급·기준급여·조정 내역에서 사용 중이라 삭제할 수 없습니다.")
+        if kind == "payee" and _payee_usage(wb, existing["지급처코드"]):
+            raise ValueError(f"지급처코드 '{existing['지급처코드']}' 는 지급 내역에서 사용 중이라 삭제할 수 없습니다.")
+        if kind == "funds" and _payee_usage(wb, existing["재원코드"]):
+            raise ValueError(f"재원코드 '{existing['재원코드']}' 는 인건비 지급 내역에서 사용 중이라 삭제할 수 없습니다.")
+        if kind == "labor" and existing.get("연결거래번호"):
+            _remove_labor_exec(wb, existing["연결거래번호"])
         _delete_row(ws, row)
         if kind == "budget":
             _refresh_budget_summary(wb)
@@ -725,6 +933,97 @@ def req_to_exec(row: int, extra: dict, expect: dict | None = None) -> dict:
         _save(wb)
         rec["_row"] = r
         return rec
+
+
+def _person_usage(wb, name: str) -> int:
+    return sum(1 for r in _rows(wb[SHEET_LABOR], LABOR_COLS) if _same_key(r["이름"], name)) \
+        + sum(1 for r in _rows(wb[SHEET_SALARY], SALARY_COLS) if _same_key(r["이름"], name)) \
+        + sum(1 for r in _rows(wb[SHEET_LADJ], LADJ_COLS) if _same_key(r["이름"], name))
+
+
+def _payee_usage(wb, code: str) -> int:
+    return sum(1 for r in _rows(wb[SHEET_LABOR], LABOR_COLS) if _same_key(r["지급처"], code))
+
+
+def _remove_labor_exec(wb, number: str):
+    """확정 취소·삭제 시 연결 집행 행 제거. 증빙이 붙어 있으면 차단."""
+    ws_ex = wb[SHEET_EXEC]
+    ex = next((x for x in _rows(ws_ex, EXEC_COLS) if x["거래번호"] == number), None)
+    if ex is None:
+        return
+    if any(e["거래번호"] == number for e in _rows(wb[SHEET_EVID], EVID_COLS)):
+        raise ValueError(f"집행 {number} 에 증빙이 등록되어 있어 취소할 수 없습니다. 증빙을 먼저 지우세요.")
+    _delete_row(ws_ex, ex["_row"])
+
+
+def labor_action(row: int, action: str, pay_date: str | None = None, expect: dict | None = None) -> dict:
+    """confirm: 예정 → 확정 + 집행내역 1행 생성. unconfirm: 확정 → 예정 + 연결 집행 삭제."""
+    with _write_session() as wb:
+        ws = wb[SHEET_LABOR]
+        rec = next((x for x in _rows(ws, LABOR_COLS) if x["_row"] == row), None)
+        if rec is None:
+            raise NotFound("지급 행을 찾을 수 없습니다. 목록을 새로고침하세요.")
+        _check_expect("labor", rec, expect)
+        if action == "confirm":
+            if rec["상태"] == "확정":
+                raise ValueError("이미 확정된 건입니다.")
+            d = _to_date(pay_date) or dt.date.today().isoformat()
+            if not _valid_date(d):
+                raise ValueError(f"지급일이 올바르지 않습니다: {pay_date}")
+            p = _person(wb, rec["이름"])
+            ex = {c: "" for c in EXEC_COLS}
+            ex.update({"원인발생일": d, "지급청구일": d, "지출완료일": d, "재원": rec["지급처"],
+                       "예산목": LABOR_ITEM.get(p.get("인건비구분") or "내부", LABOR_ITEM["내부"]),
+                       "세목": "인건비", "거래처": rec["이름"], "금액": rec["금액"],
+                       "적요": f"인건비 {rec['이름']} {int(rec['귀속월'][5:])}월분" + (f" (지급월 {rec['지급월']})" if rec["지급월"] != rec["귀속월"] else ""),
+                       "비고": (f"인건비 지급" + (f" / {rec['비고']}" if rec.get("비고") else ""))})
+            _validate("exec", ex)
+            ws_ex = wb[SHEET_EXEC]
+            _assign_number(wb, ws_ex, EXEC_COLS, 1, "거래번호", ex)
+            _write_row(ws_ex, EXEC_COLS, _next_row(ws_ex), ex)
+            rec.update({"상태": "확정", "지급일": d, "연결거래번호": ex["거래번호"]})
+        elif action == "unconfirm":
+            if rec["상태"] != "확정":
+                raise ValueError("확정된 건만 취소할 수 있습니다.")
+            if rec.get("연결거래번호"):
+                _remove_labor_exec(wb, rec["연결거래번호"])
+            rec.update({"상태": "예정", "지급일": None, "연결거래번호": None})
+        else:
+            raise ValueError(f"알 수 없는 동작: {action}")
+        _write_row(ws, LABOR_COLS, row, rec)
+        _save(wb)
+        return rec
+
+
+def labor_bulk(rows: list[dict], skip_dup: bool = False) -> dict:
+    """여러 예정 건을 한 번에 추가 (기간 일괄 생성·전월 복사). 하나라도 오류면 전부 취소."""
+    if not rows:
+        raise ValueError("추가할 지급 건이 없습니다.")
+    if len(rows) > 1200:
+        raise ValueError("한 번에 1,200건까지만 추가할 수 있습니다.")
+    with _write_session() as wb:
+        ws = wb[SHEET_LABOR]
+        existing = _rows(ws, LABOR_COLS)
+        created, skipped = [], []
+        for raw in rows:
+            rec = {c: raw.get(c, "") for c in LABOR_COLS}
+            rec["상태"] = "예정"; rec["지급일"] = None; rec["연결거래번호"] = None
+            _validate("labor", rec)
+            try:
+                _validate_labor_refs(wb, rec, existing + created)
+            except ValueError as e:
+                if skip_dup and "이미 있습니다" in str(e):
+                    skipped.append(f"{rec['지급월']} {rec['이름']} {rec['지급처']}")
+                    continue
+                raise
+            created.append(rec)
+        if not created:
+            raise ValueError("추가할 건이 없습니다." + (f" (중복 {len(skipped)}건 건너뜀)" if skipped else ""))
+        r = _next_row(ws)
+        for rec in created:
+            _write_row(ws, LABOR_COLS, r, rec); r += 1
+        _save(wb)
+        return {"created": len(created), "skipped": skipped}
 
 
 def _rename_tag(wb, old: str, new: str):

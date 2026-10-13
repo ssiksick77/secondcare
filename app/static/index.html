@@ -13,6 +13,8 @@
   <h1>의료인공지능센터 회계대장</h1>
   <div class="top-status" id="file-status" aria-live="polite"></div>
   <button type="button" class="btn btn-ghost" id="btn-reload">새로고침</button>
+  <span class="top-sep" aria-hidden="true"></span>
+  <button type="button" class="btn btn-ghost btn-mode" id="btn-mode" title="인건비 관리 화면으로 전환">인건비</button>
 <button type="button" class="btn btn-ghost btn-icon" id="btn-settings" aria-label="설정" title="설정 (구글 드라이브 연결 · AI)">
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="3"/>
@@ -22,7 +24,7 @@
   <button type="button" class="btn btn-primary" id="btn-ai" aria-controls="ai-drawer" aria-expanded="false" hidden>AI 도우미</button>
 </header>
 
-<nav class="tabs" aria-label="주요 메뉴">
+<nav class="tabs main" id="main-tabs" aria-label="주요 메뉴">
   <ul role="tablist">
     <li><button role="tab" id="tab-dash" aria-controls="panel-dash" aria-selected="true">대시보드</button></li>
     <li><button role="tab" id="tab-exec" aria-controls="panel-exec" aria-selected="false">집행내역</button></li>
@@ -34,8 +36,83 @@
   </ul>
 </nav>
 
+<nav class="tabs labor" id="labor-tabs" aria-label="인건비 메뉴" hidden>
+  <span class="tabs-label">인건비 관리</span>
+  <ul role="tablist">
+    <li><button role="tab" id="ltab-plan" aria-controls="lpanel-plan" aria-selected="true">계획표</button></li>
+    <li><button role="tab" id="ltab-ledger" aria-controls="lpanel-ledger" aria-selected="false">지급 원장</button></li>
+    <li><button role="tab" id="ltab-people" aria-controls="lpanel-people" aria-selected="false">인원</button></li>
+    <li><button role="tab" id="ltab-payee" aria-controls="lpanel-payee" aria-selected="false">지급처</button></li>
+  </ul>
+  <label class="tabs-year">연도 <select id="labor-year"></select></label>
+</nav>
+
 <main id="main" tabindex="-1">
   <div id="alert" class="alert" role="alert" hidden></div>
+
+  <!-- 인건비: 계획표 -->
+  <section id="lpanel-plan" role="tabpanel" aria-labelledby="ltab-plan" hidden>
+    <h2 style="margin-top:0">지급처별 인건비 현황 <span class="muted" style="font-weight:400">(지급월 기준)</span></h2>
+    <div class="table-wrap"><table class="grid compact" id="labor-funds"></table></div>
+    <div class="toolbar">
+      <span class="toolbar-note" id="labor-plan-note"></span>
+      <button type="button" class="btn" data-labor="copy" title="전달 귀속 지급 건을 다음 달 예정으로 복사">전월 계획 복사</button>
+      <button type="button" class="btn" data-labor="bulk" title="인원·기간·지급처별 배분액으로 여러 달 예정 건을 한 번에 생성">기간 일괄 생성</button>
+      <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid plan" id="labor-plan"></table></div>
+    <p class="toolbar-note defs plan-legend"><span class="lg ok">소요 일치</span> <span class="lg short">부족</span> <span class="lg over">초과</span> <span class="lg none">미배정</span> <span class="lg off">재직 아님</span> · 칸을 클릭하면 그 달 배분을 편집합니다.</p>
+  </section>
+
+  <!-- 인건비: 지급 원장 -->
+  <section id="lpanel-ledger" role="tabpanel" aria-labelledby="ltab-ledger" hidden>
+    <div class="toolbar">
+      <label>연도 <select data-filter="year" data-kind="labor"><option value="">전체</option></select></label>
+      <label>지급월 <select data-filter="month" data-kind="labor"><option value="">전체</option></select></label>
+      <label>이름 <select data-filter="이름" data-kind="labor"><option value="">전체</option></select></label>
+      <label>지급처 <select data-filter="지급처" data-kind="labor"><option value="">전체</option></select></label>
+      <label>상태 <select data-filter="상태" data-kind="labor"><option value="">전체</option><option>예정</option><option>확정</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="labor" placeholder="이름, 지급처, 비고"></label>
+      <span class="toolbar-sum" id="labor-sum"></span>
+      <button type="button" class="btn" data-csv="labor" title="현재 필터의 목록을 CSV로 저장">CSV</button>
+      <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
+    </div>
+    <p class="toolbar-note" style="margin:0 0 8px">확정하면 집행내역에 건별 1행(재원 = 지급처, 예산목 = 인원의 내부/외부 구분)이 생기고 지급 건은 잠깁니다. 수정은 확정 취소 후, 취소·삭제 시 연결 집행도 함께 지워집니다.</p>
+    <div class="table-wrap"><table class="grid" id="labor-table"></table></div>
+  </section>
+
+  <!-- 인건비: 인원 -->
+  <section id="lpanel-people" role="tabpanel" aria-labelledby="ltab-people" hidden>
+    <div class="toolbar">
+      <span class="toolbar-note">내부/외부 구분은 확정 시 집행내역 예산목(내부인건비·외부인건비)을 정합니다. 입사·퇴사 기간 밖 귀속월에는 지급 건을 만들 수 없습니다.</span>
+      <button type="button" class="btn btn-primary" data-add="people">인원 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="people-table"></table></div>
+    <h2>기준급여 (월액 · 적용 기간)</h2>
+    <div class="toolbar">
+      <span class="toolbar-note">계획표의 소요 비교와 선급·미지급 발생액 계산에 쓰입니다. 같은 사람의 기간은 겹칠 수 없습니다.</span>
+      <button type="button" class="btn btn-primary" data-add="salary">기준급여 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid compact" id="salary-table"></table></div>
+    <h2>선급 · 미지급 현황</h2>
+    <p class="toolbar-note defs" id="labor-prepaid-note"></p>
+    <div class="table-wrap"><table class="grid compact" id="labor-prepaid"></table></div>
+    <h2>선급 · 미지급 조정 내역</h2>
+    <div class="toolbar">
+      <span class="toolbar-note">자동 계산으로 설명되지 않는 건(전년도 가지급, 정산 등)을 + 선급 / − 미지급으로 기록합니다.</span>
+      <button type="button" class="btn btn-primary" data-add="ladj">조정 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid compact" id="ladj-table"></table></div>
+  </section>
+
+  <!-- 인건비: 지급처 -->
+  <section id="lpanel-payee" role="tabpanel" aria-labelledby="ltab-payee" hidden>
+    <div class="toolbar">
+      <span class="toolbar-note">장부의 재원은 그대로 지급처로 쓸 수 있습니다 (인건비 예산은 예산변동의 내부·외부인건비 합계, 또는 재원 탭의 인건비예산 열). 여기에는 장부 밖 지급처(AI사업단, 연구지원-교수 등)만 등록합니다.</span>
+      <button type="button" class="btn btn-primary" data-add="payee">외부 지급처 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="payee-table"></table></div>
+  </section>
 
   <!-- 대시보드 -->
   <section id="panel-dash" role="tabpanel" aria-labelledby="tab-dash">
@@ -232,6 +309,44 @@
   </form>
 </aside>
 
+<!-- 인건비: 지급 확정 (지급일) -->
+<dialog id="dlg-pay" aria-labelledby="pay-title" class="dlg-small">
+  <form id="dlg-pay-form" method="dialog" novalidate>
+    <h2 id="pay-title">지급 확정</h2>
+    <p id="pay-label" class="dlg-strong"></p>
+    <label class="fld">지급일<input type="date" id="pay-date" required></label>
+    <p class="toolbar-note" id="pay-note"></p>
+    <div class="dlg-actions"><span style="flex:1"></span><button type="button" class="btn" id="dlg-pay-cancel">취소</button><button type="submit" class="btn btn-primary">확정</button></div>
+  </form>
+</dialog>
+
+<!-- 인건비: 계획표 셀 편집 -->
+<dialog id="dlg-cell" aria-labelledby="cell-title" class="dlg-cell">
+  <h2 id="cell-title"></h2>
+  <p class="toolbar-note" id="cell-note"></p>
+  <div class="table-wrap"><table class="grid compact" id="cell-table"></table></div>
+  <div class="dlg-actions"><button type="button" class="btn" data-cell="add">이 달 배분 추가</button><span style="flex:1"></span><button type="button" class="btn" data-cell="close">닫기</button></div>
+</dialog>
+
+<!-- 인건비: 기간 일괄 생성 -->
+<dialog id="dlg-bulk" aria-labelledby="bulk-title">
+  <form id="dlg-bulk-form" method="dialog" novalidate>
+    <h2 id="bulk-title">기간 일괄 생성</h2>
+    <div class="fields">
+      <label class="fld">인원<select id="bulk-name" required></select></label>
+      <label class="fld">귀속 시작월<input type="month" id="bulk-from" required></label>
+      <label class="fld">귀속 종료월<input type="month" id="bulk-to" required></label>
+      <label class="fld">지급월<select id="bulk-offset"><option value="0">귀속월과 같은 달</option><option value="1">귀속월 다음 달</option></select></label>
+      <label class="fld mid">비고<input type="text" id="bulk-memo"></label>
+    </div>
+    <p class="lab" style="margin:10px 0 4px;font-size:12px;font-weight:600">지급처별 월 배분액</p>
+    <div id="bulk-rows" class="bulk-rows"></div>
+    <button type="button" class="btn btn-sm" data-bulk="add">배분 행 추가</button>
+    <p class="toolbar-note" id="bulk-preview" style="margin:10px 0 0"></p>
+    <div class="dlg-actions"><span class="toolbar-note">각 달마다 지급처별 예정 건이 만들어집니다. 이미 같은 건이 있으면 전체가 취소됩니다.</span><span style="flex:1"></span><button type="button" class="btn" data-bulk="cancel">취소</button><button type="submit" class="btn btn-primary" id="bulk-save">생성</button></div>
+  </form>
+</dialog>
+
 <!-- 관리 패널 -->
 
 <dialog id="dlg-settings" aria-labelledby="settings-title">
@@ -312,5 +427,6 @@
 <datalist id="dl-세세목"></datalist>
 
 <script src="/static/app.js"></script>
+<script src="/static/labor.js"></script>
 </body>
 </html>

@@ -33,7 +33,7 @@ const COLS = {
   budget: null, // meta 로드 후 생성
   deposit: [{ k: "일자", t: "date" }, { k: "거래처" }, { k: "구분", t: "badge" }, { k: "금액", t: "num", amt: true }, { k: "적요", wrap: true },
     { k: "사용자" }, { k: "증빙번호" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
-  funds: [{ k: "재원코드" }, { k: "과제명", wrap: true }, { k: "시작일", t: "date" }, { k: "종료일", t: "date" }, { k: "비고", wrap: true }],
+  funds: [{ k: "재원코드" }, { k: "과제명", wrap: true }, { k: "시작일", t: "date" }, { k: "종료일", t: "date" }, { k: "비고", wrap: true }, { k: "인건비예산", t: "num", title: "인건비 화면의 지급처 예산 (비우면 예산목 합계)" }],
   tags: [{ k: "태그명" }, { k: "분류" }, { k: "설명", wrap: true }, { k: "사용건수", t: "num", calc: r => tagUsage(r["태그명"]) }],
 };
 function tagUsage(name) { return ["exec", "req", "deposit"].reduce((a, k) => a + DATA[k].filter(r => r["태그"] === name).length, 0); }
@@ -49,6 +49,7 @@ function tagField(extra = {}) {
 
 // 입력 폼 필드 정의 (type: text|date|num|select|datalist|textarea)
 function formFields(kind) {
+  if (typeof LABOR_FORMS !== "undefined" && LABOR_FORMS[kind]) return LABOR_FORMS[kind]();
   const funds = fundOptions();
   const items = DATA.meta.budget_items;
   // 실무 입력 순서: 날짜 → 재원 → 예산목 → 거래처 → 금액 → 적요 → 세목 → 태그 → (부가 정보)
@@ -100,12 +101,14 @@ function formFields(kind) {
   if (kind === "funds") return [
     { k: "재원코드", type: "text", req: true, hint: "'-' 없이, 예: AI01" }, { k: "과제명", type: "text", cls: "mid" },
     { k: "시작일", type: "date" }, { k: "종료일", type: "date" }, { k: "비고", type: "text", cls: "wide" },
+    { k: "인건비예산", type: "num", hint: "비우면 예산변동의 내부·외부인건비 합계를 사용 (인건비 화면)" },
   ];
 }
 
 function fundOptions() {
   const s = new Set(DATA.funds.map(f => f["재원코드"]));
-  [...DATA.exec, ...DATA.req, ...DATA.budget].forEach(r => r["재원"] && s.add(r["재원"]));
+  const payees = new Set((DATA.payee || []).map(p => p["지급처코드"]));  // 외부 지급처(인건비)는 예산 집계에서 제외
+  [...DATA.exec, ...DATA.req, ...DATA.budget].forEach(r => r["재원"] && !payees.has(r["재원"]) && s.add(r["재원"]));
   return [...s];
 }
 
@@ -160,6 +163,7 @@ function fillSelects() {
   setOptions($("#dash-year"), ["", ...ys], ["전체", ...ys]);
   setOptions($("#rep-fund"), ["", ...funds], ["전체", ...funds]);
   setOptions($("#rep-year"), ["", ...ys], ["전체", ...ys]);
+  if (typeof fillLaborSelects === "function") fillLaborSelects();
   if (!$("#dash-year").dataset.init) {
     // 올해 데이터가 없으면 데이터가 있는 가장 최근 연도
     const thisYear = String(new Date().getFullYear());
@@ -205,6 +209,7 @@ function renderAll() {
   renderDashboard();
   renderList("exec"); renderList("req"); renderList("budget"); renderList("funds"); renderList("deposit"); renderList("tags");
   renderBudgetSummary(); renderDepositSummary();
+  if (typeof renderLabor === "function") renderLabor();
 }
 
 const SORT = {};  // kind -> {k, dir}
@@ -218,7 +223,9 @@ function filtered(kind) {
     if (f["상태"] && r["상태"] !== f["상태"]) return false;
     if (f["거래처"] && r["거래처"] !== f["거래처"]) return false;
     if (f["구분"] && r["구분"] !== f["구분"]) return false;
-    const d = r["원인발생일"] || r["일자"] || "";
+    if (f["이름"] && r["이름"] !== f["이름"]) return false;
+    if (f["지급처"] && r["지급처"] !== f["지급처"]) return false;
+    const d = r["원인발생일"] || r["일자"] || r["지급월"] || "";
     if (f.year && d.slice(0, 4) !== f.year) return false;
     if (f.month && d.slice(5, 7) !== f.month) return false;
     if (f.unpaid && r["지출완료일"]) return false;
@@ -236,7 +243,7 @@ function filtered(kind) {
 function renderList(kind) {
   const cols = COLS[kind];
   const rows = (kind === "funds" || kind === "tags") ? [...DATA[kind]] : filtered(kind);
-  const defKey = { exec: "원인발생일", req: "원인발생일", deposit: "일자" }[kind];
+  const defKey = { exec: "원인발생일", req: "원인발생일", deposit: "일자", labor: "지급월", salary: "시작월", ladj: "월" }[kind];
   const sort = SORT[kind] || (defKey ? { k: defKey, dir: -1 } : null);
   if (sort) {
     const col = cols.find(c => c.k === sort.k);
@@ -269,11 +276,13 @@ function renderList(kind) {
       return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}"${c.wrap && v ? ` title="${esc(v)}"` : ""}>${esc(v)}</td>`;
     }).join("");
     const extra = kind === "req" && r["상태"] === "대기"
-      ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}">집행전환</button>` : "";
-    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === "exec" && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}">${tds}<td class="actions">${extra}<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button><button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td></tr>`;
+      ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}">집행전환</button>`
+      : kind === "labor" ? (r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
+    const editBtn = kind === "labor" && r["상태"] === "확정" ? "" : `<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button>`;
+    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === "exec" && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}">${tds}<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td></tr>`;
   }).join("") : `<tr><td class="empty" colspan="${cols.length + 1}">표시할 항목이 없습니다.</td></tr>`;
   let foot = "";
-  if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit")) {
+  if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor")) {
     const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
     foot = `<tfoot><tr class="total">${cols.map(c => c.k === "금액" ? `<td class="num amt${minorCls(c)}">${fmt(sum)}</td>` : `<td class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}<td class="actions"></td></tr></tfoot>`;
   }
@@ -284,7 +293,7 @@ function renderList(kind) {
   }));
   const wrap = table.closest(".table-wrap"); if (wrap) { wrap.classList.toggle("empty", rows.length === 0); wrap.classList.toggle("scrollable", table.scrollWidth > wrap.clientWidth + 4); }
 
-  if (kind === "exec" || kind === "req") {
+  if (kind === "exec" || kind === "req" || kind === "labor") {
     const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
     $(`#${kind}-sum`).textContent = `${rows.length}건 · 합계 ${fmt(sum)}원`;
   }
@@ -462,7 +471,7 @@ $("#dash-month").addEventListener("change", renderDashboard);
 $$("[data-csv]").forEach(b => b.addEventListener("click", () => {
   const kind = b.dataset.csv; const cols = COLS[kind].map(c => c.k); const rows = filtered(kind).map(r => cols.map(k => k === "상태" ? (STATUS_LABEL[r[k]] || r[k]) : r[k]));
   if (!rows.length) { showAlert("저장할 행이 없습니다.", "warn"); return; }
-  downloadCSV(`${kind === "exec" ? "집행내역" : "품의내역"}_${today()}.csv`, cols, rows);
+  downloadCSV(`${{ exec: "집행내역", req: "품의내역", labor: "인건비지급" }[kind] || kind}_${today()}.csv`, cols, rows);
 }));
 $("#exec-cols-all").addEventListener("change", e => { try { localStorage.setItem("ledger-exec-minor", e.target.checked ? "1" : "0"); } catch { } renderList("exec"); });
 try { $("#exec-cols-all").checked = localStorage.getItem("ledger-exec-minor") === "1"; } catch { }
@@ -530,12 +539,12 @@ function rememberLast(kind, rec) {
 function openForm(kind, row, preset, opts = {}) {
   const rec = row != null ? DATA[kind].find(r => r._row === row) : null;
   const fields = formFields(kind).filter(f => !(f.onlyNew && rec));
-  const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그" };
+  const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
   $("#dlg-title").textContent = opts.title || ((rec ? "수정 - " : "추가 - ") + titles[kind]);
   $("#dlg-error").hidden = true;
-  $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !["exec", "req", "deposit", "budget", "tags"].includes(kind);
+  $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !["exec", "req", "deposit", "budget", "tags", "labor", "salary", "people"].includes(kind);
   const tagDefault = DATA.tags.some(t => t["태그명"] === "적립금") ? "적립금" : "";
-  const defaults = { 원인발생일: today(), 일자: today(), 상태: "대기", 구분: "적립", _태그: tagDefault, 재원: FILTERS[kind]?.["재원"] || "", ...lastDefaults(kind), ...(preset || {}) };
+  const defaults = { 원인발생일: today(), 일자: today(), 상태: "대기", 구분: "적립", _태그: tagDefault, 재원: FILTERS[kind]?.["재원"] || "", ...(typeof laborDefaults === "function" ? laborDefaults(kind) : {}), ...lastDefaults(kind), ...(preset || {}) };
   $("#dlg-fields").innerHTML = fields.map(f => {
     const v = rec ? (rec[f.k] ?? "") : (defaults[f.k] ?? "");
     const id = "f-" + f.k;
@@ -550,6 +559,7 @@ function openForm(kind, row, preset, opts = {}) {
       input = `<select id="${id}" name="${esc(f.k)}"${f.req ? " required" : ""}>${opts.map(o => `<option value="${esc(o)}"${o === v ? " selected" : ""}>${esc(o || "(선택)")}</option>`).join("")}${extra}</select>`;
     }
     else if (f.type === "date") input = `<input id="${id}" name="${esc(f.k)}" type="date" value="${esc(v)}"${f.req ? " required" : ""}>`;
+    else if (f.type === "month") input = `<input id="${id}" name="${esc(f.k)}" type="month" value="${esc(v)}"${f.req ? " required" : ""}>`;
     else if (f.type === "num") input = `<input id="${id}" name="${esc(f.k)}" type="text" inputmode="numeric" class="num-input" value="${v === "" || v == null ? "" : fmt(v)}"${f.req ? " required" : ""} placeholder="0">`;
     else if (f.type === "datalist") input = `<input id="${id}" name="${esc(f.k)}" type="text" list="dl-${esc(f.list || (f.k === "품의자" ? "사용자" : f.k))}" value="${esc(v)}" autocomplete="off">`;
     else input = `<input id="${id}" name="${esc(f.k)}" type="text" value="${esc(v)}"${f.req ? " required" : ""}>`;
@@ -722,7 +732,8 @@ async function del(kind, row) {
     return;
   }
   const no = r?.["거래번호"] || r?.["품의번호"] || r?.["재원코드"] || r?.["태그명"];
-  const label = no ? [no, r["거래처"] || r["과제명"] || r["분류"], r["금액"] != null && kind !== "funds" && kind !== "tags" ? fmt(r["금액"]) + "원" : "", r["원인발생일"] ? mmdd(r["원인발생일"]) : "", (r["적요"] || r["설명"] || "").slice(0, 30)].filter(Boolean).join(" · ")
+  const laborLbl = typeof laborLabel === "function" ? laborLabel(kind, r) : null;
+  const label = laborLbl ? laborLbl + (kind === "labor" && r["연결거래번호"] ? `\n연결 집행 ${r["연결거래번호"]} 도 함께 삭제됩니다.` : "") : no ? [no, r["거래처"] || r["과제명"] || r["분류"], r["금액"] != null && kind !== "funds" && kind !== "tags" ? fmt(r["금액"]) + "원" : "", r["원인발생일"] ? mmdd(r["원인발생일"]) : "", (r["적요"] || r["설명"] || "").slice(0, 30)].filter(Boolean).join(" · ")
     : (kind === "deposit" ? `${r?.["일자"]} ${r?.["거래처"]} ${r?.["구분"]} ${fmt(r?.["금액"])}원` : `${r?.["재원"]} ${r?.["변경회차"]}회차`);
   if (!confirm(`삭제: ${label}\n\n되돌릴 수 없습니다. 실수로 지웠다면 app/backup 폴더의 최신 파일을 장부 이름으로 복사해 복원할 수 있습니다.\n\n계속할까요?`)) return;
   try { await api("DELETE", `/api/${kind}/${row}`, { expect: expectOf(kind, r) }); showAlert(`${no || label} 삭제했습니다.`, "ok"); await load(); }

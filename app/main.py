@@ -56,6 +56,22 @@ def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/labor")
+def labor_page():
+    """인건비 화면: 같은 페이지, 주소로 모드 전환."""
+    return FileResponse(STATIC / "index.html")
+
+
+@app.post("/api/labor/bulk")
+def labor_bulk(body: dict):
+    return store.labor_bulk(body.get("rows") or [], bool(body.get("skip_dup")))
+
+
+@app.post("/api/labor/{row}/action")
+def labor_action(row: int, body: dict):
+    return store.labor_action(row, body.get("action", ""), body.get("pay_date"), body.get("expect"))
+
+
 @app.get("/api/all")
 def all_data():
     data = store.read_all()
