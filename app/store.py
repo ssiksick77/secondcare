@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import datetime as dt
 import os
 import re
@@ -371,6 +372,32 @@ def _backup():
     olds = sorted(BACKUP_DIR.glob(f"{XLSX_PATH.stem}_*.xlsx"))
     for p in olds[:-BACKUP_KEEP]:
         p.unlink(missing_ok=True)
+    return dst
+
+
+def _file_hash() -> str:
+    return hashlib.sha256(XLSX_PATH.read_bytes()).hexdigest()
+
+
+# 직전 쓰기 기록: 되돌리기는 "그 이후 아무도 장부를 바꾸지 않았을 때"만 허용 (해시 비교)
+LAST_WRITE: dict | None = None
+
+
+def undo_last() -> dict:
+    """직전 저장 직전의 백업으로 장부를 되돌린다. 이후 다른 변경(다른 창·MCP·엑셀)이 있으면 거부."""
+    global LAST_WRITE
+    with _lock, _file_lock():
+        if not LAST_WRITE or not Path(LAST_WRITE["backup"]).exists():
+            raise ValueError("되돌릴 직전 변경이 없습니다.")
+        if _file_hash() != LAST_WRITE["after"]:
+            raise ValueError("그 뒤에 장부가 다시 바뀌어 되돌릴 수 없습니다. 목록을 새로고침하세요.")
+        _check_writable()
+        tmp = XLSX_PATH.with_suffix(".tmp.xlsx")
+        shutil.copy2(LAST_WRITE["backup"], tmp)
+        os.replace(tmp, XLSX_PATH)
+        info = {"undone": LAST_WRITE.get("label", "")}
+        LAST_WRITE = None
+        return info
 
 
 def _check_writable():
@@ -384,12 +411,14 @@ def _check_writable():
 
 
 def _save(wb):
+    global LAST_WRITE
     _check_writable()
-    _backup()
+    backup = _backup()
     tmp = XLSX_PATH.with_suffix(".tmp.xlsx")
     try:
         wb.save(tmp)
         os.replace(tmp, XLSX_PATH)
+        LAST_WRITE = {"backup": str(backup), "after": _file_hash(), "at": dt.datetime.now().isoformat(timespec="seconds")}
     except PermissionError as e:
         tmp.unlink(missing_ok=True)
         raise LedgerLocked("장부 파일에 쓸 수 없습니다. 다른 프로그램에서 열려 있는지 확인하세요.") from e

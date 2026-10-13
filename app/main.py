@@ -62,6 +62,12 @@ def labor_page():
     return FileResponse(STATIC / "index.html")
 
 
+@app.post("/api/undo")
+def undo_last():
+    """직전 저장을 되돌림 (삭제·확정 취소·상태 변경 토스트의 '되돌리기')."""
+    return store.undo_last()
+
+
 @app.post("/api/labor/bulk")
 def labor_bulk(body: dict):
     return store.labor_bulk(body.get("rows") or [], bool(body.get("skip_dup")))

@@ -140,7 +140,7 @@ async function load() {
 
 function renderStatus() {
   const st = $("#file-status");
-  st.textContent = (DATA.meta.locked ? "주의: 엑셀에서 열려 있음 (저장 불가) · " : "") + "파일 수정 " + DATA.meta.mtime.replace("T", " ");
+  st.textContent = (DATA.meta.locked ? "주의: 엑셀에서 열려 있음 (저장 불가) · " : "") + (DATA.meta.formula_count ? `수식 셀 ${DATA.meta.formula_count}개 · ` : "") + "파일 수정 " + DATA.meta.mtime.replace("T", " ");
   st.classList.toggle("locked", DATA.meta.locked);
   showBanner(DATA.meta.formula_count ? `장부에 수식 셀이 ${DATA.meta.formula_count}개 있습니다 (${DATA.meta.formula_cells.join(", ")}). 앱은 수식을 읽지 못해 0으로 집계하며, 해당 행을 저장하면 값으로 바뀝니다. 엑셀에서 값으로 바꿔 주세요.` : "");
   $("#foot-path").textContent = DATA.meta.file;
@@ -257,10 +257,16 @@ function renderList(kind) {
   table.classList.toggle("show-minor", showMinor);
   const minorCls = c => c.minor ? " col-minor" : "";
   const SORT_SVG = d => `<span class="sort-ind" aria-hidden="true"><svg viewBox="0 0 10 10"><path d="${d > 0 ? "M2 7l3-4 3 4" : "M2 3l3 4 3-4"}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
-  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}">${esc(c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</th>`).join("")}<th class="actions">작업</th></tr></thead>`;
+  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}">${esc(c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</th>`).join("")}<th class="actions">작업</th></tr></thead>`;
   const body = rows.length ? rows.map(r => {
     const tds = cols.map(c => {
       const v = c.calc ? c.calc(r) : r[c.k];
+      const td = html => html.replace(/^<td(?=[\s>])/, `<td data-col="${esc(c.k)}"`);
+      return td(cellHtml(c, r, v));
+    }).join("");
+    return rowHtml(r, tds);
+  }).join("") : `<tr><td class="empty" colspan="${cols.length + 1}">표시할 항목이 없습니다.</td></tr>`;
+  function cellHtml(c, r, v) {
       if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미등록 재원">-</span>' : fmt(v)}</td>`;
       if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit")) {
         if (kind === "exec" && (c.k === "지급청구일" || c.k === "지출완료일") && !v) { /* 아래 등록 버튼 분기로 */ }
@@ -277,13 +283,14 @@ function renderList(kind) {
       }
       if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap">${esc(v)}${originBadge(r)}</td>`;
       return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}"${c.wrap && v ? ` title="${esc(v)}"` : ""}>${esc(v)}</td>`;
-    }).join("");
+  }
+  function rowHtml(r, tds) {
     const extra = kind === "req" && r["상태"] === "대기"
       ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}">집행전환</button>`
       : kind === "labor" ? (r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
     const editBtn = kind === "labor" && r["상태"] === "확정" ? "" : `<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button>`;
     return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === "exec" && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}">${tds}<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td></tr>`;
-  }).join("") : `<tr><td class="empty" colspan="${cols.length + 1}">표시할 항목이 없습니다.</td></tr>`;
+  }
   let foot = "";
   if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor")) {
     const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
@@ -431,17 +438,17 @@ function renderDashboard() {
   $("#dash-cards").innerHTML = itemCards.length ? itemCards.map(([i, c]) => {
     const avail = c.b - c.sa - c.p, rate = c.b ? c.sa / c.b : null, used = c.b ? Math.min(1, (c.sa + c.p) / c.b) : 1;
     const bar = c.b ? `<div class="bar" aria-hidden="true"><i class="${c.sa > c.b ? "over" : ""}" style="width:${Math.min(100, c.sa / c.b * 100).toFixed(1)}%"></i>${c.p ? `<i class="p" style="left:${Math.min(100, c.sa / c.b * 100).toFixed(1)}%;width:${Math.max(0, (used - Math.min(1, c.sa / c.b)) * 100).toFixed(1)}%"></i>` : ""}</div>` : "";
-    return `<div class="card" role="listitem" title="${esc(i)}: 예산현액 ${fmt(c.b)} · 집행 ${fmt(c.sa)}${c.p ? ` · 품의대기 ${fmt(c.p)}` : ""} · 가용잔액 ${fmt(avail)}"><div class="k">${esc(i)}</div><div class="v${avail < 0 ? " neg" : ""}">${fmt(avail)}</div><div class="sub"><span>집행 ${fmt(c.sa)}${c.p ? ` <span class="muted">+대기 ${fmt(c.p)}</span>` : ""}</span><span>${rate == null ? "예산 없음" : pct(rate)}</span></div>${bar}</div>`;
+    return `<div class="card" role="listitem" title="${esc(i)}: 예산현액 ${fmt(c.b)} · 집행 ${fmt(c.sa)}${c.p ? ` · 품의대기 ${fmt(c.p)}` : ""} · 가용잔액 ${fmt(avail)}"><div class="k">${esc(i)}</div>${c.b ? `<div class="v${avail < 0 ? " neg" : ""}">${fmt(avail)}</div>` : `<div class="v nobudget" title="예산변동에 이 예산목의 예산을 입력하면 가용잔액이 계산됩니다">예산 미입력</div>`}<div class="sub"><span>집행 ${fmt(c.sa)}${c.p ? ` <span class="muted">+대기 ${fmt(c.p)}</span>` : ""}</span><span>${rate == null ? "예산 없음" : pct(rate)}</span></div>${bar}</div>`;
   }).join("") : `<div class="card empty-card"><div class="k">예산목별 가용잔액</div><div class="v">-</div><div class="sub"><span>${DATA.funds.length ? "예산·집행 데이터가 없습니다" : "재원을 먼저 등록하세요"}</span></div></div>`;
   const exAmt = excluded.reduce((a, r) => a + (r["금액"] || 0), 0);
-  $("#dash-note").innerHTML = esc((year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.sa / tot.b) : "-"} · 품의대기 ${fmt(tot.p)} (${reqs.length}건) · 가용잔액 ${fmt(tot.b - tot.sa - tot.p)} · 미완료 ${unpaid}건`)
+  $("#dash-note").innerHTML = esc((year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.sa / tot.b) : "-"} · 품의대기 ${fmt(tot.p)} (${reqs.length}건) · 가용잔액 ${tot.b ? fmt(tot.b - tot.sa - tot.p) : "예산 미입력"} · 미완료 ${unpaid}건`)
     + (excluded.length ? ` · <button type="button" class="link" data-act="show-excluded" title="재원 목록에 없는 지급처(외부 인건비 등)나 예산목 목록 밖의 집행. 집행내역·태그 집계에는 포함되지만 예산 집계에서는 제외">집계 제외 ${excluded.length}건 ${fmt(exAmt)}원</button>` : "");
   $("#dash-defs").innerHTML = `칸의 큰 숫자 = 가용잔액 = 예산현액 − 집행(파일 전체) − 품의대기(날짜 무관, 선택한 재원 합산) · 막대 = 집행률(회색은 품의대기) · 예산현액 = 재원별 이월+당초+변경 합계 · 집행액 열만 연·월 필터(원인발생일) 적용 · 잔액 = 예산현액 − 집행(전체) · 미완료 = 지출완료일 없는 집행 건`;
 
   // 표
   const cols = month ? ["예산현액", `${parseInt(month)}월 집행`, "누계 집행", "잔액", "집행률", "품의대기", "가용잔액"] : ["예산현액", "집행액", "잔액", "집행률", "품의대기", "가용잔액"];
   const th = `<thead><tr><th>재원</th><th>예산목</th>${cols.map(c => `<th class="num${c === "예산현액" ? " amt" : ""}">${c}</th>`).join("")}</tr></thead>`;
-  const line = (f, i, c, cls) => `<tr class="${cls}"><td>${cls === "total" ? esc(f) : ""}</td><td>${esc(i)}</td><td class="num amt">${fmt(c.b)}</td>${month ? `<td class="num">${fmt(c.sm)}</td>` : ""}<td class="num">${fmt(c.s)}</td><td class="num ${c.b - c.sa < 0 ? "neg" : ""}">${fmt(c.b - c.sa)}</td><td class="num">${pct(c.b ? c.sa / c.b : null)}</td><td class="num">${fmt(c.p)}</td><td class="num ${c.b - c.sa - c.p < 0 ? "neg" : ""}">${fmt(c.b - c.sa - c.p)}</td></tr>`;
+  const line = (f, i, c, cls) => `<tr class="${cls}"><td>${cls === "total" ? esc(f) : ""}</td><td>${esc(i)}</td><td class="num amt">${fmt(c.b)}</td>${month ? `<td class="num">${fmt(c.sm)}</td>` : ""}<td class="num">${fmt(c.s)}</td><td class="num ${c.b && c.b - c.sa < 0 ? "neg" : ""}">${c.b ? fmt(c.b - c.sa) : '<span class="muted" title="예산 미입력">-</span>'}</td><td class="num">${pct(c.b ? c.sa / c.b : null)}</td><td class="num">${fmt(c.p)}</td><td class="num ${c.b && c.b - c.sa - c.p < 0 ? "neg" : ""}">${c.b ? fmt(c.b - c.sa - c.p) : '<span class="muted" title="예산 미입력">-</span>'}</td></tr>`;
   let body = "";
   DASH_ROWS = [];
   funds.forEach(f => {
@@ -645,7 +652,7 @@ $("#dlg-form").addEventListener("submit", async e => {
   }
   if (kind === "deposit" && rec["구분"] === "사용" && rec["거래처"]) {
     const bal = DATA.deposit.filter(x => x["거래처"] === rec["거래처"] && x._row !== Number(row || 0)).reduce((a, x) => a + (x["구분"] === "적립" ? 1 : -1) * (x["금액"] || 0), 0);
-    if (bal - rec["금액"] < 0 && !confirm(`${rec["거래처"]} 적립금 잔액 ${fmt(bal)}원을 넘습니다 (저장 후 ${fmt(bal - rec["금액"])}원). 선결제가 더 있다면 먼저 적립을 입력하세요.\n\n그래도 저장할까요?`)) return;
+    if (bal - rec["금액"] < 0 && !await confirmDlg({ title: "적립금 잔액 초과", body: `${rec["거래처"]} 적립금 잔액 ${fmt(bal)}원을 넘습니다 (저장 후 ${fmt(bal - rec["금액"])}원). 선결제가 더 있다면 먼저 적립을 입력하세요.`, verb: "그래도 저장" })) return;
   }
   // B8: 저장 전 경고 (차단 아님). 새 행·전환·수정 모두 잔액을 검사하되, 전환 중인 품의와 수정 중인 행 자신은 빼고 계산
   if (kind === "exec" || kind === "req") {
@@ -662,7 +669,7 @@ $("#dlg-form").addEventListener("submit", async e => {
     const av = availableBudget(rec["재원"], rec["예산목"], opts);
     const changed = !cur || cur["재원"] !== rec["재원"] || cur["예산목"] !== rec["예산목"] || (rec["금액"] || 0) > (cur["금액"] || 0) || cur["상태"] !== rec["상태"];
     if (counts && changed && av != null && av - rec["금액"] < 0) warns.push(`${rec["재원"]} ${rec["예산목"]} 가용잔액 ${fmt(av)}원을 넘습니다 (저장 후 ${fmt(av - rec["금액"])}원).`);
-    if (warns.length && !confirm(warns.join("\n\n") + "\n\n그래도 저장할까요?")) return;
+    if (warns.length && !await confirmDlg({ title: "저장 전 확인", body: warns.join("\n\n"), verb: "그래도 저장" })) return;
   }
   if (kind === "exec" && row) { const cur = DATA.exec.find(x => x._row === Number(row)); if (cur) ["상태", "증빙폴더", "증빙목록"].forEach(k => { rec[k] = cur[k]; }); }
   const more = dlg.dataset.saveMore === "1"; dlg.dataset.saveMore = "";
@@ -696,7 +703,7 @@ $("#dlg-save-more").addEventListener("click", () => { $("#dlg").dataset.saveMore
 function availableBudget(fund, item, opts = {}) {
   if (!fund || !item) return null;
   const b = DATA.budget.filter(r => r["재원"] === fund).reduce((a, r) => a + (r[item] || 0), 0);
-  if (!b && !DATA.budget.some(r => r["재원"] === fund)) return null;  // 예산 미등록 재원은 경고 생략
+  if (!b) return null;  // 예산 미입력(재원 또는 예산목)은 '-' 로 표시하고 경고 생략 (대시보드 '예산 미입력'과 동일 기준)
   const s = DATA.exec.filter(r => r["재원"] === fund && r["예산목"] === item && r._row !== opts.excludeExec).reduce((a, r) => a + (r["금액"] || 0), 0);
   const p = DATA.req.filter(r => r["재원"] === fund && r["예산목"] === item && r["상태"] === "대기" && r._row !== opts.excludeReq).reduce((a, r) => a + (r["금액"] || 0), 0);
   return b - s - p;
@@ -750,8 +757,8 @@ async function del(kind, row) {
   if (kind === "deposit" && r && r["연결거래번호"]) {
     const ex = DATA.exec.find(x => x["거래번호"] === r["연결거래번호"]);
     const msg = `이 적립 건은 집행 ${r["연결거래번호"]}${ex ? ` (${ex["거래처"] || "-"}, ${fmt(ex["금액"])}원)` : ""} 과 연결되어 있습니다.\n\n[확인] = 적립 건과 연결 집행을 함께 삭제 (예산 차감도 취소)\n[취소] = 아무것도 삭제하지 않음\n\n적립 건만 지우려면 먼저 집행내역에서 해당 집행을 정리하세요.`;
-    if (!confirm(msg)) return;
-    try { await api("DELETE", `/api/deposit/${row}`, { expect: expectOf("deposit", r), cascade: true }); showAlert(`적립 건과 집행 ${r["연결거래번호"]} 을 삭제했습니다.`, "ok"); await load(); }
+    if (!await confirmDlg({ title: "적립 건과 연결 집행 삭제", body: msg.replace(/\n\n\[확인\][\s\S]*$/, "\n\n적립 건과 연결 집행을 함께 삭제합니다 (예산 차감도 취소). 적립 건만 지우려면 먼저 집행내역에서 해당 집행을 정리하세요."), verb: "둘 다 삭제", danger: true })) return;
+    try { await api("DELETE", `/api/deposit/${row}`, { expect: expectOf("deposit", r), cascade: true }); showAlert(`적립 건과 집행 ${r["연결거래번호"]} 을 삭제했습니다.`, "ok", { undo: true }); await load(); }
     catch (e) { showAlert(e.message, "error"); }
     return;
   }
@@ -760,14 +767,44 @@ async function del(kind, row) {
   const laborLbl = typeof laborLabel === "function" ? laborLabel(kind, r) : null;
   const label = laborLbl ? laborLbl + (kind === "labor" && r["연결거래번호"] ? `\n연결 집행 ${r["연결거래번호"]} 도 함께 삭제됩니다.` : "") : no ? [no, r["거래처"] || r["과제명"] || r["분류"], r["금액"] != null && kind !== "funds" && kind !== "tags" ? fmt(r["금액"]) + "원" : "", r["원인발생일"] ? mmdd(r["원인발생일"]) : "", (r["적요"] || r["설명"] || "").slice(0, 30)].filter(Boolean).join(" · ")
     : (kind === "deposit" ? `${r?.["일자"]} ${r?.["거래처"]} ${r?.["구분"]} ${fmt(r?.["금액"])}원` : `${r?.["재원"]} ${r?.["변경회차"]}회차`);
-  if (!confirm(`삭제: ${label}\n\n되돌릴 수 없습니다. 실수로 지웠다면 app/backup 폴더의 최신 파일을 장부 이름으로 복사해 복원할 수 있습니다.\n\n계속할까요?`)) return;
-  try { await api("DELETE", `/api/${kind}/${row}`, { expect: expectOf(kind, r) }); showAlert(`${no || label} 삭제했습니다.`, "ok"); await load(); }
+  if (!await confirmDlg({ title: "삭제", body: `${label}\n\n삭제 직후 토스트의 '되돌리기'로 복구할 수 있습니다. 그 뒤에는 app/backup 폴더의 백업 파일로만 복원됩니다.`, verb: "삭제", danger: true })) return;
+  try { await api("DELETE", `/api/${kind}/${row}`, { expect: expectOf(kind, r) }); showAlert(`${no || label} 삭제했습니다.`, "ok", { undo: true }); await load(); }
   catch (e) { showAlert(e.message, "error"); }
 }
 
 // ---------- 공통 UI ----------
+// 스타일 확인 대화상자. confirmDlg({title, body, verb, danger, input:{label,type,value}}) → 확인이면 true(입력 있으면 값), 취소면 null
+function confirmDlg(o) {
+  return new Promise(resolve => {
+    const d = $("#dlg-confirm"), form = $("#dlg-confirm-form"), cancel = $("#confirm-cancel"), ok = $("#confirm-ok");
+    const w = $("#confirm-input-wrap"), inp = $("#confirm-input");
+    $("#confirm-title").textContent = o.title || "확인";
+    $("#confirm-body").textContent = o.body || "";
+    w.hidden = !o.input; if (o.input) { $("#confirm-input-label").textContent = o.input.label || ""; inp.type = o.input.type || "text"; inp.value = o.input.value || ""; }
+    ok.textContent = o.verb || "확인"; ok.className = "btn " + (o.danger ? "btn-danger-solid" : "btn-primary");
+    let done = false;
+    const onSubmit = e => { e.preventDefault(); finish(o.input ? inp.value : true); };
+    const onCancel = () => finish(null);
+    const onClose = () => finish(null);
+    function finish(v) {
+      if (done) return; done = true;
+      form.removeEventListener("submit", onSubmit); cancel.removeEventListener("click", onCancel); d.removeEventListener("close", onClose);
+      if (d.open) d.close();
+      resolve(v);
+    }
+    form.addEventListener("submit", onSubmit); cancel.addEventListener("click", onCancel);
+    // 직전 대화상자의 close 이벤트가 뒤늦게 도착해 이번 대화상자를 닫지 않도록, 열고 난 다음 틱에 close 를 듣는다
+    const open = () => { d.showModal(); (o.input ? inp : (o.danger ? cancel : ok)).focus(); setTimeout(() => { if (!done) d.addEventListener("close", onClose); }, 0); };
+    if (d.open) { d.close(); setTimeout(open, 0); } else open();
+  });
+}
+// 직전 저장 되돌리기 (서버가 저장 직전 백업을 복원; 그 뒤 다른 변경이 있으면 거부)
+async function undoLast(t) {
+  try { await api("POST", "/api/undo"); if (t) t.remove(); showAlert("되돌렸습니다.", "ok"); await load(); if (typeof refreshCellDialog === "function") refreshCellDialog(); }
+  catch (e) { showAlert("되돌리기 실패: " + e.message, "error"); }
+}
 // 토스트 메시지: ok 4초, warn 7초 후 자동 닫힘. error 는 닫기 버튼을 누를 때까지 유지(최대 5개).
-function showAlert(msg, type = "ok") {
+function showAlert(msg, type = "ok", opts = {}) {
   let box = $("#toasts");
   if (!box) { box = document.createElement("div"); box.id = "toasts"; box.className = "toasts"; box.setAttribute("aria-live", "polite"); document.body.appendChild(box); }
   // 모달 대화상자(top layer) 위에도 보이도록 popover 로 띄움 (지원 브라우저만)
@@ -778,31 +815,34 @@ function showAlert(msg, type = "ok") {
   t.className = "toast " + type; t.setAttribute("role", type === "error" ? "alert" : "status");
   t.innerHTML = `<span class="toast-msg"></span><button type="button" class="toast-x" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`;
   t.querySelector(".toast-msg").textContent = msg;
+  if (opts.undo) { const u = document.createElement("button"); u.type = "button"; u.className = "btn btn-sm toast-undo"; u.textContent = "되돌리기"; u.addEventListener("click", () => undoLast(t)); t.insertBefore(u, t.querySelector(".toast-x")); }
   t.querySelector(".toast-x").addEventListener("click", () => t.remove());
   box.appendChild(t);
   while (box.children.length > 5) box.firstChild.remove();
-  const ttl = type === "ok" ? 4000 : type === "warn" ? 7000 : 0;
+  const ttl = opts.undo ? 12000 : type === "ok" ? 4000 : type === "warn" ? 7000 : 0;
   if (ttl) setTimeout(() => t.remove(), ttl);
 }
 // 지속 배너 (수식 셀 경고처럼 사용자가 해결할 때까지 보여야 하는 것)
+// 수식 셀 배너: 집행내역 탭에서만 전체 문구, 다른 곳은 헤더 상태 한 줄로만 (붉은색 상시 노출 방지)
 function showBanner(msg) {
   const a = $("#alert");
   if (!msg) { a.hidden = true; return; }
-  a.textContent = msg; a.className = "alert error"; a.hidden = false;
+  a.textContent = msg; a.className = "alert error formula"; a.hidden = false;
 }
 
 function closeExecDrawer() { $("#exec-drawer").hidden = true; document.body.classList.remove("drawer-open"); if (XD.row != null) { XD.row = null; if (DATA) renderList("exec"); } }
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#exec-drawer").hidden && !$("#dlg").open && !$("#dlg-settings").open) closeExecDrawer(); });
 function switchTab(name) {
+  document.body.dataset.tab = name;
   if (name !== "exec") closeExecDrawer();
-  $$(".tabs [role=tab]").forEach(b => {
+  $$("#main-tabs [role=tab]").forEach(b => {
     const on = b.id === "tab-" + name;
     b.setAttribute("aria-selected", on);
     $("#" + b.getAttribute("aria-controls")).hidden = !on;
   });
   try { localStorage.setItem("ledger-tab", name); } catch { }
 }
-$$(".tabs [role=tab]").forEach(b => b.addEventListener("click", () => switchTab(b.id.replace("tab-", ""))));
+$$("#main-tabs [role=tab]").forEach(b => b.addEventListener("click", () => switchTab(b.id.replace("tab-", ""))));
 
 document.addEventListener("click", e => {
   const b = e.target.closest("button[data-act], button[data-add]");
@@ -1119,7 +1159,7 @@ $("#s-test").addEventListener("click", async () => {
 $("#s-clear-key").addEventListener("click", async () => {
   const p = $("#s-provider").value;
   const key = p === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
-  if (!confirm(`${p === "openai" ? "OpenAI" : "Anthropic"} API 키를 설정 파일(.env)에서 삭제합니다. 계속할까요?`)) return;
+  if (!await confirmDlg({ title: "API 키 삭제", body: `${p === "openai" ? "OpenAI" : "Anthropic"} API 키를 설정 파일(.env)에서 삭제합니다.`, verb: "삭제", danger: true })) return;
   try { $(`[name=${key}]`).value = "__clear__"; await saveSettings(); setMsg("키를 삭제했습니다."); }
   catch (err) { setMsg("삭제 실패: " + err.message, true); }
 });
@@ -1173,11 +1213,11 @@ $$("[data-filter][data-kind=exec]").forEach(el => el.addEventListener("input", r
 async function execAction(row, action, btn) {
   const r = DATA.exec.find(x => x._row === row); if (!r) return;
   const label = { claim: "지급청구일 등록", complete: "지출완료일 등록", fix: "보완 표시", unfix: "보완 해제", uncomplete: "완료 취소 (지출완료일 삭제)" }[action];
-  if (action === "uncomplete" && !confirm(`${r["거래번호"]} 의 지출완료일(${r["지출완료일"]})을 지우고 청구 상태로 되돌립니다. 계속할까요?`)) return;
+  if (action === "uncomplete" && !await confirmDlg({ title: "완료 취소", body: `${r["거래번호"]} 의 지출완료일(${r["지출완료일"]})을 지우고 청구 상태로 되돌립니다.`, verb: "완료 취소", danger: true })) return;
   if (btn) btn.disabled = true;
   try {
     await api("POST", `/api/exec/${row}/action`, { action, expect: expectOf("exec", r) });
-    showAlert(`${r["거래번호"]} ${label} (${today()})`, "ok");
+    showAlert(`${r["거래번호"]} ${label} (${today()})`, "ok", { undo: true });
     await load();
   } catch (e) { showAlert(e.message, "error"); if (btn) btn.disabled = false; }
 }
@@ -1245,7 +1285,7 @@ async function renderExecDrawer(fetchEvid) {
         <label>증빙종류 <input type="text" name="kind" list="dl-증빙종류" required autocomplete="off" placeholder="예: 카드전표, 견적서, 회의록"></label>
         <label>파일명 날짜 <input type="date" name="date" value="${esc(r["원인발생일"] || today())}"></label>
         <label class="wide">비고 <input type="text" name="note" placeholder="선택"></label>
-        <label class="wide">파일 <input type="file" name="files" multiple ${drive.connected ? "" : "disabled"}></label>
+        <label class="wide file-pick">파일 <span class="file-pick-row"><input type="file" name="files" multiple ${drive.connected ? "" : "disabled"}><span class="btn btn-sm file-btn" aria-hidden="true">파일 선택</span><span class="file-names">선택된 파일 없음</span></span></label>
         <div class="drop wide" id="evid-drop"><b>파일을 여기로 끌어다 놓으세요</b><br>이름은 재원_적요_증빙종류_금액_YYMMDD 로 자동 변환되어 드라이브 증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])} 에 저장됩니다.</div>
         <div class="wide" style="display:flex;justify-content:flex-end"><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
       </form>
@@ -1258,6 +1298,9 @@ async function renderExecDrawer(fetchEvid) {
 function bindEvidForm(r) {
   const form = $("#evid-form"); if (!form) return;
   const fileInput = form.querySelector("[name=files]");
+  const names = form.querySelector(".file-names");
+  const showNames = () => { const f = fileInput.files; names.textContent = f.length ? (f.length === 1 ? f[0].name : `${f[0].name} 외 ${f.length - 1}개`) : "선택된 파일 없음"; };
+  fileInput.addEventListener("change", showNames); showNames();
   const dz = $("#evid-drop");
   ["dragenter", "dragover"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add("hot"); }));
   ["dragleave", "drop"].forEach(ev => dz.addEventListener(ev, () => dz.classList.remove("hot")));
@@ -1280,7 +1323,7 @@ function bindEvidForm(r) {
   });
   $("#evid-copy")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText($(".evid-list code").textContent); showAlert("증빙목록을 복사했습니다.", "ok"); } catch { } });
   $$("#xd-body [data-evdel]").forEach(b => b.addEventListener("click", async () => {
-    if (!confirm(`'${b.dataset.name}' 을 장부에서 지우고 드라이브 휴지통으로 옮깁니다. 계속할까요?`)) return;
+    if (!await confirmDlg({ title: "증빙 삭제", body: `'${b.dataset.name}' 을 장부에서 지우고 드라이브 휴지통으로 옮깁니다.`, verb: "삭제", danger: true })) return;
     const row = Number(b.dataset.evdel); const e = (XD.evid || []).find(x => x._row === row);
     try {
       const res = await api("DELETE", `/api/evidence/${row}`, { expect: e ? { 거래번호: e["거래번호"], 파일명: e["파일명"] } : undefined });
@@ -1319,7 +1362,7 @@ $("#drive-connect").addEventListener("click", async () => {
   finally { refreshDriveStatus(); }
 });
 $("#drive-disconnect").addEventListener("click", async () => {
-  if (!confirm("드라이브 연결을 해제합니다 (토큰 삭제). 업로드된 파일은 그대로 남습니다.")) return;
+  if (!await confirmDlg({ title: "드라이브 연결 해제", body: "토큰을 삭제합니다. 업로드된 파일은 드라이브에 그대로 남습니다.", verb: "연결 해제", danger: true })) return;
   try { await api("POST", "/api/drive/disconnect"); setMsg("연결을 해제했습니다."); } catch (err) { setMsg(err.message, true); }
   refreshDriveStatus();
 });

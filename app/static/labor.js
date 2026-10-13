@@ -207,8 +207,8 @@ async function laborUnconfirm(row) {
   const r = DATA.labor.find(x => x._row === row); if (!r) return;
   const ev = DATA.evidence.filter(e => e["거래번호"] === r["연결거래번호"]).length;
   if (ev) return showAlert(`집행 ${r["연결거래번호"]} 에 증빙 ${ev}개가 등록되어 있어 확정을 취소할 수 없습니다. 집행내역 상세에서 증빙을 먼저 지우세요.`, "warn");
-  if (!confirm(`확정 취소: ${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원\n\n연결 집행 ${r["연결거래번호"] || ""} 이 집행내역에서 삭제되고 이 건은 '예정'으로 돌아갑니다. 계속할까요?`)) return;
-  try { await api("POST", `/api/labor/${row}/action`, { action: "unconfirm", expect: expectOf("labor", r) }); showAlert("확정을 취소했습니다 (예정으로 되돌림).", "ok"); await load(); refreshCellDialog(); }
+  if (!await confirmDlg({ title: "확정 취소", body: `${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원\n\n연결 집행 ${r["연결거래번호"] || ""} 이 집행내역에서 삭제되고 이 건은 '예정'으로 돌아갑니다.`, verb: "확정 취소", danger: true })) return;
+  try { await api("POST", `/api/labor/${row}/action`, { action: "unconfirm", expect: expectOf("labor", r) }); showAlert("확정을 취소했습니다 (예정으로 되돌림).", "ok", { undo: true }); await load(); refreshCellDialog(); }
   catch (err) { showAlert("취소 실패: " + err.message, "error"); }
 }
 
@@ -315,13 +315,13 @@ $("#dlg-bulk-form").addEventListener("submit", async e => {
 
 // ---------- 전월 계획 복사 ----------
 async function copyPrevMonth() {
-  const target = prompt("복사할 대상 월 (YYYY-MM). 그 전달의 예정·확정 건을 '예정'으로 복사하며, 이미 있는 건은 건너뜁니다.", curMonth());
+  const target = await confirmDlg({ title: "전월 계획 복사", body: "대상 월을 고르면 그 전달 귀속 예정·확정 건을 대상 월의 '예정'으로 복사합니다. 이미 있는 건은 건너뜁니다.", verb: "다음", input: { label: "대상 월", type: "month", value: curMonth() } });
   if (!target) return;
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(target)) return showAlert("월 형식은 YYYY-MM 입니다.", "warn");
   const src = addMonth(target, -1);
   const rows = DATA.labor.filter(r => r["귀속월"] === src).map(r => ({ 귀속월: target, 지급월: addMonth(r["지급월"], 1), 이름: r["이름"], 지급처: r["지급처"], 금액: r["금액"], 비고: r["비고"] || "" }));
   if (!rows.length) return showAlert(`${src} 귀속 지급 건이 없어 복사할 것이 없습니다.`, "warn");
-  if (!confirm(`${src} → ${target}: ${rows.length}건을 예정으로 복사합니다. 계속할까요?`)) return;
+  if (!await confirmDlg({ title: "전월 계획 복사", body: `${src} → ${target}: ${rows.length}건을 예정으로 복사합니다.`, verb: `${rows.length}건 복사` })) return;
   try { const res = await api("POST", "/api/labor/bulk", { rows, skip_dup: true }); showAlert(`${res.created}건 복사` + (res.skipped.length ? `, 이미 있는 ${res.skipped.length}건 건너뜀` : ""), "ok"); await load(); }
   catch (err) { showAlert("복사 실패: " + err.message, "error"); }
 }

@@ -3,7 +3,7 @@
 :root {
   --ink: #1E2124;
   --ink-2: #5A6270;
-  --ink-3: #8A919C;
+  --ink-3: #6B7380;
   --bg: #FFFFFF;
   --bg-table: #FAFBFC;
   --bg-head: #EEF0F3;
@@ -78,7 +78,7 @@ main { flex: 1; padding: 12px 20px 90px; width: 100%; margin: 0 auto; }
 .toolbar .btn-primary { margin-left: 6px; }
 
 /* ---------- 컨트롤 ---------- */
-select, input[type="text"], input[type="search"], input[type="date"], input[type="number"], input[type="url"], input[type="password"], textarea {
+select, input[type="text"], input[type="search"], input[type="date"], input[type="month"], input[type="number"], input[type="url"], input[type="password"], textarea {
   font: inherit; padding: 5px 8px; border: 1px solid var(--rule); border-radius: var(--radius); background: #fff; min-height: 32px; color: var(--ink);
 }
 select:hover, input:hover, textarea:hover { border-color: #B8BFC9; }
@@ -98,7 +98,7 @@ input:disabled, select:disabled, textarea:disabled { background: var(--bg-head);
 .btn-sm { padding: 0 9px; min-height: 26px; font-size: 12px; }
 .btn-danger { color: var(--alert); border-color: #E3B3AF; }
 .btn-danger:hover { background: var(--alert-bg); border-color: var(--alert); }
-.btn:disabled, .btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn:disabled, .btn[disabled] { opacity: 1; cursor: not-allowed; background: var(--bg-head); color: var(--ink-3); border-color: var(--rule); }
 .btn:disabled:hover { background: inherit; }
 .btn svg, .icon { width: 14px; height: 14px; display: inline-block; vertical-align: -2px; }
 .btn-x { width: 28px; height: 28px; min-height: 0; padding: 0; justify-content: center; }
@@ -351,7 +351,7 @@ body.labor-mode .top { border-bottom-color: var(--margin); }
 .tabs.labor .tabs-year select { min-height: 28px; }
 table.grid.plan td.cell { cursor: pointer; line-height: 1.15; padding: 2px 6px; min-width: 70px; }
 table.grid.plan td.cell small { display: block; font-size: 12px; font-weight: 400; color: var(--ink-3); white-space: nowrap; }
-table.grid.plan td.cell.short small { color: var(--alert); font-weight: 600; }
+table.grid.plan td.cell.short small { color: var(--warn); font-weight: 600; }
 table.grid.plan td.cell.over small { color: var(--warn); font-weight: 600; }
 table.grid.plan td.cell.ok small { color: var(--ok); }
 table.grid.plan td.cell.off { color: var(--ink-3); background: var(--bg-head); }
@@ -360,7 +360,7 @@ table.grid.plan td.cell:hover { background: var(--bg-select); }
 table.grid.plan th, table.grid.plan td { height: auto; min-height: var(--row); }
 table.grid.plan tbody td { height: 40px; }
 .plan-legend .lg { display: inline-block; padding: 0 6px; border: 1px solid var(--rule); border-radius: 2px; margin-right: 2px; font-size: 12px; }
-.plan-legend .lg.ok { color: var(--ok); } .plan-legend .lg.short { color: var(--alert); } .plan-legend .lg.over { color: var(--warn); } .plan-legend .lg.none { color: var(--ink-3); } .plan-legend .lg.off { background: var(--bg-head); color: var(--ink-3); }
+.plan-legend .lg.ok { color: var(--ok); } .plan-legend .lg.short { color: var(--warn); } .plan-legend .lg.over { color: var(--warn); } .plan-legend .lg.none { color: var(--ink-3); } .plan-legend .lg.off { background: var(--bg-head); color: var(--ink-3); }
 .badge.예정::before { background: var(--warn); } .badge.예정 { color: var(--warn); }
 .badge.확정::before { background: var(--ok); } .badge.확정 { color: var(--ok); }
 dialog.dlg-small { width: min(420px, 92vw); }
@@ -385,3 +385,21 @@ table.grid td.nowrap { white-space: nowrap; }
 .field-error.info { color: var(--ink-2); background: var(--bg-head); border-color: var(--rule); }
 .toasts:popover-open { position: fixed; inset: auto 14px auto auto; top: 12px; margin: 0; border: 0; padding: 0; background: transparent; overflow: visible; width: auto; max-width: min(520px, 92vw); }
 .toasts .toast { pointer-events: auto; }
+
+/* 비평 반영: 확인 대화상자·되돌리기·드로어 열림 시 열 접기·예산 미입력·수식 배너·파일 선택 */
+.confirm-body { white-space: pre-wrap; line-height: 1.55; margin: 4px 0 10px; }
+.btn-danger-solid { background: var(--alert); color: #fff; border-color: var(--alert); }
+.btn-danger-solid:hover { background: var(--alert-deep); border-color: var(--alert-deep); }
+.toast-undo { pointer-events: auto; flex: none; }
+body.drawer-open #exec-table [data-col="지급청구일"], body.drawer-open #exec-table [data-col="지출완료일"], body.drawer-open #exec-table [data-col="재원"],
+body.drawer-open #exec-table [data-col="세목"], body.drawer-open #exec-table [data-col="사용자"], body.drawer-open #exec-table [data-col="태그"],
+body.drawer-open #exec-table [data-col="증빙"], body.drawer-open #exec-table [data-col="비고"], body.drawer-open #exec-table [data-col="예산목 잔액"] { display: none; }
+.card .v.nobudget { font-size: 14px; font-weight: 600; color: var(--ink-2); line-height: 1.6; }
+.defs-box { margin: 0 0 8px; } .defs-box > summary { font-size: 12px; color: var(--ink-2); cursor: pointer; padding: 2px 0; }
+.defs-box > summary:hover { color: var(--ink); } .defs-box .defs { margin-top: 4px; }
+body:not([data-tab="exec"]) #alert.formula, body.labor-mode #alert.formula { display: none; }
+.file-pick-row { display: flex; align-items: center; gap: 8px; }
+.file-pick input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.file-pick input[type="file"]:focus-visible + .file-btn { outline: 2px solid var(--primary); outline-offset: 1px; }
+.file-pick input[type="file"]:disabled + .file-btn { background: var(--bg-head); color: var(--ink-3); }
+.file-names { font-size: 12px; color: var(--ink-2); }
