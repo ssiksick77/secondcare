@@ -58,7 +58,9 @@ function laborLabel(kind, r) {
 
 // ---------- 조회 도우미 ----------
 const laborYear = () => $("#labor-year").value || String(new Date().getFullYear());
-function curMonth() { const y = laborYear(), now = new Date(); return y === String(now.getFullYear()) ? now.toISOString().slice(0, 7) : `${y}-01`; }
+function curMonth() { const y = laborYear(), now = new Date(); return y === String(now.getFullYear()) ? localISO(now).slice(0, 7) : `${y}-01`; }
+// 선급·미지급 기준월: 이번 달 급여는 아직 발생 전으로 보고 직전 달까지 누적 (2026-10-13 결정). 과거 연도는 12월까지
+function closedMonth() { const y = laborYear(), now = new Date(); return y === String(now.getFullYear()) ? addMonth(localISO(now).slice(0, 7), -1) : (y < String(now.getFullYear()) ? `${y}-12` : `${y}-00`); }
 const monthsOf = y => Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`);
 const addMonth = (ym, n) => { let y = +ym.slice(0, 4), m = +ym.slice(5, 7) + n; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; } return `${y}-${String(m).padStart(2, "0")}`; };
 const peopleNames = () => DATA.people.map(p => p["이름"]);
@@ -80,8 +82,10 @@ function prepaid(p, year, through) {
   // 이월선급 + 확정지급(지급월) − 발생(귀속월, 기준급여×재직월) + 조정, 기준월까지 누적. 양수 선급, 음수 미지급
   let accrued = 0, paid = 0, adj = 0;
   monthsOf(year).filter(m => m <= through).forEach(m => { if (activeIn(p, m)) accrued += salaryFor(p["이름"], m) || 0; });
-  DATA.labor.forEach(r => { if (r["이름"] === p["이름"] && r["상태"] === "확정" && r["지급월"].startsWith(year) && r["지급월"] <= through) paid += r["금액"] || 0; });
-  DATA.ladj.forEach(r => { if (r["이름"] === p["이름"] && r["월"].startsWith(year) && r["월"] <= through) adj += r["금액"] || 0; });
+  // 발생은 직전 달(through)까지, 확정 지급·조정은 이번 달까지 → 이번 달 지급은 선급으로 잡힘
+  const payThrough = year === String(new Date().getFullYear()) ? curMonth() : `${year}-12`;
+  DATA.labor.forEach(r => { if (r["이름"] === p["이름"] && r["상태"] === "확정" && r["지급월"].startsWith(year) && r["지급월"] <= payThrough) paid += r["금액"] || 0; });
+  DATA.ladj.forEach(r => { if (r["이름"] === p["이름"] && r["월"].startsWith(year) && r["월"] <= payThrough) adj += r["금액"] || 0; });
   return { opening: p["이월선급"] || 0, accrued, paid, adj, balance: (p["이월선급"] || 0) + paid - accrued + adj };
 }
 
@@ -134,14 +138,15 @@ function renderLaborFunds() {
     const b = laborBudget(c);
     return { c, name: payeeName(c), b, done, plan, external: !DATA.funds.some(f => f["재원코드"] === c) };
   });
-  const t = rows.reduce((a, r) => ({ b: a.b + (r.b || 0), done: a.done + r.done, plan: a.plan + r.plan }), { b: 0, done: 0, plan: 0 });
+  const t = rows.filter(r => r.b != null).reduce((a, r) => ({ b: a.b + r.b, done: a.done + r.done, plan: a.plan + r.plan }), { b: 0, done: 0, plan: 0 });
+  const u = rows.filter(r => r.b == null).reduce((a, r) => ({ n: a.n + 1, done: a.done + r.done, plan: a.plan + r.plan }), { n: 0, done: 0, plan: 0 });
   const cell = (v, neg) => `<td class="num${neg ? " neg" : ""}">${v == null ? '<span class="muted" title="인건비예산 미입력">-</span>' : fmt(v)}</td>`;
   const line = r => `<tr><td>${esc(r.c)}${r.external ? ' <span class="muted">(외부)</span>' : ""}</td><td class="wrap">${esc(r.name)}</td><td class="num amt">${r.b == null ? '<span class="muted">관리 안 함</span>' : fmt(r.b)}</td>${cell(r.done)}${cell(r.plan)}${cell(r.b == null ? null : r.b - r.done, r.b != null && r.b - r.done < 0)}${cell(r.b == null ? null : r.b - r.done - r.plan, r.b != null && r.b - r.done - r.plan < 0)}</tr>`;
-  $("#labor-funds").innerHTML = `<thead><tr><th>지급처</th><th>과제명 · 지급처명</th><th class="num amt">인건비 예산</th><th class="num">확정 지급</th><th class="num">예정</th><th class="num">확정잔액</th><th class="num">예정잔액</th></tr></thead><tbody>${rows.map(line).join("") || `<tr><td class="empty" colspan="7">${y}년 인건비 지급 건과 인건비 예산이 없습니다. 재원 탭의 예산변동(내부·외부인건비) 또는 재원의 인건비예산 열, 지급처 탭의 인건비예산을 확인하세요.</td></tr>`}</tbody>${rows.length ? `<tfoot><tr class="total"><td>합계</td><td></td><td class="num amt">${fmt(t.b)}</td><td class="num">${fmt(t.done)}</td><td class="num">${fmt(t.plan)}</td><td class="num${t.b - t.done < 0 ? " neg" : ""}">${fmt(t.b - t.done)}</td><td class="num${t.b - t.done - t.plan < 0 ? " neg" : ""}">${fmt(t.b - t.done - t.plan)}</td></tr></tfoot>` : ""}`;
+  $("#labor-funds").innerHTML = `<thead><tr><th>지급처</th><th>과제명 · 지급처명</th><th class="num amt">인건비 예산</th><th class="num">확정 지급</th><th class="num">예정</th><th class="num">확정잔액</th><th class="num">예정잔액</th></tr></thead><tbody>${rows.map(line).join("") || `<tr><td class="empty" colspan="7">${y}년 인건비 지급 건과 인건비 예산이 없습니다. 재원 탭의 예산변동(내부·외부인건비) 또는 재원의 인건비예산 열, 지급처 탭의 인건비예산을 확인하세요.</td></tr>`}</tbody>${rows.length ? `<tfoot><tr class="total"><td>합계 (예산 관리 지급처)</td><td></td><td class="num amt">${fmt(t.b)}</td><td class="num">${fmt(t.done)}</td><td class="num">${fmt(t.plan)}</td><td class="num${t.b - t.done < 0 ? " neg" : ""}">${fmt(t.b - t.done)}</td><td class="num${t.b - t.done - t.plan < 0 ? " neg" : ""}">${fmt(t.b - t.done - t.plan)}</td></tr>${u.n ? `<tr class="sub"><td>관리 안 함 지급처 ${u.n}곳</td><td class="muted">예산 없음 · 잔액 계산 제외</td><td class="num amt"></td><td class="num">${fmt(u.done)}</td><td class="num">${fmt(u.plan)}</td><td></td><td></td></tr>` : ""}</tfoot>` : ""}`;
   $("#labor-funds").closest(".table-wrap").classList.toggle("empty", !rows.length);
 }
 function renderLaborPlan() {
-  const y = laborYear(), months = monthsOf(y), through = curMonth();
+  const y = laborYear(), months = monthsOf(y), through = closedMonth();
   const people = DATA.people.filter(p => months.some(m => activeIn(p, m)) || DATA.labor.some(r => r["이름"] === p["이름"] && r["귀속월"].startsWith(y)));
   const head = `<thead><tr><th>이름</th><th>구분</th>${months.map((m, i) => `<th class="num${i === 0 ? " amt" : ""}">${i + 1}월</th>`).join("")}<th class="num amt">연간 배분</th><th class="num">확정</th><th class="num">예정</th><th class="num">선급 / 미지급</th></tr></thead>`;
   const body = people.map(p => {
@@ -170,12 +175,12 @@ function renderLaborPlan() {
   const foot = people.length ? `<tfoot><tr class="total"><td>합계</td><td></td>${tot.map((v, i) => `<td class="num${i === 0 ? " amt" : ""}">${fmt(v)}</td>`).join("")}<td class="num amt">${fmt(tot.reduce((a, b) => a + b, 0))}</td><td class="num">${fmt(all.filter(r => r["상태"] === "확정").reduce((a, r) => a + r["금액"], 0))}</td><td class="num">${fmt(all.filter(r => r["상태"] === "예정").reduce((a, r) => a + r["금액"], 0))}</td><td></td></tr></tfoot>` : "";
   $("#labor-plan").innerHTML = head + `<tbody>${body || `<tr><td class="empty" colspan="18">인원이 없습니다. [인원] 탭에서 지급 대상을 먼저 등록하세요.</td></tr>`}</tbody>` + foot;
   $("#labor-plan").closest(".table-wrap").classList.toggle("empty", !people.length);
-  $("#labor-plan-note").textContent = `${y}년 귀속월 기준 · 칸 = 예정+확정 배분 합계, 작은 글자 = 기준급여 대비 · 선급/미지급은 ${through}까지 누적 (지급월 기준 확정 지급 − 귀속월 기준 발생)`;
+  $("#labor-plan-note").textContent = `${y}년 귀속월 기준 · 칸 = 예정+확정 배분 합계, 작은 글자 = 기준급여 대비 · 선급/미지급은 직전 달(${through.endsWith("-00") ? "없음" : through})까지 누적 (확정 지급 − 기준급여 발생)`;
 }
 function renderPrepaid() {
-  const y = laborYear(), through = curMonth();
+  const y = laborYear(), through = closedMonth();
   const rows = DATA.people.map(p => ({ p, ...prepaid(p, y, through) })).filter(x => x.opening || x.accrued || x.paid || x.adj);
-  $("#labor-prepaid-note").textContent = `${y}년 ${through}까지 누적. 잔액 = 이월선급 + 확정 지급(지급월) − 발생(귀속월 기준급여 × 재직월) + 조정. 양수 선급, 음수 미지급.`;
+  $("#labor-prepaid-note").textContent = `${y}년 직전 달(${through.endsWith("-00") ? "없음" : through})까지 누적. 이번 달 급여는 아직 발생 전으로 보며, 이번 달 확정 지급은 선급으로 잡힙니다. 잔액 = 이월선급 + 확정 지급(지급월) − 발생(귀속월 기준급여 × 재직월) + 조정. 양수 선급, 음수 미지급.`;
   $("#labor-prepaid").innerHTML = `<thead><tr><th>이름</th><th class="num amt">이월선급</th><th class="num">발생 누계</th><th class="num">확정 지급 누계</th><th class="num">조정</th><th class="num">잔액 (선급 + / 미지급 −)</th></tr></thead><tbody>${rows.map(x => `<tr><td>${esc(x.p["이름"])}</td><td class="num amt">${fmt(x.opening)}</td><td class="num">${fmt(x.accrued)}</td><td class="num">${fmt(x.paid)}</td><td class="num">${fmt(x.adj)}</td><td class="num${x.balance < 0 ? " neg" : ""}">${fmt(x.balance)}</td></tr>`).join("") || '<tr><td class="empty" colspan="6">기준급여·지급·조정 내역이 있는 인원이 없습니다.</td></tr>'}</tbody>`;
   $("#labor-prepaid").closest(".table-wrap").classList.toggle("empty", !rows.length);
 }

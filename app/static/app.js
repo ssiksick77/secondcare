@@ -6,7 +6,8 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const fmt = n => (n == null || isNaN(n)) ? "" : Math.round(n).toLocaleString("ko-KR");
 const pct = r => r == null ? "-" : (r * 100).toFixed(1) + "%";
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const today = () => new Date().toISOString().slice(0, 10);
+const localISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const today = () => localISO(new Date());  // 로컬(한국) 날짜. toISOString 은 UTC 라 오전 9시 전에 어제가 됨
 const mmdd = d => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d.slice(5, 7) + "/" + d.slice(8, 10) : d;
 // 행 식별값 (서버가 다른 창/MCP 에서 행이 밀렸는지 검사)
 const IDENT = { funds: ["재원코드"], exec: ["거래번호"], req: ["품의번호"], tags: ["태그명"], budget: ["재원", "변경회차", "신청일자"], deposit: ["일자", "거래처", "구분", "금액"] };
@@ -234,6 +235,7 @@ function filtered(kind) {
       if (QUICK === "fix" && r["상태"] !== "보완") return false;
       if (QUICK === "done" && r["상태"] !== "완료") return false;
       if (QUICK === "noevid" && hasEvidence(r)) return false;
+      if (QUICK === "excluded" && !isExcludedExec(r)) return false;
     }
     if (q && !Object.entries(r).some(([k, v]) => !k.startsWith("_") && norm(v).includes(q))) return false;
     return true;
@@ -404,35 +406,41 @@ function renderDashboard() {
   const inYear = r => !year || (r["원인발생일"] || "").startsWith(year);
   const upTo = r => !month || (r["원인발생일"] || "").slice(5, 7) <= month;
   const inMonth = r => month && (r["원인발생일"] || "").slice(5, 7) === month;
-  const execs = DATA.exec.filter(r => (!fund || r["재원"] === fund) && inYear(r) && upTo(r));
-  const reqs = DATA.req.filter(r => r["상태"] === "대기" && (!fund || r["재원"] === fund) && inYear(r) && upTo(r));
+  // 잔액·가용잔액·집행률은 파일 전체 기준(sa), 연·월 필터는 '집행액'(s)·'M월 집행'(sm) 열에만 적용. 대기 품의는 날짜 무관 전부 차감 (2026-10-13 결정)
+  const execsAll = DATA.exec.filter(r => !fund || r["재원"] === fund);
+  const execs = execsAll.filter(r => inYear(r) && upTo(r));
+  const reqs = DATA.req.filter(r => r["상태"] === "대기" && (!fund || r["재원"] === fund));
   const budgets = DATA.budget.filter(r => !fund || r["재원"] === fund);
 
-  const cell = () => ({ b: 0, s: 0, sm: 0, p: 0 });
+  const cell = () => ({ b: 0, s: 0, sm: 0, sa: 0, p: 0 });
   const m = {};
   funds.forEach(f => { m[f] = {}; items.forEach(i => m[f][i] = cell()); });
   budgets.forEach(r => m[r["재원"]] && items.forEach(i => m[r["재원"]][i].b += r[i] || 0));
-  execs.forEach(r => { const c = m[r["재원"]]?.[r["예산목"]]; if (c) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } });
+  const excluded = [];  // 재원 목록 밖(외부 지급처 인건비 등)·예산목 목록 밖 집행: 예산 집계에서 제외
+  execsAll.forEach(r => { const c = m[r["재원"]]?.[r["예산목"]]; if (!c) { if (inYear(r) && upTo(r)) excluded.push(r); return; } c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } });
   reqs.forEach(r => m[r["재원"]]?.[r["예산목"]] && (m[r["재원"]][r["예산목"]].p += r["금액"] || 0));
+  const add = (t, c) => { t.b += c.b; t.s += c.s; t.sm += c.sm; t.sa += c.sa; t.p += c.p; };
 
   // 카드
   const tot = cell();
-  funds.forEach(f => items.forEach(i => { tot.b += m[f][i].b; tot.s += m[f][i].s; tot.sm += m[f][i].sm; tot.p += m[f][i].p; }));
+  funds.forEach(f => items.forEach(i => add(tot, m[f][i])));
   const unpaid = execs.filter(r => !r["지출완료일"]).length;
-  const itemCards = items.map(i => { const c = cell(); funds.forEach(f => { c.b += m[f][i].b; c.s += m[f][i].s; c.sm += m[f][i].sm; c.p += m[f][i].p; }); return [i, c]; })
-    .filter(([, c]) => c.b || c.s || c.p);
+  const itemCards = items.map(i => { const c = cell(); funds.forEach(f => add(c, m[f][i])); return [i, c]; })
+    .filter(([, c]) => c.b || c.sa || c.p);
   $("#dash-cards").innerHTML = itemCards.length ? itemCards.map(([i, c]) => {
-    const avail = c.b - c.s - c.p, rate = c.b ? c.s / c.b : null, used = c.b ? Math.min(1, (c.s + c.p) / c.b) : 1;
-    const bar = c.b ? `<div class="bar" aria-hidden="true"><i class="${c.s > c.b ? "over" : ""}" style="width:${Math.min(100, c.s / c.b * 100).toFixed(1)}%"></i>${c.p ? `<i class="p" style="left:${Math.min(100, c.s / c.b * 100).toFixed(1)}%;width:${Math.max(0, (used - Math.min(1, c.s / c.b)) * 100).toFixed(1)}%"></i>` : ""}</div>` : "";
-    return `<div class="card" role="listitem" title="${esc(i)}: 예산현액 ${fmt(c.b)} · 집행 ${fmt(c.s)}${c.p ? ` · 품의대기 ${fmt(c.p)}` : ""} · 가용잔액 ${fmt(avail)}"><div class="k">${esc(i)}</div><div class="v${avail < 0 ? " neg" : ""}">${fmt(avail)}</div><div class="sub"><span>집행 ${fmt(c.s)}${c.p ? ` <span class="muted">+대기 ${fmt(c.p)}</span>` : ""}</span><span>${rate == null ? "예산 없음" : pct(rate)}</span></div>${bar}</div>`;
+    const avail = c.b - c.sa - c.p, rate = c.b ? c.sa / c.b : null, used = c.b ? Math.min(1, (c.sa + c.p) / c.b) : 1;
+    const bar = c.b ? `<div class="bar" aria-hidden="true"><i class="${c.sa > c.b ? "over" : ""}" style="width:${Math.min(100, c.sa / c.b * 100).toFixed(1)}%"></i>${c.p ? `<i class="p" style="left:${Math.min(100, c.sa / c.b * 100).toFixed(1)}%;width:${Math.max(0, (used - Math.min(1, c.sa / c.b)) * 100).toFixed(1)}%"></i>` : ""}</div>` : "";
+    return `<div class="card" role="listitem" title="${esc(i)}: 예산현액 ${fmt(c.b)} · 집행 ${fmt(c.sa)}${c.p ? ` · 품의대기 ${fmt(c.p)}` : ""} · 가용잔액 ${fmt(avail)}"><div class="k">${esc(i)}</div><div class="v${avail < 0 ? " neg" : ""}">${fmt(avail)}</div><div class="sub"><span>집행 ${fmt(c.sa)}${c.p ? ` <span class="muted">+대기 ${fmt(c.p)}</span>` : ""}</span><span>${rate == null ? "예산 없음" : pct(rate)}</span></div>${bar}</div>`;
   }).join("") : `<div class="card empty-card"><div class="k">예산목별 가용잔액</div><div class="v">-</div><div class="sub"><span>${DATA.funds.length ? "예산·집행 데이터가 없습니다" : "재원을 먼저 등록하세요"}</span></div></div>`;
-  $("#dash-note").textContent = (year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.s / tot.b) : "-"} · 품의대기 ${fmt(tot.p)} (${reqs.length}건) · 가용잔액 ${fmt(tot.b - tot.s - tot.p)} · 미완료 ${unpaid}건`;
-  $("#dash-defs").innerHTML = `칸의 큰 숫자 = 가용잔액(예산현액 − 집행액 − 품의대기, 선택한 재원 합산) · 막대 = 집행률(회색은 품의대기) · 예산현액 = 재원별 이월+당초+변경 합계 (연도 구분 없음) · 집행액 = 집행내역 금액 합계${year ? ` (${year}년 원인발생일 기준)` : ""} · 품의대기 = 상태 '대기' 품의 합계 · 미완료 = 지출완료일 없는 집행 건`;
+  const exAmt = excluded.reduce((a, r) => a + (r["금액"] || 0), 0);
+  $("#dash-note").innerHTML = esc((year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.sa / tot.b) : "-"} · 품의대기 ${fmt(tot.p)} (${reqs.length}건) · 가용잔액 ${fmt(tot.b - tot.sa - tot.p)} · 미완료 ${unpaid}건`)
+    + (excluded.length ? ` · <button type="button" class="link" data-act="show-excluded" title="재원 목록에 없는 지급처(외부 인건비 등)나 예산목 목록 밖의 집행. 집행내역·태그 집계에는 포함되지만 예산 집계에서는 제외">집계 제외 ${excluded.length}건 ${fmt(exAmt)}원</button>` : "");
+  $("#dash-defs").innerHTML = `칸의 큰 숫자 = 가용잔액 = 예산현액 − 집행(파일 전체) − 품의대기(날짜 무관, 선택한 재원 합산) · 막대 = 집행률(회색은 품의대기) · 예산현액 = 재원별 이월+당초+변경 합계 · 집행액 열만 연·월 필터(원인발생일) 적용 · 잔액 = 예산현액 − 집행(전체) · 미완료 = 지출완료일 없는 집행 건`;
 
   // 표
   const cols = month ? ["예산현액", `${parseInt(month)}월 집행`, "누계 집행", "잔액", "집행률", "품의대기", "가용잔액"] : ["예산현액", "집행액", "잔액", "집행률", "품의대기", "가용잔액"];
   const th = `<thead><tr><th>재원</th><th>예산목</th>${cols.map(c => `<th class="num${c === "예산현액" ? " amt" : ""}">${c}</th>`).join("")}</tr></thead>`;
-  const line = (f, i, c, cls) => `<tr class="${cls}"><td>${cls === "total" ? esc(f) : ""}</td><td>${esc(i)}</td><td class="num amt">${fmt(c.b)}</td>${month ? `<td class="num">${fmt(c.sm)}</td>` : ""}<td class="num">${fmt(c.s)}</td><td class="num ${c.b - c.s < 0 ? "neg" : ""}">${fmt(c.b - c.s)}</td><td class="num">${pct(c.b ? c.s / c.b : null)}</td><td class="num">${fmt(c.p)}</td><td class="num ${c.b - c.s - c.p < 0 ? "neg" : ""}">${fmt(c.b - c.s - c.p)}</td></tr>`;
+  const line = (f, i, c, cls) => `<tr class="${cls}"><td>${cls === "total" ? esc(f) : ""}</td><td>${esc(i)}</td><td class="num amt">${fmt(c.b)}</td>${month ? `<td class="num">${fmt(c.sm)}</td>` : ""}<td class="num">${fmt(c.s)}</td><td class="num ${c.b - c.sa < 0 ? "neg" : ""}">${fmt(c.b - c.sa)}</td><td class="num">${pct(c.b ? c.sa / c.b : null)}</td><td class="num">${fmt(c.p)}</td><td class="num ${c.b - c.sa - c.p < 0 ? "neg" : ""}">${fmt(c.b - c.sa - c.p)}</td></tr>`;
   let body = "";
   DASH_ROWS = [];
   funds.forEach(f => {
@@ -440,9 +448,9 @@ function renderDashboard() {
     let rows = "";
     items.forEach(i => {
       const c = m[f][i];
-      if (!c.b && !c.s && !c.p) return;
-      ft.b += c.b; ft.s += c.s; ft.sm += c.sm; ft.p += c.p;
-      rows += line(f, i, c, "sub"); DASH_ROWS.push([f, i, c.b, ...(month ? [c.sm] : []), c.s, c.b - c.s, c.b ? (c.s / c.b * 100).toFixed(1) + "%" : "", c.p, c.b - c.s - c.p]);
+      if (!c.b && !c.sa && !c.p) return;
+      add(ft, c);
+      rows += line(f, i, c, "sub"); DASH_ROWS.push([f, i, c.b, ...(month ? [c.sm] : []), c.s, c.b - c.sa, c.b ? (c.sa / c.b * 100).toFixed(1) + "%" : "", c.p, c.b - c.sa - c.p]);
     });
     if (!rows) return;
     body += line(f, "소계", ft, "total") + rows;
@@ -633,14 +641,21 @@ $("#dlg-form").addEventListener("submit", async e => {
     showFormError((missing.length ? `입력 필요: ${missing.join(", ")}` : "") + (invalid.length ? ` / 확인 필요: ${invalid.join(", ")}` : ""));
     firstBad?.focus(); return;
   }
-  // B8: 저장 전 경고 (차단 아님)
-  if ((kind === "exec" || kind === "req") && !row) {
+  // B8: 저장 전 경고 (차단 아님). 새 행·전환·수정 모두 잔액을 검사하되, 전환 중인 품의와 수정 중인 행 자신은 빼고 계산
+  if (kind === "exec" || kind === "req") {
     const warns = [];
-    if (rec["금액"] < 0) warns.push(`금액이 음수(${fmt(rec["금액"])}원)입니다. 반납·환입 기록이 맞나요?`);
-    const dup = DATA[kind].find(x => x["원인발생일"] === rec["원인발생일"] && (x["거래처"] || "") === (rec["거래처"] || "") && x["금액"] === rec["금액"]);
-    if (dup) warns.push(`같은 날·거래처·금액의 건이 이미 있습니다: ${dup["거래번호"] || dup["품의번호"]} (${dup["적요"] || "-"}). 중복 입력일 수 있습니다.`);
-    const av = availableBudget(rec["재원"], rec["예산목"]);
-    if (av != null && av - rec["금액"] < 0) warns.push(`${rec["재원"]} ${rec["예산목"]} 가용잔액 ${fmt(av)}원을 넘습니다 (저장 후 ${fmt(av - rec["금액"])}원).`);
+    const convertRowNo = dlg.dataset.convert ? Number(dlg.dataset.convert) : null;
+    const cur = row ? DATA[kind].find(x => x._row === Number(row)) : null;
+    if (!row) {
+      if (rec["금액"] < 0) warns.push(`금액이 음수(${fmt(rec["금액"])}원)입니다. 반납·환입 기록이 맞나요?`);
+      const dup = DATA[kind].find(x => x["원인발생일"] === rec["원인발생일"] && (x["거래처"] || "") === (rec["거래처"] || "") && x["금액"] === rec["금액"]);
+      if (dup) warns.push(`같은 날·거래처·금액의 건이 이미 있습니다: ${dup["거래번호"] || dup["품의번호"]} (${dup["적요"] || "-"}). 중복 입력일 수 있습니다.`);
+    }
+    const opts = convertRowNo != null ? { excludeReq: convertRowNo } : cur ? (kind === "exec" ? { excludeExec: cur._row } : { excludeReq: cur._row }) : {};
+    const counts = kind === "exec" || rec["상태"] === "대기";  // 취소·집행완료 품의는 잔액에 영향 없음
+    const av = availableBudget(rec["재원"], rec["예산목"], opts);
+    const changed = !cur || cur["재원"] !== rec["재원"] || cur["예산목"] !== rec["예산목"] || (rec["금액"] || 0) > (cur["금액"] || 0) || cur["상태"] !== rec["상태"];
+    if (counts && changed && av != null && av - rec["금액"] < 0) warns.push(`${rec["재원"]} ${rec["예산목"]} 가용잔액 ${fmt(av)}원을 넘습니다 (저장 후 ${fmt(av - rec["금액"])}원).`);
     if (warns.length && !confirm(warns.join("\n\n") + "\n\n그래도 저장할까요?")) return;
   }
   if (kind === "exec" && row) { const cur = DATA.exec.find(x => x._row === Number(row)); if (cur) ["상태", "증빙폴더", "증빙목록"].forEach(k => { rec[k] = cur[k]; }); }
@@ -670,12 +685,14 @@ $("#dlg-form").addEventListener("submit", async e => {
 });
 $("#dlg-save-more").addEventListener("click", () => { $("#dlg").dataset.saveMore = "1"; $("#dlg-form").requestSubmit(); });
 
-function availableBudget(fund, item) {
+// 가용잔액 = 예산현액 − 집행(파일 전체) − 대기 품의(날짜 무관). 대시보드·집행내역 열·저장 경고가 모두 이 함수를 쓴다 (2026-10-13 결정).
+// excludeReq / excludeExec: 품의→집행 전환 중인 품의, 수정 중인 집행 행은 빼고 계산 (이중 차감 방지)
+function availableBudget(fund, item, opts = {}) {
   if (!fund || !item) return null;
   const b = DATA.budget.filter(r => r["재원"] === fund).reduce((a, r) => a + (r[item] || 0), 0);
   if (!b && !DATA.budget.some(r => r["재원"] === fund)) return null;  // 예산 미등록 재원은 경고 생략
-  const s = DATA.exec.filter(r => r["재원"] === fund && r["예산목"] === item).reduce((a, r) => a + (r["금액"] || 0), 0);
-  const p = DATA.req.filter(r => r["재원"] === fund && r["예산목"] === item && r["상태"] === "대기").reduce((a, r) => a + (r["금액"] || 0), 0);
+  const s = DATA.exec.filter(r => r["재원"] === fund && r["예산목"] === item && r._row !== opts.excludeExec).reduce((a, r) => a + (r["금액"] || 0), 0);
+  const p = DATA.req.filter(r => r["재원"] === fund && r["예산목"] === item && r["상태"] === "대기" && r._row !== opts.excludeReq).reduce((a, r) => a + (r["금액"] || 0), 0);
   return b - s - p;
 }
 let DLG_ON_SAVED = null;
@@ -785,6 +802,7 @@ document.addEventListener("click", e => {
     return;
   }
   if (b.dataset.act === "xact") return execAction(Number(b.dataset.row), b.dataset.action, b);
+  if (b.dataset.act === "show-excluded") { switchTab("exec"); QUICK = "excluded"; FILTERS.exec = {}; $$("[data-filter][data-kind=exec]").forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = ""; }); renderExecTiles(); renderList("exec"); showAlert("예산 집계에서 제외된 집행만 표시 중입니다. 빠른 필터 타일을 누르거나 새로고침하면 해제됩니다.", "ok"); return; }
   if (b.dataset.add) return openForm(b.dataset.add);
   if (b.dataset.act === "dep-use") return openForm("deposit", null, { 거래처: b.dataset.vendor, 구분: "사용" });
   if (b.dataset.act === "dep-add") return openForm("deposit", null, { 거래처: b.dataset.vendor, 구분: "적립" });
@@ -1100,6 +1118,7 @@ $("#s-clear-key").addEventListener("click", async () => {
 let QUICK = "";
 const XD = { row: null, evid: null, drive: null };
 function evidCount(r) { return (DATA.evidence || []).filter(e => e["거래번호"] === r["거래번호"]).length; }
+function isExcludedExec(r) { return !DATA.funds.some(f => f["재원코드"] === r["재원"]) || !DATA.meta.budget_items.includes(r["예산목"]); }
 function hasEvidence(r) { return !!(r["증빙목록"]) || (DATA.evidence || []).some(e => e["거래번호"] === r["거래번호"]); }
 
 function renderExecTiles() {
