@@ -191,7 +191,7 @@ function laborConfirm(row) {
   const r = DATA.labor.find(x => x._row === row); if (!r) return;
   const d = $("#dlg-pay"); $("#pay-label").textContent = `${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원`; $("#pay-date").value = today();
   const p = DATA.people.find(x => x["이름"] === r["이름"]);
-  $("#pay-note").textContent = `확정하면 집행내역에 재원 ${r["지급처"]} · ${p?.["인건비구분"] === "외부" ? "외부인건비(공통)" : "내부인건비(공통)"} 1건이 지급일 날짜로 추가됩니다.`;
+  $("#pay-note").textContent = `확정하면 집행내역에 재원 ${r["지급처"]} · ${p?.["인건비구분"] === "외부" ? "외부인건비(공통)" : "내부인건비(공통)"} 1건이 지급일 날짜로 추가되고, 이 지급 건은 잠깁니다. 금액·지급처를 바꾸려면 '확정 취소' 뒤에 수정하세요.`;
   d.dataset.row = row; d.showModal(); $("#pay-date").focus();
 }
 $("#dlg-pay-form").addEventListener("submit", async e => {
@@ -205,7 +205,9 @@ $("#dlg-pay-form").addEventListener("submit", async e => {
 $("#dlg-pay-cancel").addEventListener("click", () => $("#dlg-pay").close());
 async function laborUnconfirm(row) {
   const r = DATA.labor.find(x => x._row === row); if (!r) return;
-  if (!confirm(`확정 취소: ${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원\n\n연결 집행 ${r["연결거래번호"] || ""} 도 집행내역에서 삭제됩니다. 계속할까요?`)) return;
+  const ev = DATA.evidence.filter(e => e["거래번호"] === r["연결거래번호"]).length;
+  if (ev) return showAlert(`집행 ${r["연결거래번호"]} 에 증빙 ${ev}개가 등록되어 있어 확정을 취소할 수 없습니다. 집행내역 상세에서 증빙을 먼저 지우세요.`, "warn");
+  if (!confirm(`확정 취소: ${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원\n\n연결 집행 ${r["연결거래번호"] || ""} 이 집행내역에서 삭제되고 이 건은 '예정'으로 돌아갑니다. 계속할까요?`)) return;
   try { await api("POST", `/api/labor/${row}/action`, { action: "unconfirm", expect: expectOf("labor", r) }); showAlert("확정을 취소했습니다 (예정으로 되돌림).", "ok"); await load(); refreshCellDialog(); }
   catch (err) { showAlert("취소 실패: " + err.message, "error"); }
 }
@@ -251,8 +253,8 @@ document.addEventListener("click", e => {
 // ---------- 기간 일괄 생성 ----------
 function openBulk() {
   const d = $("#dlg-bulk");
-  setOptions($("#bulk-name"), peopleNames(), peopleNames());
-  $("#bulk-from").value = curMonth(); $("#bulk-to").value = `${laborYear()}-12`; $("#bulk-memo").value = "";
+  setOptions($("#bulk-name"), ["", ...peopleNames()], ["(선택)", ...peopleNames()]);
+  $("#bulk-name").value = ""; $("#bulk-from").value = curMonth(); $("#bulk-to").value = `${laborYear()}-12`; $("#bulk-memo").value = "";
   $("#bulk-rows").innerHTML = ""; addBulkRow(); updateBulkPreview();
   d.showModal(); $("#bulk-name").focus();
 }
@@ -269,9 +271,27 @@ function updateBulkPreview() {
   const from = $("#bulk-from").value, to = $("#bulk-to").value, name = $("#bulk-name").value;
   const n = (from && to && from <= to) ? ((+to.slice(0, 4) - +from.slice(0, 4)) * 12 + (+to.slice(5, 7) - +from.slice(5, 7)) + 1) : 0;
   const rows = bulkRows(), monthly = rows.reduce((a, r) => a + r.amt, 0), sal = name && from ? salaryFor(name, from) : null;
-  $("#bulk-preview").textContent = n && rows.length ? `${n}개월 × ${rows.length}개 지급처 = ${n * rows.length}건 · 월 합계 ${fmt(monthly)}원` + (sal != null ? ` (기준급여 ${fmt(sal)}원${monthly !== sal ? `, ${monthly < sal ? "부족" : "초과"} ${fmt(Math.abs(sal - monthly))}원` : ""})` : "") : "인원·기간·배분을 입력하세요.";
+  const { dup } = bulkPlanRows();
+  $("#bulk-preview").textContent = n && rows.length ? `${n}개월 × ${rows.length}개 지급처 = ${n * rows.length}건 · 월 합계 ${fmt(monthly)}원` + (sal != null ? ` (기준급여 ${fmt(sal)}원${monthly !== sal ? `, ${monthly < sal ? "부족" : "초과"} ${fmt(Math.abs(sal - monthly))}원` : ""})` : "")
+    + (dup.length ? ` · 이미 있는 ${dup.length}건은 건너뜀 (${dup.slice(0, 3).map(d => `${d.귀속월} ${d.지급처}`).join(", ")}${dup.length > 3 ? " …" : ""})` : "") : "인원·기간·배분을 입력하세요.";
 }
 $("#dlg-bulk").addEventListener("input", updateBulkPreview);
+$("#bulk-name").addEventListener("change", () => {  // 인원을 고르면 기간을 재직 기간(올해 안)으로 맞춤
+  const p = DATA.people.find(x => x["이름"] === $("#bulk-name").value); if (!p) return;
+  const y = laborYear(); let from = curMonth(), to = `${y}-12`;
+  if (p["입사일"] && p["입사일"].slice(0, 7) > from) from = p["입사일"].slice(0, 7);
+  if (p["퇴사일"] && p["퇴사일"].slice(0, 7) < to) to = p["퇴사일"].slice(0, 7);
+  if (from.slice(0, 4) === y) $("#bulk-from").value = from;
+  $("#bulk-to").value = to; updateBulkPreview();
+});
+function bulkPlanRows() {
+  const name = $("#bulk-name").value, from = $("#bulk-from").value, to = $("#bulk-to").value, offset = Number($("#bulk-offset").value), memo = $("#bulk-memo").value.trim();
+  const rows = bulkRows(); const out = [];
+  if (!name || !from || !to || from > to) return { out, dup: [] };
+  for (let m = from; m <= to && out.length < 1300; m = addMonth(m, 1)) rows.forEach(r => out.push({ 귀속월: m, 지급월: addMonth(m, offset), 이름: name, 지급처: r.code, 금액: r.amt, 비고: memo }));
+  const dup = out.filter(o => DATA.labor.some(x => x["이름"] === o.이름 && x["귀속월"] === o.귀속월 && x["지급월"] === o.지급월 && x["지급처"] === o.지급처));
+  return { out, dup };
+}
 $("#dlg-bulk").addEventListener("click", e => {
   const b = e.target.closest("button[data-bulk]"); if (!b) return;
   if (b.dataset.bulk === "add") addBulkRow();
@@ -284,10 +304,11 @@ $("#dlg-bulk-form").addEventListener("submit", async e => {
   const rows = bulkRows();
   if (!name || !from || !to || from > to) return showAlert("인원과 올바른 기간을 입력하세요.", "warn");
   if (!rows.length || rows.some(r => !r.code || r.amt <= 0)) return showAlert("지급처와 양수 금액을 모두 입력하세요.", "warn");
-  const out = []; for (let m = from; m <= to; m = addMonth(m, 1)) rows.forEach(r => out.push({ 귀속월: m, 지급월: addMonth(m, offset), 이름: name, 지급처: r.code, 금액: r.amt, 비고: memo }));
+  const { out, dup } = bulkPlanRows();
   if (out.length > 1200) return showAlert("한 번에 1,200건까지만 생성할 수 있습니다.", "warn");
+  if (dup.length === out.length) return showAlert("모든 건이 이미 있어 추가할 것이 없습니다.", "warn");
   const btn = $("#bulk-save"); btn.disabled = true;
-  try { const res = await api("POST", "/api/labor/bulk", { rows: out }); $("#dlg-bulk").close(); showAlert(`예정 ${res.created}건을 추가했습니다.`, "ok"); await load(); }
+  try { const res = await api("POST", "/api/labor/bulk", { rows: out, skip_dup: true }); $("#dlg-bulk").close(); showAlert(`예정 ${res.created}건을 추가했습니다.` + (res.skipped.length ? ` 이미 있는 ${res.skipped.length}건은 건너뛰었습니다.` : ""), "ok"); await load(); }
   catch (err) { showAlert("생성 실패: " + err.message, "error"); }
   finally { btn.disabled = false; }
 });

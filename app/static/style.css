@@ -374,3 +374,14 @@ dialog .fld input, dialog .fld select { font-size: 13px; }
 
 .btn.link, button.link { border: 0; background: none; padding: 0; font: inherit; color: var(--primary); text-decoration: underline; cursor: pointer; }
 button.link:hover { color: var(--primary-dark); }
+
+/* 연결 집행 출처 배지 · 잠긴 필드 · 토스트 popover */
+.origin { display: inline-block; margin-left: 6px; padding: 0 5px; font-size: 12px; line-height: 16px; border: 1px solid var(--rule); border-radius: 2px; color: var(--ink-2); background: var(--bg-head); cursor: pointer; vertical-align: 1px; font-weight: 600; }
+.origin:hover { color: var(--ink); border-color: var(--ink); }
+.origin.인건비 { color: var(--margin); border-color: #B9C4E3; background: #EEF1F9; }
+.origin.적립 { color: #8A4F00; border-color: #E3CBA6; background: #FBF3E6; }
+table.grid td.nowrap { white-space: nowrap; }
+.fields input.locked, .fields select.locked { background: var(--bg-head); color: var(--ink-2); cursor: not-allowed; }
+.field-error.info { color: var(--ink-2); background: var(--bg-head); border-color: var(--rule); }
+.toasts:popover-open { position: fixed; inset: auto 14px auto auto; top: 12px; margin: 0; border: 0; padding: 0; background: transparent; overflow: visible; width: auto; max-width: min(520px, 92vw); }
+.toasts .toast { pointer-events: auto; }

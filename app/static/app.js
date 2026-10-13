@@ -275,6 +275,7 @@ function renderList(kind) {
         const lbl = r["상태"] === "청구" ? '<span class="muted" title="청구했고 지출완료 대기 중">지급대기</span>' : "";
         return `<td>${lbl}${fix}<button type="button" class="btn btn-inline" data-act="xact" data-action="complete" data-row="${r._row}" title="오늘 날짜로 지출완료일 등록">완료일=오늘</button></td>`;
       }
+      if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap">${esc(v)}${originBadge(r)}</td>`;
       return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}"${c.wrap && v ? ` title="${esc(v)}"` : ""}>${esc(v)}</td>`;
     }).join("");
     const extra = kind === "req" && r["상태"] === "대기"
@@ -540,7 +541,7 @@ function lastDefaults(kind) {
   try { return JSON.parse(sessionStorage.getItem("ledger-last-" + kind) || "{}"); } catch { return {}; }
 }
 function rememberLast(kind, rec) {
-  const keep = { exec: ["재원", "예산목", "원인발생일", "사용자"], req: ["재원", "예산목", "원인발생일", "품의자", "결제수단"], deposit: ["일자", "거래처", "사용자"], budget: ["재원"] }[kind] || [];
+  const keep = { exec: ["재원", "예산목", "사용자"], req: ["재원", "예산목", "품의자", "결제수단"], deposit: ["거래처", "사용자"], budget: ["재원"] }[kind] || [];  // 날짜는 '저장 후 계속' 안에서만 유지
   const o = {}; keep.forEach(k => { if (rec[k]) o[k] = rec[k]; });
   try { sessionStorage.setItem("ledger-last-" + kind, JSON.stringify(o)); } catch { }
 }
@@ -549,7 +550,7 @@ function openForm(kind, row, preset, opts = {}) {
   const fields = formFields(kind).filter(f => !(f.onlyNew && rec));
   const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
   $("#dlg-title").textContent = opts.title || ((rec ? "수정 - " : "추가 - ") + titles[kind]);
-  $("#dlg-error").hidden = true;
+  $("#dlg-error").hidden = true; $("#dlg-error").classList.remove("info");
   $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !["exec", "req", "deposit", "budget", "tags", "labor", "salary", "people"].includes(kind);
   const tagDefault = DATA.tags.some(t => t["태그명"] === "적립금") ? "적립금" : "";
   const defaults = { 원인발생일: today(), 일자: today(), 상태: "대기", 구분: "적립", _태그: tagDefault, 재원: FILTERS[kind]?.["재원"] || "", ...(typeof laborDefaults === "function" ? laborDefaults(kind) : {}), ...lastDefaults(kind), ...(preset || {}) };
@@ -574,6 +575,7 @@ function openForm(kind, row, preset, opts = {}) {
     return `<label class="${f.cls || ""}" for="${id}" data-dep="${esc(f.dep || "")}"><span class="lab">${lab}${f.hint ? ` <small>(${esc(f.hint)})</small>` : ""}</span>${input}</label>`;
   }).join("");
   syncDepFields();
+  if (kind === "exec" && rec) { const o = execOrigin(rec); if (o?.locked) { LOCKED_COLS.forEach(k => { const el = F(k); if (el) { el.readOnly = true; el.setAttribute("aria-readonly", "true"); if (el.tagName === "SELECT") el.dataset.lock = el.value; el.classList.add("locked"); el.title = `${o.kind} 연결 행: 원본에서만 변경`; } }); $("#dlg-error").textContent = `${o.label} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리하고, 여기서는 세목·태그·관리번호·날짜·비고만 바꿀 수 있습니다.`; $("#dlg-error").hidden = false; $("#dlg-error").classList.add("info"); } }
   const dlg = $("#dlg");
   dlg.dataset.kind = kind; dlg.dataset.row = row ?? ""; dlg.dataset.convert = opts.convertRow ?? "";
   if (kind === "budget" && !rec && !preset?.["변경회차"]) {  // 다음 회차 자동 제안
@@ -581,8 +583,8 @@ function openForm(kind, row, preset, opts = {}) {
     sel.addEventListener("change", () => { F("변경회차").value = ""; fill(); }); fill();
   }
   dlg.showModal();
-  const focusField = fields.find(f => f.focus && F(f.k));
-  (focusField ? F(focusField.k) : $("#dlg-fields input:not([readonly]), #dlg-fields select"))?.focus();
+  const focusField = fields.find(f => f.focus && F(f.k) && !F(f.k).readOnly);
+  (focusField ? F(focusField.k) : $$("#dlg-fields input:not([readonly]):not([type=hidden]), #dlg-fields select").find(el => !el.readOnly && !el.closest("label")?.hidden))?.focus();
   dlg.dataset.initial = formSnapshot();
 }
 function formSnapshot() { return JSON.stringify($$("#dlg-fields input, #dlg-fields select").map(el => el.type === "checkbox" ? el.checked : el.value)); }
@@ -614,7 +616,7 @@ function syncDepFields() {
     l.hidden = !show;
   });
 }
-$("#dlg-fields").addEventListener("change", e => { if (e.target.id === "f-구분" || e.target.id === "f-_record_exec") syncDepFields(); });
+$("#dlg-fields").addEventListener("change", e => { if (e.target.dataset.lock !== undefined && e.target.value !== e.target.dataset.lock) { e.target.value = e.target.dataset.lock; showAlert("연결된 집행이라 이 값은 원본 화면에서만 바꿀 수 있습니다.", "warn"); } if (e.target.id === "f-구분" || e.target.id === "f-_record_exec") syncDepFields(); });
 
 $("#dlg-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -640,6 +642,10 @@ $("#dlg-form").addEventListener("submit", async e => {
   if (missing.length || invalid.length) {
     showFormError((missing.length ? `입력 필요: ${missing.join(", ")}` : "") + (invalid.length ? ` / 확인 필요: ${invalid.join(", ")}` : ""));
     firstBad?.focus(); return;
+  }
+  if (kind === "deposit" && rec["구분"] === "사용" && rec["거래처"]) {
+    const bal = DATA.deposit.filter(x => x["거래처"] === rec["거래처"] && x._row !== Number(row || 0)).reduce((a, x) => a + (x["구분"] === "적립" ? 1 : -1) * (x["금액"] || 0), 0);
+    if (bal - rec["금액"] < 0 && !confirm(`${rec["거래처"]} 적립금 잔액 ${fmt(bal)}원을 넘습니다 (저장 후 ${fmt(bal - rec["금액"])}원). 선결제가 더 있다면 먼저 적립을 입력하세요.\n\n그래도 저장할까요?`)) return;
   }
   // B8: 저장 전 경고 (차단 아님). 새 행·전환·수정 모두 잔액을 검사하되, 전환 중인 품의와 수정 중인 행 자신은 빼고 계산
   if (kind === "exec" || kind === "req") {
@@ -678,7 +684,7 @@ $("#dlg-form").addEventListener("submit", async e => {
     showAlert(`${no ? no + " " : ""}저장했습니다.` + (convertRow != null ? " (품의 → 집행 전환 완료)" : ""), "ok");
     await load();
     if (cb) cb(saved);
-    if (more) { openForm(kind, null, { 거래처: "", 금액: "", 적요: "", 세목: "", 세세목: "", 관리번호: "", 비고: "", 증빙번호: "" }); }
+    if (more) { const carry = {}; ["원인발생일", "일자", "귀속월", "지급월", "이름"].forEach(k => { if (rec[k]) carry[k] = rec[k]; }); openForm(kind, null, { ...carry, 거래처: "", 금액: "", 적요: "", 세목: "", 세세목: "", 관리번호: "", 비고: "", 증빙번호: "" }); }
   } catch (err) {
     showFormError(err.message); showAlert("저장 실패: " + err.message, "error");
   } finally { saveBtn.disabled = false; moreBtn.disabled = false; saveBtn.textContent = "저장"; }
@@ -740,6 +746,7 @@ async function setDateToday(row, col, btn) {
 // ---------- 삭제 ----------
 async function del(kind, row) {
   const r = DATA[kind].find(x => x._row === row);
+  if (kind === "exec" && r) { const o = execOrigin(r); if (o?.locked) { showAlert(`${o.label} 에서 생긴 집행이라 여기서 지울 수 없습니다. ${o.kind === "인건비" ? "인건비 원장에서 '확정 취소' 또는 삭제" : "적립금 탭에서 해당 적립 행 삭제"}로 처리하세요.`, "warn"); return; } }
   if (kind === "deposit" && r && r["연결거래번호"]) {
     const ex = DATA.exec.find(x => x["거래번호"] === r["연결거래번호"]);
     const msg = `이 적립 건은 집행 ${r["연결거래번호"]}${ex ? ` (${ex["거래처"] || "-"}, ${fmt(ex["금액"])}원)` : ""} 과 연결되어 있습니다.\n\n[확인] = 적립 건과 연결 집행을 함께 삭제 (예산 차감도 취소)\n[취소] = 아무것도 삭제하지 않음\n\n적립 건만 지우려면 먼저 집행내역에서 해당 집행을 정리하세요.`;
@@ -749,6 +756,7 @@ async function del(kind, row) {
     return;
   }
   const no = r?.["거래번호"] || r?.["품의번호"] || r?.["재원코드"] || r?.["태그명"];
+  if (kind === "labor" && r?.["연결거래번호"]) { const ev = DATA.evidence.filter(e => e["거래번호"] === r["연결거래번호"]).length; if (ev) { showAlert(`집행 ${r["연결거래번호"]} 에 증빙 ${ev}개가 있어 삭제할 수 없습니다. 증빙을 먼저 지우세요.`, "warn"); return; } }
   const laborLbl = typeof laborLabel === "function" ? laborLabel(kind, r) : null;
   const label = laborLbl ? laborLbl + (kind === "labor" && r["연결거래번호"] ? `\n연결 집행 ${r["연결거래번호"]} 도 함께 삭제됩니다.` : "") : no ? [no, r["거래처"] || r["과제명"] || r["분류"], r["금액"] != null && kind !== "funds" && kind !== "tags" ? fmt(r["금액"]) + "원" : "", r["원인발생일"] ? mmdd(r["원인발생일"]) : "", (r["적요"] || r["설명"] || "").slice(0, 30)].filter(Boolean).join(" · ")
     : (kind === "deposit" ? `${r?.["일자"]} ${r?.["거래처"]} ${r?.["구분"]} ${fmt(r?.["금액"])}원` : `${r?.["재원"]} ${r?.["변경회차"]}회차`);
@@ -762,6 +770,8 @@ async function del(kind, row) {
 function showAlert(msg, type = "ok") {
   let box = $("#toasts");
   if (!box) { box = document.createElement("div"); box.id = "toasts"; box.className = "toasts"; box.setAttribute("aria-live", "polite"); document.body.appendChild(box); }
+  // 모달 대화상자(top layer) 위에도 보이도록 popover 로 띄움 (지원 브라우저만)
+  try { if ("showPopover" in box) { if (!box.hasAttribute("popover")) box.setAttribute("popover", "manual"); if (box.matches(":popover-open")) box.hidePopover(); box.showPopover(); } } catch { }  // 다시 띄워 가장 위 층으로
   const dup = [...box.children].find(x => x.querySelector(".toast-msg")?.textContent === msg);
   if (dup) dup.remove();
   const t = document.createElement("div");
@@ -802,6 +812,7 @@ document.addEventListener("click", e => {
     return;
   }
   if (b.dataset.act === "xact") return execAction(Number(b.dataset.row), b.dataset.action, b);
+  if (b.dataset.act === "origin") return gotoOrigin(Number(b.dataset.row));
   if (b.dataset.act === "show-excluded") { switchTab("exec"); QUICK = "excluded"; FILTERS.exec = {}; $$("[data-filter][data-kind=exec]").forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = ""; }); renderExecTiles(); renderList("exec"); showAlert("예산 집계에서 제외된 집행만 표시 중입니다. 빠른 필터 타일을 누르거나 새로고침하면 해제됩니다.", "ok"); return; }
   if (b.dataset.add) return openForm(b.dataset.add);
   if (b.dataset.act === "dep-use") return openForm("deposit", null, { 거래처: b.dataset.vendor, 구분: "사용" });
@@ -1118,6 +1129,23 @@ $("#s-clear-key").addEventListener("click", async () => {
 let QUICK = "";
 const XD = { row: null, evid: null, drive: null };
 function evidCount(r) { return (DATA.evidence || []).filter(e => e["거래번호"] === r["거래번호"]).length; }
+// 집행 행의 출처: 인건비 확정 / 적립금 적립 기록 / 품의 전환. 연결 행은 핵심 열이 잠김
+const LOCKED_COLS = ["재원", "예산목", "금액", "거래처", "원인발생일"];
+function execOrigin(r) {
+  if (!r || !r["거래번호"]) return null;
+  const lab = (DATA.labor || []).find(x => x["연결거래번호"] === r["거래번호"]); if (lab) return { kind: "인건비", locked: true, row: lab._row, label: `${lab["지급월"]} ${lab["이름"]} · ${lab["지급처"]}` };
+  const dep = DATA.deposit.find(x => x["연결거래번호"] === r["거래번호"]); if (dep) return { kind: "적립", locked: true, row: dep._row, label: `${dep["일자"]} ${dep["거래처"]} 적립` };
+  const m = /^품의 (\S+)/.exec(r["비고"] || ""); if (m) { const req = DATA.req.find(x => x["품의번호"] === m[1]); return { kind: "품의", locked: false, row: req?._row, no: m[1], label: `품의 ${m[1]}` }; }
+  return null;
+}
+function originBadge(r) { const o = execOrigin(r); return o ? ` <button type="button" class="origin ${o.kind}" data-act="origin" data-row="${r._row}" title="${esc(o.label)} 에서 생성${o.locked ? " · 재원·예산목·금액·거래처·원인발생일은 원본에서만 변경" : ""} · 클릭하면 원본으로 이동">${o.kind}</button>` : ""; }
+function gotoOrigin(row) {
+  const r = DATA.exec.find(x => x._row === row); const o = execOrigin(r); if (!o) return;
+  const setSearch = (kind, q) => { FILTERS[kind] = { q }; $$(`[data-filter][data-kind=${kind}]`).forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = el.dataset.filter === "q" ? q : ""; }); renderList(kind); };
+  if (o.kind === "인건비") { setMode(true); switchLaborTab("ledger"); setSearch("labor", r["거래번호"]); }
+  else if (o.kind === "적립") { switchTab("deposit"); setSearch("deposit", r["거래번호"]); }
+  else { switchTab("req"); setSearch("req", o.no); }
+}
 function isExcludedExec(r) { return !DATA.funds.some(f => f["재원코드"] === r["재원"]) || !DATA.meta.budget_items.includes(r["예산목"]); }
 function hasEvidence(r) { return !!(r["증빙목록"]) || (DATA.evidence || []).some(e => e["거래번호"] === r["거래번호"]); }
 
@@ -1166,8 +1194,10 @@ $("#xd-close").addEventListener("click", closeExecDrawer);
 async function renderExecDrawer(fetchEvid) {
   const r = DATA.exec.find(x => x._row === XD.row);
   if (!r) { $("#exec-drawer").hidden = true; XD.row = null; return; }
-  $("#xd-title").textContent = r["거래번호"];
+  $("#xd-title").innerHTML = esc(r["거래번호"]) + originBadge(r);
   $("#xd-sub").textContent = `${r["재원"]} · ${r["예산목"]} · ${fmt(r["금액"])}원`;
+  // 다른 저장·새로고침으로 다시 그릴 때 입력 중이던 증빙 업로드 폼은 유지
+  const oldForm = $("#evid-form"), keep = oldForm && XD.formRow === r._row ? { kind: oldForm.kind.value, date: oldForm.date.value, note: oldForm.note.value, files: oldForm.files.files } : null;
   if (fetchEvid || !XD.evid) {
     try { const d = await api("GET", `/api/evidence/${encodeURIComponent(r["거래번호"])}`); XD.evid = d.items; XD.drive = d.drive; }
     catch (e) { XD.evid = []; XD.drive = { connected: false, error: e.message }; }
@@ -1221,6 +1251,8 @@ async function renderExecDrawer(fetchEvid) {
       </form>
     </section>`;
   bindEvidForm(r);
+  XD.formRow = r._row;
+  if (keep) { const f = $("#evid-form"); f.kind.value = keep.kind; if (keep.date) f.date.value = keep.date; f.note.value = keep.note; try { if (keep.files?.length && !f.files.disabled) f.files.files = keep.files; } catch { } }
 }
 
 function bindEvidForm(r) {

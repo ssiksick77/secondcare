@@ -57,6 +57,7 @@ MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
 EXEC_COLS = ["거래번호", "관리번호", "원인발생일", "지급청구일", "지출완료일", "재원", "예산목", "세목",
              "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록"]
 EXEC_STATUS = ["발생", "청구", "보완", "완료"]  # 날짜에서 계산, '보완'만 수동
+LINKED_LOCKED = ["재원", "예산목", "금액", "거래처", "원인발생일"]  # 인건비·적립 연결 집행에서 잠그는 열
 REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예산목", "세목", "세세목", "거래처",
             "결제수단", "적요", "금액", "태그", "품의자", "비고", "상태"]
 DEP_COLS = ["일자", "거래처", "구분", "금액", "적요", "사용자", "증빙번호", "연결거래번호", "비고", "태그"]
@@ -827,6 +828,11 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None) -> dict:
         if existing is None:
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
         _check_expect(kind, existing, expect)
+        if kind == "exec" and (existing["거래번호"] in _labor_refs(wb) or existing["거래번호"] in _number_refs(wb, "거래번호")):
+            # 인건비 확정·적립 기록으로 생긴 행: 원본과 어긋나지 않도록 핵심 열은 잠금 (부가 정보만 수정 가능)
+            for c in LINKED_LOCKED:
+                if _cell_out(c, rec.get(c)) != existing.get(c):
+                    raise ValueError(f"인건비·적립금과 연결된 집행이라 {c}은(는) 여기서 바꿀 수 없습니다. 원본 화면(인건비 원장 확정 취소 / 적립금)에서 처리하세요.")
         if kind in ("exec", "req", "deposit") and str(rec.get("태그") or "").strip() != str(existing.get("태그") or ""):
             _validate_tag(rec, wb)  # 태그를 바꿀 때만 검증 (기존 미등록 태그는 유지 가능)
         if kind == "budget":
