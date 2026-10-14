@@ -293,7 +293,7 @@ function renderList(kind) {
         const sub = kind === "exec" && (stDate || fixLink) ? `<div class="s">${stDate ? `<span title="${esc(stDate)}">${esc(mmdd(stDate))}</span>` : ""}${stDate && fixLink ? " · " : ""}${fixLink}</div>` : "";
         return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : (kind === "exec" ? '<span class="next ph" aria-hidden="true"></span>' : "")}</div>${sub || (kind === "exec" ? '<div class="s">&nbsp;</div>' : "")}</td>`;
       }
-      if (c.t === "title") return `<td class="tit" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}"><div class="t">${esc(v || "")}${kind === "exec" ? originBadge(r) : ""}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`;
+      if (c.t === "title") { const memo = String(r["비고"] || "").trim(); return `<td class="tit${memo ? " memo" : ""}" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}${memo ? esc("\n비고: " + memo) : ""}"${memo ? ` data-memo="${esc(memo)}"` : ""}>${memo ? '<i class="memo-mark" aria-hidden="true"></i>' : ""}<div class="t">${esc(v || "")}${kind === "exec" ? originBadge(r) : ""}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`; }
       if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap"><button type="button" class="rowbtn" aria-label="${esc(v)} 상세 열기 (Shift+Enter 수정)">${esc(v)}</button></td>`;
       return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}"${c.wrap && v ? ` title="${esc(v)}"` : ""}>${esc(v)}</td>`;
   }
@@ -953,6 +953,20 @@ document.addEventListener("click", e => {
   else if (b.dataset.act === "del") del(b.dataset.kind, row);
   else if (b.dataset.act === "toexec") toExec(row);
 });
+
+// 적요 칸 비고 메모: 좌상단 회색 삼각 마크, 마우스를 올리면 비고 내용을 툴팁으로 (엑셀 메모 차용)
+(() => {
+  let tip = null, cur = null;
+  const show = (td, x, y) => {
+    if (!tip) { tip = document.createElement("div"); tip.className = "memo-tip"; tip.setAttribute("role", "tooltip"); document.body.appendChild(tip); }
+    tip.textContent = td.dataset.memo; tip.hidden = false;
+    const r = td.getBoundingClientRect(); tip.style.left = Math.min(r.left + 8, window.innerWidth - tip.offsetWidth - 12) + "px";
+    const top = r.bottom + 4; tip.style.top = (top + tip.offsetHeight > window.innerHeight ? r.top - tip.offsetHeight - 4 : top) + "px";
+  };
+  document.addEventListener("mouseover", e => { const td = e.target.closest("td.tit.memo"); if (!td || td === cur) return; cur = td; show(td); });
+  document.addEventListener("mouseout", e => { if (cur && !cur.contains(e.relatedTarget)) { cur = null; if (tip) tip.hidden = true; } });
+  document.addEventListener("scroll", () => { if (tip) tip.hidden = true; cur = null; }, true);
+})();
 
 // 행 더블클릭 → 수정 창 (표 안 버튼·입력·링크 제외, 확정된 인건비 건 제외)
 document.addEventListener("dblclick", e => {
