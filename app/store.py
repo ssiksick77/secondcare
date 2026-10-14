@@ -46,8 +46,8 @@ SHEET_META = "메타"  # 숨김 시트: 키/값 (연도별 신청번호 최고�
 
 BUDGET_ITEMS = [
     "내부인건비(공통)", "외부인건비(공통)", "연구시설.장비비", "연구활동비",
-    "연구재료비", "연구수당", "위탁연구개발비", "간접비(공통)", "발생이자",
-]
+    "연구재료비", "연구수당", "위탁연구개발비", "국제공동연구개발비", "연구개발부담비", "간접비(공통)", "발생이자",
+]  # 국제공동연구개발비·연구개발부담비는 2026-10-14 추가: 이전 장부의 예산변동에는 _ensure_structure 가 맨 끝 열로 붙인다
 PAY_METHODS = ["연구비카드", "계좌이체", "연구자선지출", "공금통장", "적립금", "기타"]
 REQ_STATUS = ["대기", "집행완료", "취소"]
 BUDGET_ROUNDS = ["이월", "당초"]  # 그 외에는 1,2,3... 숫자 회차
@@ -108,7 +108,7 @@ DELIVERED_MSG = "배송 완료된 신청입니다 (주문 {no}). 담당자가 �
 LOAD_LOCKED_MSG = "장부 파일을 열 수 없습니다. 다른 프로그램(엑셀·동기화 등)이 파일을 잠갔거나 접근 권한이 없습니다. 파일을 닫은 뒤 다시 시도하세요."
 LINK_RE = re.compile(r"^https?://\S", re.I)
 BUDGET_HEAD_ROW = 8
-BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS  # A~D + E~M
+BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS  # 새 장부: A~D + E~O. 읽기·쓰기는 8행 머리글 이름 기준 (열 순서 무관)
 
 DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일",
              "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일"}
@@ -438,11 +438,28 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
+    # 예산변동: 8행 머리글을 이름으로 맞춘다. 빈 머리글이면 새로 쓰고, 이전 장부에 없는 열(새 예산목)은
+    # 기존 열을 옮기지 않고 맨 끝에 붙인다 (자리로 덮어쓰면 기존 열의 숫자가 다른 예산목으로 읽힘)
     ws = wb[SHEET_BUDGET]
-    for i, c in enumerate(BUDGET_COLS, 1):
-        if ws.cell(BUDGET_HEAD_ROW, i).value != c:
+    heads = _headers(ws, BUDGET_HEAD_ROW)
+    if not any(heads):
+        for i, c in enumerate(BUDGET_COLS, 1):
             ws.cell(BUDGET_HEAD_ROW, i, c).font = head_font
-            changed = True
+        changed = True
+    else:
+        for c in BUDGET_COLS:
+            if c not in heads:
+                heads.append(c)
+                col = len(heads)
+                ws.cell(BUDGET_HEAD_ROW, col, c).font = head_font
+                if c in BUDGET_ITEMS:  # 1~3행 요약 머리 (항목·비목·예산목)
+                    if ws.cell(1, col).value in (None, ""):
+                        ws.cell(1, col, "간접비" if c in ("간접비(공통)", "발생이자") else "직접비")
+                    for rr in (2, 3):
+                        if ws.cell(rr, col).value in (None, ""):
+                            ws.cell(rr, col, c)
+                    ws.column_dimensions[get_column_letter(col)].width = 16
+                changed = True
     return changed
 
 
@@ -1784,19 +1801,23 @@ def _refresh_budget_summary(wb):
     """예산변동 1~7행 요약(전체 재원 합계)을 갱신."""
     ws = wb[SHEET_BUDGET]
     rows = _rows(ws, BUDGET_COLS, BUDGET_HEAD_ROW)
-    sums = {"이월금": [0] * 9, "당초액": [0] * 9, "변경액": [0] * 9}
+    n = len(BUDGET_ITEMS)
+    sums = {"이월금": [0] * n, "당초액": [0] * n, "변경액": [0] * n}
     for r in rows:
         rnd = str(r["변경회차"])
         key = "이월금" if rnd == "이월" else "당초액" if rnd == "당초" else "변경액"
         for i, item in enumerate(BUDGET_ITEMS):
             sums[key][i] += _to_num(r.get(item))
+    heads = _headers(ws, BUDGET_HEAD_ROW)  # 요약은 8행 머리글과 같은 열에 (새 예산목은 맨 끝 열일 수 있음)
+    cols = {item: heads.index(item) + 1 for item in BUDGET_ITEMS if item in heads}
     label_row = {"이월금": 4, "당초액": 5, "변경액": 6}
-    for key, rr in label_row.items():
-        for i in range(9):
-            c = ws.cell(rr, 5 + i, sums[key][i] or None)
+    for i, item in enumerate(BUDGET_ITEMS):
+        if item not in cols:
+            continue
+        for key, rr in label_row.items():
+            c = ws.cell(rr, cols[item], sums[key][i] or None)
             c.number_format = "#,##0"
-    for i in range(9):
-        c = ws.cell(7, 5 + i, (sums["이월금"][i] + sums["당초액"][i] + sums["변경액"][i]) or None)
+        c = ws.cell(7, cols[item], (sums["이월금"][i] + sums["당초액"][i] + sums["변경액"][i]) or None)
         c.number_format = "#,##0"
     ws.cell(1, 2, "※ 전체 재원 합계 (앱 자동 갱신)")
 

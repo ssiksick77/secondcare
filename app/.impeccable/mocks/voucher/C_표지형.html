@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>지출결의서 C 표지형</title>
+<style>
+@page { size: A4 portrait; margin: 15mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: #E5E7EB; color: #000;
+  font-family: "Pretendard GOV", "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  font-size: 10.5pt; line-height: 1.45;
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+}
+.sheet {
+  width: 210mm; min-height: 297mm; margin: 24px auto; padding: 15mm;
+  background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.12);
+  display: flex; flex-direction: column;
+}
+.body { flex: 1; }
+
+/* 머리 줄 */
+.top { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 2mm; }
+h1 { margin: 0; font-size: 14pt; font-weight: 700; letter-spacing: .5em; }
+.inst { margin: 0; font-size: 9.5pt; color: #333; }
+
+/* 표지 띠: 서가에서 찾는 두 값 */
+.band { display: grid; grid-template-columns: 1fr 1fr; border-top: 3px solid #000; border-bottom: 1px solid #000; }
+.band > div { padding: 4mm 0 4mm; }
+.band > div + div { border-left: 0.5pt solid #000; padding-left: 6mm; text-align: right; }
+.band .lab { display: block; font-size: 9pt; color: #333; font-weight: 600; }
+.band .no { display: block; font-size: 38pt; font-weight: 800; line-height: 1.05; letter-spacing: -.01em; }
+.band .amt { display: block; font-size: 30pt; font-weight: 800; line-height: 1.15; letter-spacing: -.01em; }
+.band .amt small { font-size: 16pt; font-weight: 700; margin-left: 1mm; }
+.band .kr { display: block; font-size: 9.5pt; color: #333; margin-top: 1mm; }
+
+/* 거래처 · 적요 */
+.what { padding: 3.5mm 0 3mm; border-bottom: 1px solid #000; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 6mm; }
+.what .vendor { margin: 0; font-size: 15pt; font-weight: 700; line-height: 1.25; }
+.what .desc { margin: 1mm 0 0; font-size: 12.5pt; }
+.what .who { font-size: 9pt; color: #333; text-align: right; white-space: nowrap; }
+.what .who b { color: #000; font-weight: 600; margin-left: 1.5mm; }
+
+/* 나머지 2단 kv */
+.kv2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 6mm; }
+.kv2 dl { border-top: 0; }
+dl.wide { margin-top: 0; border-top: 0; }
+dl.wide.last { margin-top: 0; border-top: 0; }
+dl { margin: 0; display: grid; grid-template-columns: 17mm 1fr; border-top: 0.5pt solid #000; }
+dt, dd { margin: 0; padding: 1.7mm 0; border-bottom: 0.5pt solid #000; }
+dt { color: #333; font-weight: 600; white-space: nowrap; }
+dd { padding-left: 2mm; }
+
+h2 { margin: 5mm 0 1.5mm; font-size: 10pt; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; }
+h2 small { font-size: 8.5pt; font-weight: 400; color: #666; }
+
+/* 예산 현황 띠 */
+.bud { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid #000; border-bottom: 1px solid #000; }
+.bud div { padding: 1.5mm 3mm; display: flex; justify-content: space-between; align-items: baseline; }
+.bud div + div { border-left: 0.5pt solid #000; }
+.bud span { font-size: 9pt; color: #333; font-weight: 600; }
+
+/* 일정: 점과 선으로 잇는 가로 줄 */
+.tl { list-style: none; margin: 1mm 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); }
+.tl li { position: relative; text-align: center; padding-top: 0; }
+.tl .k { display: block; font-size: 9pt; color: #333; font-weight: 600; margin-bottom: 1.6mm; }
+.tl .dot { display: block; height: 2.4mm; position: relative; }
+.tl .dot::before { content: ""; position: absolute; top: 50%; left: 0; right: 0; border-top: 0.5pt solid #000; }
+.tl li:first-child .dot::before { left: 50%; }
+.tl li:last-child .dot::before { right: 50%; }
+.tl .dot::after { content: ""; position: absolute; top: 0; left: 50%; width: 2.4mm; height: 2.4mm; margin-left: -1.2mm; border-radius: 50%; background: #000; }
+.tl .v { display: block; margin-top: 1.4mm; font-size: 10.5pt; }
+
+/* 증빙 */
+table.f { width: 100%; border-collapse: collapse; table-layout: fixed; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+table.f th, table.f td { border-bottom: 0.5pt solid #000; padding: 1.8mm 2mm; text-align: left; vertical-align: middle; white-space: nowrap; }
+table.f thead th { font-weight: 600; color: #333; font-size: 9pt; }
+table.f .c { text-align: center; }
+table.f td.file { overflow: hidden; text-overflow: ellipsis; }
+.box { display: inline-block; width: 4.2mm; height: 4.2mm; border: 1px solid #000; vertical-align: middle; }
+.note { margin: 1.5mm 0 0; font-size: 8.5pt; color: #666; }
+
+.foot { margin-top: 6mm; padding-top: 1.5mm; border-top: 0.5pt solid #000; font-size: 8.5pt; color: #666; text-align: right; }
+
+.demo { width: 210mm; margin: 0 auto 32px; padding: 6mm 15mm; background: #fff; }
+.demo p { margin: 0 0 2mm; color: #333; }
+
+@media print {
+  body { background: #fff; }
+  .sheet { width: auto; min-height: 0; height: 266mm; margin: 0; padding: 0; box-shadow: none; }
+  .demo { display: none; }
+  body, body * { font-feature-settings: normal; font-variant-numeric: normal; }
+}
+</style>
+</head>
+<body>
+<main class="sheet">
+  <div class="body">
+    <div class="top">
+      <h1>지출결의서</h1>
+      <p class="inst">분당서울대학교병원 의료인공지능센터</p>
+    </div>
+
+    <div class="band">
+      <div><span class="lab">결의번호</span><span class="no">2026-0147</span></div>
+      <div><span class="lab">금액</span><span class="amt">385,000<small>원</small></span><span class="kr">금 삼십팔만오천 원정</span></div>
+    </div>
+
+    <div class="what">
+      <div>
+        <p class="vendor">(주)메디컬프린팅</p>
+        <p class="desc">자문회의 자료 인쇄 및 제본 (30부)</p>
+      </div>
+      <div class="who">담당자<b>안윤아</b><br>출력일<b>2026-10-14</b></div>
+    </div>
+
+    <dl class="wide">
+      <dt>과제명</dt><dd>의료 AI 공정성 평가 플랫폼 개발 (RS-2026-00123456)</dd>
+    </dl>
+    <div class="kv2">
+      <dl>
+        <dt>재원코드</dt><dd>공정성</dd>
+        <dt>예산목</dt><dd>연구활동비</dd>
+        <dt>세목</dt><dd>회의비</dd>
+        <dt>세세목</dt><dd>전문가 자문 회의</dd>
+      </dl>
+      <dl>
+        <dt>결제수단</dt><dd>연구비카드</dd>
+        <dt>사용자</dt><dd>박지원</dd>
+        <dt>관리번호</dt><dd>M-0317</dd>
+        <dt>품의</dt><dd>2026-공정성-012 · 박지원</dd>
+      </dl>
+    </div>
+    <dl class="wide last">
+      <dt>비고</dt><dd>회의록 별첨</dd>
+    </dl>
+
+    <h2>일정</h2>
+    <ol class="tl">
+      <li><span class="k">원인발생일</span><span class="dot"></span><span class="v">2026-09-24</span></li>
+      <li><span class="k">지급청구일</span><span class="dot"></span><span class="v">2026-09-26</span></li>
+      <li><span class="k">지출완료일</span><span class="dot"></span><span class="v">2026-10-02</span></li>
+      <li><span class="k">결의일</span><span class="dot"></span><span class="v">2026-10-10</span></li>
+    </ol>
+
+    <h2>예산목 현황 · 연구활동비 <small>출력일 기준</small></h2>
+    <div class="bud">
+      <div><span>예산현액</span>12,000,000</div>
+      <div><span>누계집행</span>4,615,000</div>
+      <div><span>잔액</span><b>7,385,000</b></div>
+    </div>
+
+    <h2>증빙 목록 <small>3건 · 실물과 대조 후 칸에 표시</small></h2>
+    <table class="f">
+      <colgroup><col style="width:10mm"><col style="width:10mm"><col style="width:25mm"><col><col style="width:24mm"></colgroup>
+      <thead><tr><th scope="col" class="c">확인</th><th scope="col" class="c">번호</th><th scope="col">증빙종류</th><th scope="col">파일명</th><th scope="col" class="c">업로드일</th></tr></thead>
+      <tbody>
+        <tr><td class="c"><span class="box"></span></td><td class="c">1</td><td>세금계산서</td><td class="file">2026-0147_세금계산서_메디컬프린팅.pdf</td><td class="c">2026-10-02</td></tr>
+        <tr><td class="c"><span class="box"></span></td><td class="c">2</td><td>거래명세서</td><td class="file">2026-0147_거래명세서.pdf</td><td class="c">2026-10-02</td></tr>
+        <tr><td class="c"><span class="box"></span></td><td class="c">3</td><td>카드전표</td><td class="file">2026-0147_카드전표.jpg</td><td class="c">2026-10-03</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="foot">회계대장 자동 생성 · 2026-10-14 17:40</p>
+</main>
+
+<section class="demo" aria-label="증빙이 없을 때">
+  <p>증빙이 없을 때 (같은 자리, 한 줄로)</p>
+  <table class="f">
+    <colgroup><col style="width:10mm"><col style="width:10mm"><col style="width:25mm"><col><col style="width:24mm"></colgroup>
+    <thead><tr><th scope="col" class="c">확인</th><th scope="col" class="c">번호</th><th scope="col">증빙종류</th><th scope="col">파일명</th><th scope="col" class="c">업로드일</th></tr></thead>
+    <tbody><tr><td colspan="5" class="c">등록된 증빙 없음</td></tr></tbody>
+  </table>
+</section>
+</body>
+</html>

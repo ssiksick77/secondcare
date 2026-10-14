@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>지출결의서 A 전통형</title>
+<style>
+@page { size: A4 portrait; margin: 15mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: #E5E7EB; color: #000;
+  font-family: "Pretendard GOV", "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  font-size: 10.5pt; line-height: 1.45;
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.sheet {
+  width: 210mm; min-height: 297mm; margin: 24px auto; padding: 15mm;
+  background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.12);
+  display: flex; flex-direction: column;
+}
+.body { flex: 1; }
+
+/* 머리 */
+.inst { font-size: 10pt; color: #333; margin: 0 0 6mm; }
+h1 { margin: 0; text-align: center; font-size: 22pt; font-weight: 700; letter-spacing: .9em; text-indent: .9em; line-height: 1.2; }
+.title-rule { border: 0; border-top: 3px double #000; margin: 4mm 0 4mm; }
+.no-block { margin: 0 0 5mm auto; border-collapse: collapse; font-size: 10pt; }
+.no-block th, .no-block td { border: 0.5pt solid #000; padding: 1.2mm 3mm; text-align: left; font-weight: 400; white-space: nowrap; }
+.no-block th { color: #333; width: 20mm; }
+.no-block td { min-width: 34mm; }
+.no-block .no { font-weight: 700; }
+
+/* 절 제목 */
+h2 { margin: 5mm 0 1.5mm; font-size: 10.5pt; font-weight: 700; display: flex; align-items: baseline; justify-content: space-between; }
+h2 small { font-size: 8.5pt; font-weight: 400; color: #666; }
+
+/* 표 공통 */
+table.f { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1px solid #000; }
+table.f th, table.f td { border: 0.5pt solid #000; padding: 1.6mm 2.5mm; text-align: left; vertical-align: middle; }
+table.f th { font-weight: 600; color: #333; white-space: nowrap; }
+table.kv col.l { width: 24mm; }
+table.kv .amt { font-size: 12pt; font-weight: 700; }
+table.kv .amt span { font-weight: 400; font-size: 10.5pt; color: #333; margin-left: 3mm; }
+table.f .num { text-align: right; white-space: nowrap; }
+table.f .c { text-align: center; }
+table.grid thead th { text-align: center; }
+table.grid td { white-space: nowrap; }
+.file { font-size: 9.5pt; overflow: hidden; text-overflow: ellipsis; }
+
+.foot { margin-top: 6mm; padding-top: 1.5mm; border-top: 0.5pt solid #000; font-size: 8.5pt; color: #666; text-align: right; }
+
+/* 화면 전용 설명 */
+.demo { width: 210mm; margin: 0 auto 32px; padding: 6mm 15mm; background: #fff; font-size: 10pt; }
+.demo p { margin: 0 0 2mm; color: #333; }
+
+@media print {
+  body { background: #fff; }
+  .sheet { width: auto; min-height: 0; height: 266mm; margin: 0; padding: 0; box-shadow: none; }
+  .demo { display: none; }
+  /* PDF 에서 숫자를 글자로 복사할 수 있게 (발주서와 같은 규칙) */
+  body, body * { font-feature-settings: normal; font-variant-numeric: normal; }
+}
+</style>
+</head>
+<body>
+<main class="sheet">
+  <div class="body">
+    <p class="inst">분당서울대학교병원 의료인공지능센터</p>
+    <h1>지 출 결 의 서</h1>
+    <hr class="title-rule">
+
+    <table class="no-block">
+      <tr><th scope="row">결의번호</th><td class="no">2026-0147</td></tr>
+      <tr><th scope="row">담 당 자</th><td>안윤아</td></tr>
+      <tr><th scope="row">출 력 일</th><td>2026-10-14</td></tr>
+    </table>
+
+    <h2>과제 · 거래 내역</h2>
+    <table class="f kv">
+      <colgroup><col class="l"><col><col class="l"><col></colgroup>
+      <tbody>
+        <tr><th scope="row">재원코드</th><td>공정성</td><th scope="row">예 산 목</th><td>연구활동비</td></tr>
+        <tr><th scope="row">과 제 명</th><td colspan="3">의료 AI 공정성 평가 플랫폼 개발 (RS-2026-00123456)</td></tr>
+        <tr><th scope="row">세 목</th><td>회의비</td><th scope="row">세 세 목</th><td>전문가 자문 회의</td></tr>
+        <tr><th scope="row">거 래 처</th><td colspan="3">(주)메디컬프린팅</td></tr>
+        <tr><th scope="row">적 요</th><td colspan="3">자문회의 자료 인쇄 및 제본 (30부)</td></tr>
+        <tr><th scope="row">금 액</th><td colspan="3" class="amt">385,000원<span>금 삼십팔만오천 원정</span></td></tr>
+        <tr><th scope="row">결제수단</th><td>연구비카드</td><th scope="row">사 용 자</th><td>박지원</td></tr>
+        <tr><th scope="row">관리번호</th><td>M-0317</td><th scope="row">품 의</th><td>2026-공정성-012 · 박지원</td></tr>
+        <tr><th scope="row">비 고</th><td colspan="3">회의록 별첨</td></tr>
+      </tbody>
+    </table>
+
+    <h2>일정</h2>
+    <table class="f grid">
+      <thead><tr><th scope="col">원인발생일</th><th scope="col">지급청구일</th><th scope="col">지출완료일</th><th scope="col">결의일</th></tr></thead>
+      <tbody><tr><td class="c">2026-09-24</td><td class="c">2026-09-26</td><td class="c">2026-10-02</td><td class="c">2026-10-10</td></tr></tbody>
+    </table>
+
+    <h2>증빙 목록</h2>
+    <table class="f grid">
+      <colgroup><col style="width:12mm"><col style="width:28mm"><col><col style="width:26mm"></colgroup>
+      <thead><tr><th scope="col">번호</th><th scope="col">증빙종류</th><th scope="col">파일명</th><th scope="col">업로드일</th></tr></thead>
+      <tbody>
+        <tr><td class="c">1</td><td>세금계산서</td><td class="file">2026-0147_세금계산서_메디컬프린팅.pdf</td><td class="c">2026-10-02</td></tr>
+        <tr><td class="c">2</td><td>거래명세서</td><td class="file">2026-0147_거래명세서.pdf</td><td class="c">2026-10-02</td></tr>
+        <tr><td class="c">3</td><td>카드전표</td><td class="file">2026-0147_카드전표.jpg</td><td class="c">2026-10-03</td></tr>
+      </tbody>
+    </table>
+
+    <h2>예산목 현황 · 연구활동비 <small>출력일 기준</small></h2>
+    <table class="f grid">
+      <thead><tr><th scope="col">예산현액</th><th scope="col">누계집행</th><th scope="col">잔액</th></tr></thead>
+      <tbody><tr><td class="num">12,000,000</td><td class="num">4,615,000</td><td class="num"><b>7,385,000</b></td></tr></tbody>
+    </table>
+  </div>
+  <p class="foot">회계대장 자동 생성 · 2026-10-14 17:40</p>
+</main>
+
+<section class="demo" aria-label="증빙이 없을 때">
+  <p>증빙이 없을 때 (같은 자리, 한 줄로)</p>
+  <table class="f grid">
+    <colgroup><col style="width:12mm"><col style="width:28mm"><col><col style="width:26mm"></colgroup>
+    <thead><tr><th scope="col">번호</th><th scope="col">증빙종류</th><th scope="col">파일명</th><th scope="col">업로드일</th></tr></thead>
+    <tbody><tr><td colspan="4" class="c">등록된 증빙 없음</td></tr></tbody>
+  </table>
+</section>
+</body>
+</html>

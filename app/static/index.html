@@ -492,6 +492,15 @@
   </form>
 </dialog>
 
+<!-- 집행: 지출결의서 (집행 1건 = 1장, 지출완료일 등록 후). 미리보기 + A4 세로 인쇄 -->
+<dialog id="dlg-voucher" class="dlg-sheet dlg-voucher" aria-labelledby="voucher-title">
+  <form method="dialog">
+    <div class="vc-preview" id="voucher-sheet" role="region" aria-label="지출결의서 미리보기" tabindex="0"></div>
+    <p class="toolbar-note" id="voucher-note" hidden></p>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="voucher-close">닫기</button><button type="button" class="btn btn-primary" id="voucher-print">인쇄</button></div>
+  </form>
+</dialog>
+
 <!-- 신청: 학회 여비 계산기 (conf.js). 신청 폼 [여비 계산기] 또는 상세 패널 [산출 내역 보기](보기 전용)로 연다 -->
 <dialog id="dlg-conf" aria-labelledby="conf-title" class="dlg-conf">
   <form id="conf-form" method="dialog" novalidate>
@@ -540,7 +549,8 @@
         <label class="wide" for="s-rq-sup-note">연구원 안내 <small>(소모품 신청 화면에 표시 · 예: 드림디포는 10월 말까지 이용 불가 · 비우면 이용 불가 구매처가 자동으로 표시됩니다)</small><input id="s-rq-sup-note" name="REQUEST_SUPPLIER_NOTE" type="text" autocomplete="off" maxlength="200"></label>
         <label for="s-rq-buyer">발주 기관 <small>(발주서에 우리 기관으로 표시)</small><input id="s-rq-buyer" name="REQUEST_BUYER" type="text" autocomplete="off" placeholder="예: 의료인공지능센터"></label>
         <label class="mid" for="s-rq-ship">배송지<input id="s-rq-ship" name="REQUEST_SHIP_TO" type="text" autocomplete="off" placeholder="주소 · 호실"></label>
-        <label class="wide" for="s-rq-contact">담당자 <small>(이름 · 연락처)</small><input id="s-rq-contact" name="REQUEST_CONTACT" type="text" autocomplete="off"></label>
+        <label class="wide" for="s-rq-contact">담당자 <small>(이름 · 연락처 · 결의서에는 괄호 앞 이름만)</small><input id="s-rq-contact" name="REQUEST_CONTACT" type="text" autocomplete="off" placeholder="예: 안윤아 (031-000-0000)"></label>
+        <label class="wide" for="s-org">기관명 (결의서·발주서 머리글) <small>(비우면 분당서울대학교병원 의료인공지능센터)</small><input id="s-org" name="LEDGER_ORG" type="text" autocomplete="off" maxlength="80"></label>
       </div>
     </fieldset>
     <p class="toolbar-note" style="margin:0 0 8px"><b>AI 도우미 (선택 · 유료)</b> — 장부 데이터가 선택한 AI 서버로 전송되며 사용량에 따라 과금됩니다. 저장하면 <code>app/.env</code>에 기록되고 즉시 적용됩니다. 키는 이 PC에만 저장됩니다.</p>
@@ -612,5 +622,6 @@
 <script src="/static/conf.js"></script>
 <div id="print-sheet" class="print-root" aria-hidden="true"></div>
 <div id="print-conf" class="print-root" aria-hidden="true"></div>
+<div id="print-voucher" class="print-root" aria-hidden="true"></div>
 </body>
 </html>

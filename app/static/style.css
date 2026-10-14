@@ -665,6 +665,46 @@ dialog.dlg-sheet { width: min(820px, 95vw); }
 #order-lines col.ol-who { width: 64px; }
 #order-lines td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .print-root { display: none; }
+/* 지출결의서 (시안 .impeccable/mocks/voucher/A5_수정형.html). 미리보기와 인쇄가 같은 규칙.
+   인쇄 공문 양식이라 화면 토큰 대신 시안 값: 검정 괘선, 회색 라벨 칸(#F2F2F2), 행 높이 8mm 고정(줄이지 않음).
+   증빙 5줄 + 재원 9줄이 A4 한 쪽(267mm)에 들어가도록 머리 16mm(번호 상자 높이)·절 제목 위 1.7mm/아래 0.5mm로 시안보다 좁힘 */
+dialog.dlg-voucher { width: min(880px, 96vw); max-width: none; }
+.vc-preview { max-height: calc(100vh - 150px); overflow: auto; background: var(--bg-table); border: 1px solid var(--rule); padding: 12px; }
+.vc-preview .voucher { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm; background: #fff; border: 1px solid var(--rule); }
+.voucher {
+  --vc-row: 8mm; --vc-pad: 3mm; --vc-label: 24mm; --vc-label-bg: #F2F2F2;
+  color: #000; font-family: var(--font); font-size: 10.5pt; line-height: 1.45; text-align: left;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.voucher .vc-head { position: relative; height: 16mm; display: flex; flex-direction: column; }
+.voucher .vc-inst { font-size: 10pt; color: #333; margin: 0; line-height: 1.45; }
+.voucher .vc-band { flex: 1; display: flex; align-items: center; justify-content: center; }
+.voucher .vc-title { margin: 0; text-align: center; font-size: 22pt; font-weight: 700; letter-spacing: 0; line-height: 1.2; color: #000; }
+.voucher .vc-box { position: absolute; top: 0; right: 0; min-width: 52mm; border-collapse: collapse; font-size: 10pt; background: #fff; }   /* 긴 거래번호(YYYY-재원코드-NNN)는 왼쪽으로 넓어짐 */
+.voucher .vc-box th, .voucher .vc-box td { border: 0.5pt solid #000; height: var(--vc-row); padding: 0 2mm 0 var(--vc-pad); text-align: left; vertical-align: middle; font-weight: 400; white-space: nowrap; line-height: 1.2; color: #000; }
+.voucher .vc-box th { color: #333; width: 20mm; }
+.voucher .vc-box .vc-no { font-weight: 700; }
+.voucher .vc-box th, .voucher .vc-kv th, .voucher .vc-g thead th { background: var(--vc-label-bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.voucher .vc-rule { border: 0; border-top: 3px double #000; margin: 0; }
+.voucher h3 { margin: 1.7mm 0 0.5mm; font-size: 21px; font-weight: 700; line-height: 1; color: #000; display: flex; align-items: baseline; justify-content: space-between; break-after: avoid; }
+.voucher h3 small { font-size: 8.5pt; font-weight: 400; color: #666; }
+.voucher .vc-t { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1px solid #000; background: #fff; font-size: inherit; }
+.voucher .vc-t th, .voucher .vc-t td { border: 0.5pt solid #000; height: var(--vc-row); padding: 0 2mm 0 var(--vc-pad); text-align: left; vertical-align: middle; line-height: 1.3; letter-spacing: 0; color: #000; overflow-wrap: anywhere; }
+.voucher .vc-t th { font-weight: 600; color: #333; white-space: nowrap; }
+.voucher .vc-kv col.l { width: var(--vc-label); }
+.voucher .vc-kv .vc-amt { font-size: 12pt; font-weight: 700; }
+.voucher .vc-kv .vc-amt span { font-weight: 400; font-size: 10.5pt; color: #333; margin-left: 3mm; }
+.voucher .vc-t .num { text-align: right; white-space: nowrap; padding: 0 var(--vc-pad); }
+.voucher .vc-t .c { text-align: center; padding: 0 var(--vc-pad); }
+.voucher .vc-g thead th { text-align: center; padding: 0 var(--vc-pad); }
+.voucher .vc-g td { white-space: nowrap; }
+.voucher .vc-ev td:last-child { white-space: normal; }   /* 증빙 비고는 길면 줄바꿈 (행은 8mm 이상) */
+.voucher .vc-fund col.l { width: 40mm; }
+.voucher .vc-fund tbody th { font-weight: 400; color: #000; background: #fff; }
+.voucher .vc-fund tr.vc-sum th, .voucher .vc-fund tr.vc-sum td { border-top: 2px solid #000; }
+.voucher .vc-fund tr.vc-sum th { font-weight: 700; }
+.voucher tr { break-inside: avoid; }
+.voucher thead { display: table-header-group; }   /* 쪽이 넘어가면 열 머리 반복 */
 /* 학회 여비 계산기 (conf.js): 머리·바닥 고정, 본문만 스크롤 */
 dialog.dlg-conf { width: min(1180px, 96vw); max-width: none; max-height: 94vh; }
 dialog.dlg-conf form { padding: 16px 22px 14px; display: flex; flex-direction: column; max-height: 94vh; }
@@ -768,6 +808,7 @@ table.grid.edit td.num .cell-input { text-align: right; }
 /* ---------- 인쇄 ---------- */
 @page { size: A4 landscape; margin: 12mm; }
 @page order-sheet { size: A4 portrait; margin: 15mm; }
+@page voucher { size: A4 portrait; margin: 15mm; @bottom-center { content: counter(page) "/" counter(pages); font-size: 9pt; color: #000; } }
 @media print {
   .top, .tabs, .toolbar, .drawer, .toasts, .memo-tip, #alert, .cards.quick, .actions, #dash-csv, #dash-print, .foot,
   .table-wrap.scrollable::after, .next, .origin, .memo-mark, .defs-box > summary, .edit-legend, .del-bar, table.grid .sel { display: none !important; }
@@ -799,6 +840,11 @@ table.grid.edit td.num .cell-input { text-align: right; }
   body.printing-sheet .os-lines tfoot tr:first-child td { border-top: 1px solid #000; }
   body.printing-sheet .os-lines .os-int { color: #444; }
   body.printing-sheet #print-sheet, body.printing-sheet #print-sheet * { font-feature-settings: normal; font-variant-numeric: normal; }   /* PDF 에서 숫자·코드를 복사할 수 있게 (tnum 대체 글리프는 글자로 추출되지 않음) */
+  /* 지출결의서 인쇄: 인쇄 전용 사본만, 이름 붙은 쪽 voucher (A4 세로 15mm, 아래 가운데 k/n) */
+  body.printing-voucher > :not(#print-voucher) { display: none !important; }
+  body.printing-voucher { background: #fff; }
+  body.printing-voucher #print-voucher { display: block; page: voucher; }
+  body.printing-voucher #print-voucher, body.printing-voucher #print-voucher * { font-feature-settings: normal; font-variant-numeric: normal; }   /* PDF 에서 숫자를 글자로 복사 (발주서와 같은 규칙) */
   /* 학회 여비 산출 내역 인쇄: 같은 A4 세로 양식 */
   body.printing-conf > :not(#print-conf) { display: none !important; }
   body.printing-conf #print-conf { display: block; page: order-sheet; }

@@ -1066,6 +1066,7 @@ document.addEventListener("click", e => {
   }
   if (b.dataset.act === "xact") return execAction(Number(b.dataset.row), b.dataset.action, b);
   if (b.dataset.act === "origin") return gotoOrigin(Number(b.dataset.row));
+  if (b.dataset.act === "voucher") return openVoucher(Number(b.dataset.row), b);
   if (b.dataset.act === "show-excluded") { switchTab("exec"); QUICK = "excluded"; FILTERS.exec = {}; $$("[data-filter][data-kind=exec]").forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = ""; }); renderExecTiles(); renderList("exec"); showAlert("예산 집계에서 제외된 집행만 표시 중입니다. 빠른 필터 타일을 누르거나 새로고침하면 해제됩니다.", "ok"); return; }
   if (b.dataset.add) return openForm(b.dataset.add);
   if (b.dataset.act === "dep-use") return openForm("deposit", null, { 거래처: b.dataset.vendor, 구분: "사용" });
@@ -1367,7 +1368,7 @@ $("#rep-copy").addEventListener("click", async () => {
 aiInit();
 
 // ================= 설정 (관리 패널) =================
-const SET_FIELDS = ["REQUEST_SUPPLIERS", "REQUEST_SUPPLIERS_OFF", "REQUEST_SUPPLIER_NOTE", "REQUEST_BUYER", "REQUEST_SHIP_TO", "REQUEST_CONTACT", "LEDGER_PROVIDER", "ANTHROPIC_API_KEY", "LEDGER_MODEL", "LEDGER_EFFORT", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENAI_REASONING_EFFORT"];
+const SET_FIELDS = ["REQUEST_SUPPLIERS", "REQUEST_SUPPLIERS_OFF", "REQUEST_SUPPLIER_NOTE", "REQUEST_BUYER", "REQUEST_SHIP_TO", "REQUEST_CONTACT", "LEDGER_ORG", "LEDGER_PROVIDER", "ANTHROPIC_API_KEY", "LEDGER_MODEL", "LEDGER_EFFORT", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENAI_REASONING_EFFORT"];
 function setMsg(text, warn) { const m = $("#settings-msg"); m.textContent = text; m.classList.toggle("warn", !!warn); }
 function syncProviderGroups() {
   const p = $("#s-provider").value;
@@ -1542,6 +1543,7 @@ const XD_STAGES = [["발생", "원인발생일", null], ["청구", "지급청구
 const XD_INLINE = [["결제수단", "select"], ["세목", "text"], ["세세목", "text"], ["태그", "tag"], ["사용자", "text"], ["관리번호", "text"], ["비고", "textarea"]];
 const XD_DL = { 세목: "dl-세목", 세세목: "dl-세세목", 사용자: "dl-사용자" };
 const XD_IMG = /\.(jpe?g|png|gif|webp)$/i;
+const VOUCHER_OFF = "지출완료일을 등록하면 결의서를 출력할 수 있습니다";   // [결의서] 버튼이 꺼진 이유 (지출결의서는 파일 끝)
 const fileExt = n => (/\.([A-Za-z0-9]{1,5})$/.exec(n || "")?.[1] || "파일").toUpperCase();
 
 // 날짜 직접 저장 (청구·승인·결의일 지정/수정/삭제). 앞 단계 빈 날짜는 store.exec_action 과 같은 규칙으로 채움
@@ -1687,7 +1689,7 @@ async function renderExecDrawer(fetchEvid) {
         <div class="wide evid-drop-row"><div class="drop" id="evid-drop" title="이름은 재원_적요_증빙종류_금액_YYMMDD 로 자동 변환됩니다"><b>파일을 여기로 끌어다 놓기</b> · 증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])}</div><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
       </form>
     </section>
-    <section class="xd-sec xd-foot">${(() => { const ev = evid.length; const dis = locked || ev; return `<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
+    <section class="xd-sec xd-foot">${(() => { const ev = evid.length; const dis = locked || ev; const vOk = !!r["지출완료일"]; return `<button type="button" class="btn btn-sm" data-act="voucher" data-row="${r._row}"${vOk ? "" : " disabled"} title="${vOk ? "지출결의서 미리보기 · A4 인쇄" : VOUCHER_OFF}">결의서</button><button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
   bindEvidForm(r);
   bindXdBody();
   XD.formRow = r._row; XD.shownRow = r._row;
@@ -1778,3 +1780,130 @@ $("#drive-disconnect").addEventListener("click", async () => {
   try { await api("POST", "/api/drive/disconnect"); setMsg("연결을 해제했습니다."); } catch (err) { setMsg(err.message, true); }
   refreshDriveStatus();
 });
+
+// ================= 지출결의서 (집행 1건 = 1장, 지출완료일 등록 후 · 시안 .impeccable/mocks/voucher/A5_수정형.html) =================
+// 재원 현황의 9줄: [결의서 표기, 장부 예산목]. 학생인건비는 따로 두지 않고 인건비 줄에 포함(사용자 결정 2026-10-14). 발생이자는 넣지 않음
+const VOUCHER_GROUPS = [
+  ["인건비", ["내부인건비(공통)", "외부인건비(공통)"]],
+  ["연구시설·장비비", ["연구시설.장비비"]],
+  ["연구재료비", ["연구재료비"]],
+  ["위탁연구개발비", ["위탁연구개발비"]],
+  ["국제공동연구개발비", ["국제공동연구개발비"]],
+  ["연구개발부담비", ["연구개발부담비"]],
+  ["연구활동비", ["연구활동비"]],
+  ["연구수당", ["연구수당"]],
+  ["간접비", ["간접비(공통)"]],
+];
+// 금액 한글: 1,234,567 → "금 일백이십삼만사천오백육십칠 원정". 십·백·천 앞의 1은 읽지 않되, 맨 앞 묶음의 첫 백·천과 1인 만·억 묶음은 '일'을 붙임
+function korWon(n) {
+  n = Math.round(Number(n) || 0);
+  if (!n) return "금 영 원정";
+  const neg = n < 0, D = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"], P = ["천", "백", "십", ""], U = ["", "만", "억", "조", "경"];
+  const groups = []; let s = String(Math.abs(n));
+  while (s.length) { groups.unshift(s.slice(-4)); s = s.slice(0, -4); }
+  const words = groups.map((g, gi) => {
+    const v = Number(g), u = U[groups.length - 1 - gi];
+    if (!v) return "";
+    if (v === 1 && u) return "일" + u;
+    let w = "", lead = true;
+    g.padStart(4, "0").split("").forEach((c, k) => {
+      const d = Number(c); if (!d) return;
+      const skipOne = d === 1 && P[k] && !(gi === 0 && lead && (P[k] === "천" || P[k] === "백"));
+      w += (skipOne ? "" : D[d]) + P[k]; lead = false;
+    });
+    return w + u;
+  });
+  return `금 ${neg ? "마이너스 " : ""}${words.join("")} 원정`;
+}
+const ymdKo = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ""); return m ? `${m[1]}년 ${m[2]}월 ${m[3]}일` : ""; };
+const vcNum = n => n < 0 ? "−" + fmt(-n) : fmt(n);   // 음수는 U+2212
+// 재원 현황: 이 행 위치(원인발생일 순, 같은 날은 행 순 = 집행 표 '예산목 잔액'의 runningBalance 와 같은 순서)까지 누적한 예산목 묶음별 잔액
+function voucherFund(r) {
+  const fund = r["재원"], upTo = x => ((x["원인발생일"] || "").localeCompare(r["원인발생일"] || "") || x._row - r._row) <= 0;
+  const budget = DATA.budget.filter(x => x["재원"] === fund), execs = DATA.exec.filter(x => x["재원"] === fund && upTo(x));
+  const bal = i => budget.reduce((a, x) => a + (x[i] || 0), 0) - execs.filter(x => x["예산목"] === i).reduce((a, x) => a + (x["금액"] || 0), 0);
+  const rows = VOUCHER_GROUPS.map(([label, items]) => {
+    const own = items.includes(r["예산목"]), cur = own ? (r["금액"] || 0) : 0, after = items.reduce((a, i) => a + bal(i), 0);
+    return { label, own, cur, after, before: after + cur };
+  });
+  const sum = k => rows.reduce((a, x) => a + x[k], 0);
+  return { rows, own: rows.some(x => x.own), before: sum("before"), cur: sum("cur"), after: sum("after") };
+}
+function voucherModel(r, evid, cfg) {
+  const m = /^품의 (\S+)/.exec(r["비고"] || ""), req = m && DATA.req.find(x => x["품의번호"] === m[1]);
+  const fund = DATA.funds.find(f => f["재원코드"] === r["재원"]);
+  return {
+    r, evid, fund: voucherFund(r),
+    org: cfg.LEDGER_ORG || "", contact: String(cfg.REQUEST_CONTACT || "").split("(")[0].trim(),
+    title: fund?.["과제명"] || "",
+    req: req ? [req["품의번호"], req["품의자"]].filter(Boolean).join(" · ") : m ? m[1] : "-",
+  };
+}
+function voucherHtml(v, withIds) {
+  const r = v.r, t = x => esc(x == null ? "" : x), f = v.fund;
+  const cur = x => !x.own ? "-" : x.cur > 0 ? "−" + fmt(x.cur) : x.cur < 0 ? "+" + fmt(-x.cur) : "0";
+  const kv = (a, b, c, d) => `<tr><th scope="row">${a}</th><td>${t(b)}</td><th scope="row">${c}</th><td>${t(d)}</td></tr>`;
+  const full = (a, b, cls = "") => `<tr><th scope="row">${a}</th><td colspan="3"${cls}>${b}</td></tr>`;
+  return `<article class="voucher">
+  <header class="vc-head">
+    <p class="vc-inst">${t(v.org)}</p>
+    <table class="vc-box"><tbody><tr><th scope="row">거래번호</th><td class="vc-no">${t(r["거래번호"])}</td></tr><tr><th scope="row">담당자</th><td>${t(v.contact)}</td></tr></tbody></table>
+    <div class="vc-band"><h2 class="vc-title"${withIds ? ' id="voucher-title"' : ""}>지출결의서</h2></div>
+  </header>
+  <hr class="vc-rule">
+  <h3>결의 내역</h3>
+  <table class="vc-t vc-kv"><colgroup><col class="l"><col><col class="l"><col></colgroup><tbody>
+    ${kv("재원코드", r["재원"], "예산목", r["예산목"])}
+    ${full("과제명", t(v.title))}
+    ${kv("세목", r["세목"], "세세목", r["세세목"])}
+    ${full("거래처", t(r["거래처"]))}
+    ${full("적요", t(r["적요"]))}
+    ${full("금액", `${vcNum(r["금액"] || 0)}원<span>${esc(korWon(r["금액"]))}</span>`, ' class="vc-amt"')}
+    ${kv("결제수단", r["결제수단"], "사용자", r["사용자"])}
+    ${kv("관리번호", r["관리번호"], "품의", v.req)}
+    ${kv("원인발생일", ymdKo(r["원인발생일"]), "지급청구일", ymdKo(r["지급청구일"]))}
+    ${kv("지출완료일", ymdKo(r["지출완료일"]), "전산결의일", ymdKo(r["결의일"]))}
+    ${full("비고", t(r["비고"]))}
+  </tbody></table>
+  <h3>증빙 목록</h3>
+  <table class="vc-t vc-g vc-ev"><colgroup><col style="width:14mm"><col style="width:40mm"><col></colgroup>
+    <thead><tr><th scope="col">번호</th><th scope="col">증빙종류</th><th scope="col">비고</th></tr></thead>
+    <tbody>${v.evid.map((e, i) => `<tr><td class="c">${i + 1}</td><td>${t(e["증빙종류"])}</td><td>${t(e["비고"])}</td></tr>`).join("") || '<tr><td colspan="3" class="c">등록된 증빙 없음</td></tr>'}</tbody></table>
+  <h3>재원 현황 · ${t(r["재원"])} <small>원인발생일 순 누적</small></h3>
+  <table class="vc-t vc-g vc-fund"><colgroup><col class="l"><col><col><col></colgroup>
+    <thead><tr><th scope="col">예산목</th><th scope="col">집행 전 잔액</th><th scope="col">금회 집행분</th><th scope="col">집행 후 잔액</th></tr></thead>
+    <tbody>${f.rows.map(x => `<tr${x.own ? ' class="vc-own"' : ""}><th scope="row">${x.label}</th><td class="num">${vcNum(x.before)}</td><td class="num">${x.own ? `<b>${cur(x)}</b>` : "-"}</td><td class="num">${x.own ? `<b>${vcNum(x.after)}</b>` : vcNum(x.after)}</td></tr>`).join("")}
+      <tr class="vc-sum"><th scope="row">합계</th><td class="num">${vcNum(f.before)}</td><td class="num">${cur(f)}</td><td class="num">${vcNum(f.after)}</td></tr></tbody></table>
+</article>`;
+}
+let VOUCHER = null, VOUCHER_BTN = null;
+async function openVoucher(row, btn) {
+  const r = DATA.exec.find(x => x._row === row); if (!r) return;
+  if (!r["지출완료일"]) { showAlert(VOUCHER_OFF + ".", "warn"); return; }
+  try {
+    const [ev, st] = await Promise.all([api("GET", `/api/evidence/${encodeURIComponent(r["거래번호"])}`), api("GET", "/api/settings")]);
+    VOUCHER = voucherModel(r, ev.items || [], st.values || {});
+  } catch (e) { showAlert("결의서를 만들지 못했습니다: " + e.message, "error"); return; }
+  VOUCHER_BTN = btn || null;
+  $("#voucher-sheet").innerHTML = voucherHtml(VOUCHER, true); $("#voucher-sheet").scrollTop = 0;
+  const miss = [!VOUCHER.contact && "담당자", !VOUCHER.title && "과제명"].filter(Boolean);
+  $("#voucher-note").hidden = !miss.length;
+  $("#voucher-note").textContent = miss.length ? `${miss.join("·")} 칸이 비어 있습니다.${!VOUCHER.contact ? " 담당자는 설정(톱니) › '신청 · 발주서'의 담당자 이름이 들어갑니다." : ""}${!VOUCHER.title ? " 과제명은 [재원] 탭에서 입력합니다." : ""}` : "";
+  $("#dlg-voucher").showModal(); $("#voucher-print").focus();
+}
+// 인쇄 사본: [인쇄] 버튼이든 Ctrl+P든 결의서 대화상자가 열려 있으면 결의서만 (A4 세로, 아래 가운데 k/n)
+function preparePrintVoucher() {
+  if (!VOUCHER || !$("#dlg-voucher").open) return false;
+  $("#print-voucher").innerHTML = voucherHtml(VOUCHER, false);
+  document.body.classList.add("printing-voucher");
+  return true;
+}
+$("#voucher-close").addEventListener("click", () => $("#dlg-voucher").close());
+$("#voucher-print").addEventListener("click", () => { if (preparePrintVoucher()) window.print(); });
+$("#dlg-voucher").addEventListener("close", () => {
+  // 드로어가 다시 그려졌어도 같은 행의 [결의서] 버튼으로 초점을 돌려줌
+  const b = VOUCHER_BTN?.isConnected ? VOUCHER_BTN : VOUCHER && $(`#xd-body [data-act="voucher"][data-row="${VOUCHER.r._row}"]`);
+  if (b) b.focus();
+});
+window.addEventListener("beforeprint", () => { if (!document.body.classList.contains("printing-voucher")) preparePrintVoucher(); });
+window.addEventListener("afterprint", () => { if (!document.body.classList.contains("printing-voucher")) return; document.body.classList.remove("printing-voucher"); $("#print-voucher").innerHTML = ""; });

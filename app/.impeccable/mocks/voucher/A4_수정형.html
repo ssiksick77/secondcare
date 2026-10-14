@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>지출결의서 A4 수정형</title>
+<style>
+@page {
+  size: A4 portrait; margin: 15mm;
+  @bottom-center { content: counter(page) "/" counter(pages); font-size: 9pt; color: #000; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: #E5E7EB; color: #000;
+  font-family: "Pretendard GOV", "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  font-size: 10.5pt; line-height: 1.45;
+  font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.sheet {
+  position: relative;
+  width: 210mm; min-height: 297mm; margin: 24px auto; padding: 15mm;
+  background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.12);
+}
+/* 화면 전용 쪽번호: 인쇄 시 @page 아래 가운데 여백 상자와 같은 자리 */
+.pageno {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 15mm;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9pt; line-height: 1;
+}
+
+/* 치수 */
+:root { --row: 8mm; --pad: 3mm; --label: 24mm; }
+
+/* 머리: 기관명 위 왼쪽, 번호 상자는 기관명 줄 윗변에 맞춰 오른쪽, 제목은 아래 띠 가운데 */
+.head { position: relative; }
+.inst { font-size: 10pt; color: #333; margin: 0; line-height: 1.45; }
+.title-band { height: 18mm; display: flex; align-items: center; justify-content: center; margin-top: 2mm; }
+h1 { margin: 0; text-align: center; font-size: 22pt; font-weight: 700; letter-spacing: 0; line-height: 1.2; }
+.box { position: absolute; top: 0; right: 0; width: 52mm; border-collapse: collapse; table-layout: fixed; font-size: 10pt; }
+.box th, .box td { border: 0.5pt solid #000; height: var(--row); padding: 0 2mm 0 var(--pad); text-align: left; vertical-align: middle; font-weight: 400; white-space: nowrap; line-height: 1.2; }
+.box th { color: #333; width: 20mm; }
+.box .no { font-weight: 700; }
+.title-rule { border: 0; border-top: 3px double #000; margin: 0; }
+
+/* 절 제목: 같은 크기·굵기, 위 6mm, 아래 2mm */
+h2 { margin: 6mm 0 2mm; font-size: 10.5pt; font-weight: 700; line-height: 1.3; display: flex; align-items: baseline; justify-content: space-between; }
+h2 small { font-size: 8.5pt; font-weight: 400; color: #666; }
+
+/* 표 공통: 폭 180mm, 한 줄 행 8mm, 왼쪽 여백 3mm */
+table.f { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1px solid #000; }
+table.f th, table.f td {
+  border: 0.5pt solid #000; height: var(--row); padding: 0 2mm 0 var(--pad);
+  text-align: left; vertical-align: middle; line-height: 1.3; letter-spacing: 0;
+}
+table.f th { font-weight: 600; color: #333; white-space: nowrap; }
+table.kv col.l { width: var(--label); }
+table.kv .amt { font-size: 12pt; font-weight: 700; }
+table.kv .amt span { font-weight: 400; font-size: 10.5pt; color: #333; margin-left: 3mm; }
+table.f .num { text-align: right; white-space: nowrap; padding: 0 var(--pad) 0 var(--pad); }
+table.f .c { text-align: center; padding: 0 var(--pad); }
+table.grid thead th { text-align: center; padding: 0 var(--pad); }
+table.grid td { white-space: nowrap; }
+
+/* 화면 전용 설명 */
+.demo { width: 210mm; margin: 0 auto 32px; padding: 6mm 15mm; background: #fff; font-size: 10pt; }
+.demo p { margin: 0 0 2mm; color: #333; }
+
+@media print {
+  body { background: #fff; }
+  .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+  .pageno, .demo { display: none; }
+  /* PDF 에서 숫자를 글자로 복사할 수 있게 (발주서와 같은 규칙) */
+  body, body * { font-feature-settings: normal; font-variant-numeric: normal; }
+}
+</style>
+</head>
+<body>
+<main class="sheet">
+  <header class="head">
+    <p class="inst">분당서울대학교병원 의료인공지능센터</p>
+    <table class="box">
+      <tr><th scope="row">거래번호</th><td class="no">2026-0147</td></tr>
+      <tr><th scope="row">담당자</th><td>안윤아</td></tr>
+    </table>
+    <div class="title-band">
+      <h1>지출결의서</h1>
+    </div>
+  </header>
+  <hr class="title-rule">
+
+  <h2>과제 · 거래 내역</h2>
+  <table class="f kv">
+    <colgroup><col class="l"><col><col class="l"><col></colgroup>
+    <tbody>
+      <tr><th scope="row">재원코드</th><td>공정성</td><th scope="row">예산목</th><td>연구활동비</td></tr>
+      <tr><th scope="row">과제명</th><td colspan="3">의료 AI 공정성 평가 플랫폼 개발 (RS-2026-00123456)</td></tr>
+      <tr><th scope="row">세목</th><td>회의비</td><th scope="row">세세목</th><td>전문가 자문 회의</td></tr>
+      <tr><th scope="row">거래처</th><td colspan="3">(주)메디컬프린팅</td></tr>
+      <tr><th scope="row">적요</th><td colspan="3">자문회의 자료 인쇄 및 제본 (30부)</td></tr>
+      <tr><th scope="row">금액</th><td colspan="3" class="amt">385,000원<span>금 삼십팔만오천 원정</span></td></tr>
+      <tr><th scope="row">결제수단</th><td>연구비카드</td><th scope="row">사용자</th><td>박지원</td></tr>
+      <tr><th scope="row">관리번호</th><td>M-0317</td><th scope="row">품의</th><td>2026-공정성-012 · 박지원</td></tr>
+      <tr><th scope="row">원인발생일</th><td>2026년 09월 24일</td><th scope="row">지급청구일</th><td>2026년 09월 26일</td></tr>
+      <tr><th scope="row">지출완료일</th><td>2026년 10월 02일</td><th scope="row">전산결의일</th><td>2026년 10월 10일</td></tr>
+      <tr><th scope="row">비고</th><td colspan="3">회의록 별첨</td></tr>
+    </tbody>
+  </table>
+
+  <h2>증빙 목록</h2>
+  <table class="f grid ev">
+    <colgroup><col style="width:14mm"><col style="width:40mm"><col></colgroup>
+    <thead><tr><th scope="col">번호</th><th scope="col">증빙종류</th><th scope="col">비고</th></tr></thead>
+    <tbody>
+      <tr><td class="c">1</td><td>세금계산서</td><td></td></tr>
+      <tr><td class="c">2</td><td>거래명세서</td><td></td></tr>
+      <tr><td class="c">3</td><td>카드전표</td><td>원본 보관</td></tr>
+    </tbody>
+  </table>
+
+  <h2>예산목 현황 · 연구활동비 <small>원인발생일 순 누적</small></h2>
+  <table class="f grid">
+    <thead><tr><th scope="col">집행 전 잔액</th><th scope="col">이 건 집행</th><th scope="col">집행 후 잔액</th></tr></thead>
+    <tbody><tr><td class="num">7,770,000</td><td class="num">−385,000</td><td class="num"><b>7,385,000</b></td></tr></tbody>
+  </table>
+
+  <div class="pageno" aria-hidden="true">1/1</div>
+</main>
+
+<section class="demo" aria-label="증빙이 없을 때">
+  <p>증빙이 없을 때 (같은 자리, 한 줄로)</p>
+  <table class="f grid">
+    <colgroup><col style="width:14mm"><col style="width:40mm"><col></colgroup>
+    <thead><tr><th scope="col">번호</th><th scope="col">증빙종류</th><th scope="col">비고</th></tr></thead>
+    <tbody><tr><td colspan="3" class="c">등록된 증빙 없음</td></tr></tbody>
+  </table>
+</section>
+</body>
+</html>
