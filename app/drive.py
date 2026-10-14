@@ -4,6 +4,7 @@
 - 토큰: app/google_token.json (최초 1회 브라우저 로그인 후 저장, 자동 갱신)
 - 루트: 내 드라이브/증빙관리 (앱이 생성). 아래에 YYYY/재원코드/거래번호 폴더.
 - LEDGER_DRIVE_MOCK=1 이면 드라이브 대신 app/drive_mock/ 로컬 폴더에 저장 (테스트·오프라인용).
+  LEDGER_DRIVE_MOCK_DIR 로 그 폴더를 바꿀 수 있다 (상대 경로는 app 폴더 기준).
 """
 from __future__ import annotations
 
@@ -19,7 +20,8 @@ APP_DIR = Path(__file__).resolve().parent
 CLIENT_SECRET = APP_DIR / "google_client_secret.json"
 TOKEN_PATH = APP_DIR / "google_token.json"
 FOLDER_CACHE = APP_DIR / "drive_folders.json"
-MOCK_DIR = APP_DIR / "drive_mock"
+_MOCK_ENV = os.environ.get("LEDGER_DRIVE_MOCK_DIR", "").strip()
+MOCK_DIR = (APP_DIR / _MOCK_ENV).resolve() if _MOCK_ENV else APP_DIR / "drive_mock"
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 ROOT_NAME = "증빙관리"
 REQUEST_ROOT = "신청"  # 신청 첨부: 내 드라이브/신청/YYYY/신청번호

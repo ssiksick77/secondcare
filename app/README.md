@@ -24,7 +24,7 @@
 
 - 장부: `docs\qa_data_2026_01_09\qa_ledger.xlsx` (`LEDGER_XLSX`). 파일이 없으면 실행하지 않습니다. xlsx 는 git 에서 제외되어 있으니 직접 복사해 둡니다.
 - 설정: `docs\qa_data_2026_01_09\qa.env` (`LEDGER_ENV`). 비밀값 없이 `REQUEST_SUPPLIERS=알파몰,드림디포,가상문구A,가상문구B` 만 들어 있고, QA 중 설정 화면에서 저장한 값도 이 파일에만 기록됩니다. `app\.env`는 읽지도 쓰지도 않습니다(AI 키가 없으므로 AI 버튼은 꺼짐).
-- 드라이브: `LEDGER_DRIVE_MOCK=1` — 증빙·첨부는 구글 드라이브 대신 `app\drive_mock\` 로컬 폴더에 저장됩니다.
+- 드라이브: `LEDGER_DRIVE_MOCK=1` — 증빙·첨부는 구글 드라이브 대신 로컬 폴더 `docs\qa_data_2026_01_09\qa_drive_mock\`(`LEDGER_DRIVE_MOCK_DIR`, 상대 경로는 `app` 폴더 기준)에 저장되고, QA 장부의 기존 증빙·첨부 미리보기도 이 폴더에서 읽습니다. `LEDGER_DRIVE_MOCK_DIR`가 없으면 기본값 `app\drive_mock\`.
 - 포트: **8792** (`http://127.0.0.1:8792`). 실제 서버(8791)와 동시에 띄울 수 있습니다. 자동 백업은 `app\backup\qa_ledger_*.xlsx`로 따로 쌓입니다.
 - MCP 는 QA 장부를 쓰지 않습니다(MCP 는 `app\.env`의 `LEDGER_XLSX`). MCP 로 QA 장부를 보려면 MCP 실행 환경에 `LEDGER_XLSX`·`LEDGER_ENV`를 같은 값으로 지정합니다.
 

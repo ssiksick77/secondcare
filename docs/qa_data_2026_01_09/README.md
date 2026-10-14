@@ -232,5 +232,5 @@
 ### 모의 드라이브 주의
 
 - 증빙·첨부 파일은 이 폴더의 `qa_drive_mock/`(git 제외)에 있다. 장부의 드라이브파일ID는 `mock:증빙관리/…`·`mock:신청/…` 형태의 루트 기준 상대 경로이고, 증빙폴더·첨부폴더 열에는 실행 PC의 절대 `file:///` 경로가 들어 있다.
-- `app/run_qa.bat`의 모의 드라이브 루트는 코드상 `app/drive_mock/`(drive.py `MOCK_DIR`, 환경변수로 바꿀 수 없음)이다. QA 서버에서 미리보기·파일 열기를 확인하려면 `qa_drive_mock/`의 `증빙관리`·`신청` 폴더를 `app/drive_mock/`로 복사해야 한다. 복사하지 않으면 장부 기록·증빙번호·결의서 목록은 정상이고 미리보기만 비어 보인다.
+- `app/run_qa.bat`은 모의 드라이브 루트를 `LEDGER_DRIVE_MOCK_DIR`=`..\docs\qa_data_2026_01_09\qa_drive_mock`(이 폴더)로 지정한다(2026-10-14 추가, 지정하지 않으면 기본값 `app/drive_mock/`). 따라서 QA 서버에서 기존 증빙·첨부의 미리보기·파일 열기가 바로 되고, QA 중 올린 파일도 이 폴더에 쌓인다.
 - V1 상태(보완 전, SHA-256 `8fabdc86…`)는 `synthetic_baseline_v1.xlsx`로 남겼다(xlsx는 git 제외). `qa_drive_mock/`이 없는 PC에서는 이 V1 파일을 `qa_ledger.xlsx`로 복사한 뒤 `supplement_v11.py`를 다시 실행하면 같은 레코드와 같은 파일(바이트 동일, 업로드일만 실행일)이 생성된다. V1.1 상태 복원은 `synthetic_baseline.xlsx` 복사로 한다.
