@@ -11,3 +11,5 @@ app/drive_mock/
 app/backup/
 app/__pycache__/
 app/.impeccable/hook.cache.json
+# QA 데이터셋 V1.1 모의 드라이브 (supplement_v11.py 업로드 파일)
+docs/qa_data_2026_01_09/qa_drive_mock/

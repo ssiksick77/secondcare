@@ -2038,5 +2038,133 @@
     "identifier": {
       "신청번호": "R-2026-016"
     }
+  },
+  {
+    "scenario_id": "V11-SAMEDAY-1",
+    "group": "v1.1",
+    "kind": "exec",
+    "row_at_baseline": 149,
+    "identifier": {
+      "거래번호": "2026-QA06-019"
+    }
+  },
+  {
+    "scenario_id": "V11-SAMEDAY-2",
+    "group": "v1.1",
+    "kind": "exec",
+    "row_at_baseline": 150,
+    "identifier": {
+      "거래번호": "2026-QA06-020"
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E004",
+    "group": "v1.1",
+    "kind": "evidence",
+    "row_at_baseline": 2,
+    "identifier": {
+      "거래번호": "2026-QA01-004",
+      "증빙번호": "2026-QA01-004-1",
+      "증빙종류": "세금계산서",
+      "has_file": true
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E020",
+    "group": "v1.1",
+    "kind": "evidence",
+    "row_at_baseline": 3,
+    "identifier": {
+      "거래번호": "2026-QA02-002",
+      "증빙번호": "2026-QA02-002-1",
+      "증빙종류": "거래명세서",
+      "has_file": false
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E020",
+    "group": "v1.1",
+    "kind": "evidence",
+    "row_at_baseline": 4,
+    "identifier": {
+      "거래번호": "2026-QA02-002",
+      "증빙번호": "2026-QA02-002-2",
+      "증빙종류": "카드전표",
+      "has_file": true
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E041",
+    "group": "v1.1",
+    "kind": "evidence",
+    "row_at_baseline": 5,
+    "identifier": {
+      "거래번호": "2026-QA03-005",
+      "증빙번호": "2026-QA03-005-1",
+      "증빙종류": "견적서",
+      "has_file": true
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E058",
+    "group": "v1.1",
+    "kind": "evidence",
+    "row_at_baseline": 6,
+    "identifier": {
+      "거래번호": "2026-QA04-004",
+      "증빙번호": "2026-QA04-004-1",
+      "증빙종류": "영수증",
+      "has_file": false
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E077",
+    "group": "v1.1",
+    "kind": "evidence",
+    "row_at_baseline": 7,
+    "identifier": {
+      "거래번호": "2026-QA05-005",
+      "증빙번호": "2026-QA05-005-1",
+      "증빙종류": "카드전표",
+      "has_file": false
+    }
+  },
+  {
+    "scenario_id": "V11-ORDER2-CONVERT",
+    "group": "v1.1",
+    "kind": "req",
+    "row_at_baseline": 10,
+    "identifier": {
+      "품의번호": "2026-QA05-003"
+    }
+  },
+  {
+    "scenario_id": "V11-RQ-VAT",
+    "group": "v1.1",
+    "kind": "request",
+    "row_at_baseline": 18,
+    "identifier": {
+      "신청번호": "R-2026-017"
+    }
+  },
+  {
+    "scenario_id": "V11-RATT-RQ08",
+    "group": "v1.1",
+    "kind": "ratt",
+    "row_at_baseline": 2,
+    "identifier": {
+      "신청번호": "R-2026-008",
+      "파일명": "R-2026-008_[가상 QA26JANSEP-V1] 신청품목08_qa-v11-equipment-quote.pdf"
+    }
+  },
+  {
+    "scenario_id": "V11-RATT-VAT",
+    "group": "v1.1",
+    "kind": "ratt",
+    "row_at_baseline": 3,
+    "identifier": {
+      "신청번호": "R-2026-017",
+      "파일명": "R-2026-017_[가상 QA26JANSEP-V1.1] V11-VAT 소모품_qa-v11-supply-catalog.png"
+    }
   }
 ]

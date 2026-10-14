@@ -4155,5 +4155,225 @@
       "수량": 1
     },
     "status": 200
+  },
+  {
+    "scenario_id": "V11-SAMEDAY-1",
+    "method": "POST",
+    "path": "/api/exec",
+    "status": 200,
+    "body": {
+      "재원": "QA06",
+      "예산목": "연구재료비",
+      "원인발생일": "2026-09-22",
+      "금액": 33000,
+      "거래처": "가상거래처01",
+      "적요": "[가상 QA26JANSEP_V1.1] 같은날 1차",
+      "관리번호": "QA26JANSEP_V11_SAMEDAY-1",
+      "사용자": "가상담당자Alex",
+      "태그": "가상태그1",
+      "결제수단": "연구비카드",
+      "비고": "[가상 QA26JANSEP_V1.1]"
+    }
+  },
+  {
+    "scenario_id": "V11-SAMEDAY-2",
+    "method": "POST",
+    "path": "/api/exec",
+    "status": 200,
+    "body": {
+      "재원": "QA06",
+      "예산목": "연구재료비",
+      "원인발생일": "2026-09-22",
+      "지급청구일": "2026-09-23",
+      "금액": 44000,
+      "거래처": "가상거래처02",
+      "적요": "[가상 QA26JANSEP_V1.1] 같은날 2차",
+      "관리번호": "QA26JANSEP_V11_SAMEDAY-2",
+      "사용자": "가상담당자Alex",
+      "태그": "가상태그1",
+      "결제수단": "계좌이체",
+      "비고": "[가상 QA26JANSEP_V1.1]"
+    }
+  },
+  {
+    "scenario_id": "V11-ORDER2-CONVERT",
+    "method": "POST",
+    "path": "/api/request/convert",
+    "status": 200,
+    "body": {
+      "rows": [
+        4,
+        5
+      ],
+      "expects": [
+        {
+          "신청번호": "R-2026-003"
+        },
+        {
+          "신청번호": "R-2026-004"
+        }
+      ],
+      "extra": {
+        "재원": "QA05",
+        "예산목": "연구재료비",
+        "원인발생일": "2026-07-11",
+        "비고": "[가상 QA26JANSEP_V1.1] ORDER2 배송완료 후 품의 전환"
+      }
+    }
+  },
+  {
+    "scenario_id": "V11-RQ-VAT",
+    "method": "POST",
+    "path": "/api/request",
+    "status": 200,
+    "body": {
+      "구분": "소모품",
+      "신청인": "가상신청인1",
+      "신청일": "2026-09-21",
+      "관련과제": "QA06",
+      "품목": "[가상 QA26JANSEP_V1.1] V11-VAT 소모품",
+      "단가": 10000,
+      "수량": 3,
+      "부가세구분": "Y",
+      "구매처": "가상문구A",
+      "상품코드": "QA-SKU-V11",
+      "사유": "[가상 QA26JANSEP_V1.1]",
+      "비고": "[가상 QA26JANSEP_V1.1]"
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E004-1",
+    "method": "POST",
+    "path": "/api/evidence/2026-QA01-004",
+    "status": 200,
+    "multipart": {
+      "files": [
+        {
+          "filename": "qa_v11_tax_invoice.png",
+          "bytes": 69,
+          "type": "image/png"
+        }
+      ],
+      "form": {
+        "kind": "세금계산서",
+        "date": "2026-02-15",
+        "note": "[가상 QA26JANSEP_V1.1] 세금계산서 스캔(가상)"
+      }
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E020-1",
+    "method": "POST",
+    "path": "/api/evidence/2026-QA02-002/entry",
+    "status": 200,
+    "body": {
+      "증빙종류": "거래명세서",
+      "비고": "[가상 QA26JANSEP_V1.1] 실물 보관(파일 없음)"
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E020-2",
+    "method": "POST",
+    "path": "/api/evidence/2026-QA02-002",
+    "status": 200,
+    "multipart": {
+      "files": [
+        {
+          "filename": "qa_v11_card_slip.pdf",
+          "bytes": 599,
+          "type": "application/pdf"
+        }
+      ],
+      "form": {
+        "kind": "카드전표",
+        "date": "2026-01-15",
+        "note": "[가상 QA26JANSEP_V1.1] 카드전표 PDF(가상)"
+      }
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E041-1",
+    "method": "POST",
+    "path": "/api/evidence/2026-QA03-005/entry",
+    "status": 200,
+    "body": {
+      "증빙종류": "견적서",
+      "비고": "[가상 QA26JANSEP_V1.1] 항목 먼저 만든 뒤 파일 첨부"
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E041-2",
+    "method": "POST",
+    "path": "/api/evidence/2026-QA03-005",
+    "status": 200,
+    "multipart": {
+      "files": [
+        {
+          "filename": "qa_v11_quote.png",
+          "bytes": 69,
+          "type": "image/png"
+        }
+      ],
+      "form": {
+        "증빙번호": "2026-QA03-005-1",
+        "date": "2026-03-05"
+      }
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E058-1",
+    "method": "POST",
+    "path": "/api/evidence/2026-QA04-004/entry",
+    "status": 200,
+    "body": {
+      "증빙종류": "영수증",
+      "비고": "[가상 QA26JANSEP_V1.1] 종이 영수증 실물만"
+    }
+  },
+  {
+    "scenario_id": "V11-EVID-E077-1",
+    "method": "POST",
+    "path": "/api/evidence/2026-QA05-005/entry",
+    "status": 200,
+    "body": {
+      "증빙종류": "카드전표",
+      "비고": ""
+    }
+  },
+  {
+    "scenario_id": "V11-RATT-RQ08",
+    "method": "POST",
+    "path": "/api/ratt/R-2026-008",
+    "status": 200,
+    "multipart": {
+      "files": [
+        {
+          "filename": "qa_v11_equipment_quote.pdf",
+          "bytes": 599,
+          "type": "application/pdf"
+        }
+      ],
+      "form": {
+        "note": "[가상 QA26JANSEP_V1.1] 장비 견적서(가상)"
+      }
+    }
+  },
+  {
+    "scenario_id": "V11-RATT-VAT",
+    "method": "POST",
+    "path": "/api/ratt/R-2026-017",
+    "status": 200,
+    "multipart": {
+      "files": [
+        {
+          "filename": "qa_v11_supply_catalog.png",
+          "bytes": 69,
+          "type": "image/png"
+        }
+      ],
+      "form": {
+        "note": "[가상 QA26JANSEP_V1.1] 소모품 상품 안내(가상)"
+      }
+    }
   }
 ]
