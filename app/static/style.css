@@ -426,7 +426,17 @@ textarea.xd-edit { resize: vertical; margin: 2px 0; }
 /* 증빙 표: 이미지 48×36 썸네일, 그 밖은 확장자 칩 */
 .evid-table td, .evid-table th { font-size: 12px; }
 .evid-name { word-break: break-all; white-space: normal !important; }
+.evid-name .toolbar-note { word-break: keep-all; overflow-wrap: anywhere; }   /* 원본 이름 · 크기 · 날짜는 공백에서 줄바꿈 */
 .evid-table td.xd-th-cell, .evid-table th.xd-th-cell { width: 60px; padding: 2px 6px; }
+.evid-table td.evid-id { white-space: nowrap; }
+.evid-table .evid-kind, .evid-table .evid-no { display: block; }
+.evid-table .evid-no { color: var(--ink-2); }   /* 증빙번호: 종류 아래 회색 (표 글자 12px) */
+.evid-table td.evid-acts { white-space: nowrap; text-align: right; }
+.evid-table td.evid-note { min-width: 64px; color: var(--ink-2); white-space: normal; word-break: keep-all; overflow-wrap: anywhere; }
+.evid-nofile { display: inline-block; padding: 0 6px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg-table); color: var(--ink-2); font-size: 12px; line-height: 18px; white-space: nowrap; }   /* 실물만 항목: 확장자 칩(.xd-chip)과 같은 모양 */
+.evid-entry-row { display: flex; align-items: center; gap: 8px; }
+.evid-entry-row .toolbar-note { flex: 1; min-width: 0; }
+.evid-table td.evid-acts .btn + .btn { margin-left: 4px; }
 .xd-thumb { width: 48px; height: 36px; object-fit: cover; border: 1px solid var(--rule); border-radius: var(--radius); display: block; background: var(--bg); }
 .xd-chip { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 48px; height: 20px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg-table); color: var(--ink-2); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
 .drop { border: 1px dashed var(--rule); border-radius: var(--radius); padding: 12px; text-align: center; color: var(--ink-2); font-size: 12px; background: var(--bg-table); transition: background-color .12s ease-out, border-color .12s ease-out; }
@@ -705,6 +715,30 @@ dialog.dlg-voucher { width: min(880px, 96vw); max-width: none; }
 .voucher .vc-fund tr.vc-sum th { font-weight: 700; }
 .voucher tr { break-inside: avoid; }
 .voucher thead { display: table-header-group; }   /* 쪽이 넘어가면 열 머리 반복 */
+/* 증빙 첨부 양식 (시안 .impeccable/mocks/voucher/E3_첨부양식.html + 사용자 결정: 기관명 줄 없음, 2행 거래처·적요 값 칸 같은 폭 66mm).
+   미리보기와 인쇄가 같은 규칙. 인쇄 양식이라 시안 값: 검정 괘선, 회색 라벨 칸 24mm(#F2F2F2), 행 8mm, 표 아래 4mm부터 인쇄 영역 끝까지 빈 부착란.
+   열 격자 24·36·24·6·24·6·24·36 (=180mm): 1행 증빙번호 36 | 증빙종류 36 | 금액 36, 2행 거래처 66 | 적요 66, 3행 비고 156 */
+dialog.dlg-mount { width: min(880px, 96vw); max-width: none; }
+.mt-head { margin: 0 0 10px; }
+.mt-head span { font-weight: 400; color: var(--ink-2); }
+.mt-pos { flex: none !important; }
+.vc-preview .mt-page { width: 210mm; height: 297mm; margin: 0 auto; padding: 15mm; background: #fff; border: 1px solid var(--rule); }
+.ev-mount {
+  --mt-row: 8mm; --mt-pad: 3mm; --mt-label-bg: #F2F2F2;
+  height: 100%; display: flex; flex-direction: column;
+  color: #000; font-family: var(--font); font-size: 10.5pt; line-height: 1.45; text-align: left;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.ev-mount .mt-f { flex: none; width: 100%; margin: 0; border-collapse: collapse; table-layout: fixed; border: 1px solid #000; background: #fff; font-size: inherit; }
+.ev-mount .mt-f th, .ev-mount .mt-f td { border: 0.5pt solid #000; height: var(--mt-row); padding: 0 2mm 0 var(--mt-pad); text-align: left; vertical-align: middle; line-height: 1.3; letter-spacing: 0; white-space: nowrap; color: #000; }
+.ev-mount .mt-f th { font-weight: 600; color: #333; background: var(--mt-label-bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.ev-mount .mt-f td { overflow: hidden; text-overflow: ellipsis; }   /* 적요·거래처는 한 줄, 넘치면 … */
+.ev-mount .mt-f .mt-no { font-weight: 700; }
+.ev-mount .mt-f .mt-num { text-align: right; padding: 0 2mm; }
+.ev-mount .mt-f col.c1, .ev-mount .mt-f col.c3, .ev-mount .mt-f col.c5, .ev-mount .mt-f col.c7 { width: 24mm; }
+.ev-mount .mt-f col.c2, .ev-mount .mt-f col.c8 { width: 36mm; }
+.ev-mount .mt-f col.c4, .ev-mount .mt-f col.c6 { width: 6mm; }
+.ev-mount .mt-frame { flex: 1 1 auto; min-height: 0; margin-top: 4mm; border: 1px solid #000; }
 /* 학회 여비 계산기 (conf.js): 머리·바닥 고정, 본문만 스크롤 */
 dialog.dlg-conf { width: min(1180px, 96vw); max-width: none; max-height: 94vh; }
 dialog.dlg-conf form { padding: 16px 22px 14px; display: flex; flex-direction: column; max-height: 94vh; }
@@ -809,6 +843,7 @@ table.grid.edit td.num .cell-input { text-align: right; }
 @page { size: A4 landscape; margin: 12mm; }
 @page order-sheet { size: A4 portrait; margin: 15mm; }
 @page voucher { size: A4 portrait; margin: 15mm; @bottom-center { content: counter(page) "/" counter(pages); font-size: 9pt; color: #000; } }
+@page mount { size: A4 portrait; margin: 15mm; }   /* 증빙 첨부 양식: 한 장, 여백 상자(쪽 번호) 없음 */
 @media print {
   .top, .tabs, .toolbar, .drawer, .toasts, .memo-tip, #alert, .cards.quick, .actions, #dash-csv, #dash-print, .foot,
   .table-wrap.scrollable::after, .next, .origin, .memo-mark, .defs-box > summary, .edit-legend, .del-bar, table.grid .sel { display: none !important; }
@@ -845,6 +880,12 @@ table.grid.edit td.num .cell-input { text-align: right; }
   body.printing-voucher { background: #fff; }
   body.printing-voucher #print-voucher { display: block; page: voucher; }
   body.printing-voucher #print-voucher, body.printing-voucher #print-voucher * { font-feature-settings: normal; font-variant-numeric: normal; }   /* PDF 에서 숫자를 글자로 복사 (발주서와 같은 규칙) */
+  /* 증빙 첨부 양식 인쇄: 인쇄 전용 사본만, 이름 붙은 쪽 mount. 내용 칸 267mm 중 반올림 넘침을 막으려 266mm (시안과 같음) */
+  body.printing-mount > :not(#print-mount) { display: none !important; }
+  body.printing-mount { background: #fff; }
+  body.printing-mount #print-mount { display: block; page: mount; }
+  body.printing-mount #print-mount .ev-mount { height: 266mm; }
+  body.printing-mount #print-mount, body.printing-mount #print-mount * { font-feature-settings: normal; font-variant-numeric: normal; }
   /* 학회 여비 산출 내역 인쇄: 같은 A4 세로 양식 */
   body.printing-conf > :not(#print-conf) { display: none !important; }
   body.printing-conf #print-conf { display: block; page: order-sheet; }

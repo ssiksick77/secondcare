@@ -71,7 +71,10 @@ REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예
             "결제수단", "적요", "금액", "태그", "품의자", "비고", "상태"]
 DEP_COLS = ["일자", "거래처", "구분", "금액", "적요", "사용자", "증빙번호", "연결거래번호", "비고", "태그"]
 TAG_COLS = ["태그명", "분류", "설명"]
-EVID_COLS = ["거래번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
+EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
+# 증빙번호 = {거래번호}-{n}: 거래번호별 일련번호, 지운 번호는 다시 쓰지 않음 (메타 시트 증빙번호최고-{거래번호}). 이전 장부는 맨 끝 열에 붙이고 시트 순서대로 부여
+# 파일 열(EVID_FILE_COLS)이 모두 비어 있는 행 = '실물만 (파일 없음)' 증빙 항목. 나중에 파일을 첨부하면 같은 행·같은 증빙번호에 채워짐
+EVID_FILE_COLS = ["파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일"]
 DEP_TYPES = ["적립", "사용"]
 # 신청 (신청_설계_2026-10-14.md)
 REQUEST_COLS = ["신청번호", "구분", "상태", "신청인", "신청일", "관련과제", "품목", "규격", "단가", "수량", "금액", "부가세구분", "부가세액", "사유",
@@ -117,7 +120,7 @@ NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "�
 IDENT_COLS = {
     "funds": ["재원코드"], "exec": ["거래번호"], "req": ["품의번호"], "tags": ["태그명"],
     "budget": ["재원", "변경회차", "신청일자"], "deposit": ["일자", "거래처", "구분", "금액"],
-    "evidence": ["거래번호", "파일명"],
+    "evidence": ["거래번호", "증빙번호", "파일명"],  # 파일 첨부로 파일명이 바뀌어도 증빙번호는 불변
     "people": ["이름"], "salary": ["이름", "시작월"], "payee": ["지급처코드"],
     "labor": ["지급월", "귀속월", "이름", "지급처"], "ladj": ["월", "이름", "금액"],
     "request": ["신청번호"], "order": ["주문번호"], "ratt": ["신청번호", "파일명"],
@@ -132,6 +135,10 @@ class LedgerLocked(Exception):
 
 class NotFound(Exception):
     pass
+
+
+class EvidHasFile(ValueError):
+    """파일이 이미 붙은 증빙 항목에 다시 첨부하려 함 (API 409)."""
 
 
 class TooLarge(ValueError):
@@ -382,9 +389,11 @@ def _ensure_structure(wb) -> bool:
         for i, c in enumerate(EVID_COLS, 1):
             cell = ws.cell(1, i, c)
             cell.font, cell.fill = head_font, head_fill
-        for col, w in zip("ABCDEFGH", (18, 14, 44, 30, 36, 10, 12, 20)):
+        for col, w in zip("ABCDEFGHI", (18, 22, 14, 44, 30, 36, 10, 12, 20)):
             ws.column_dimensions[col].width = w
         ws.freeze_panes = "A2"
+        changed = True
+    if _ensure_evid_numbers(wb, head_font):
         changed = True
 
     for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30)),
@@ -614,7 +623,7 @@ def read_all() -> dict:
             "req": _rows(wb[SHEET_REQ], REQ_COLS, 1, formulas),
             "deposit": _rows(wb[SHEET_DEP], DEP_COLS, 1, formulas),
             "tags": _rows(wb[SHEET_TAG], TAG_COLS, 1, formulas),
-            "evidence": _rows(wb[SHEET_EVID], EVID_COLS, 1, formulas),
+            "evidence": [_evid_out(e) for e in _rows(wb[SHEET_EVID], EVID_COLS, 1, formulas)],
             "people": _rows(wb[SHEET_PEOPLE], PEOPLE_COLS, 1, formulas),
             "salary": _rows(wb[SHEET_SALARY], SALARY_COLS, 1, formulas),
             "payee": _rows(wb[SHEET_PAYEE], PAYEE_COLS, 1, formulas),
@@ -998,6 +1007,64 @@ def _assign_order_number(wb, ws, rec):
     _meta_set(wb, _order_hw_key(stem), mx + 1)
 
 
+def _evid_hw_key(number: str) -> str:
+    return f"증빙번호최고-{number}"
+
+
+def _evid_suffix(number: str, evno) -> int:
+    """증빙번호가 '{거래번호}-{n}' 이면 n, 아니면 0."""
+    v, prefix = str(evno or "").strip(), f"{number}-"
+    return int(v[len(prefix):]) if number and v.startswith(prefix) and v[len(prefix):].isdigit() else 0
+
+
+def _bump_evid_hw(wb, number: str, evno):
+    """지운(또는 쓴) 증빙번호를 거래번호별 최고값으로 기록 (지운 마지막 번호가 다시 쓰이지 않도록)."""
+    n = _evid_suffix(number, evno)
+    if n > int(_to_num(_meta_get(wb, _evid_hw_key(number)))):
+        _meta_set(wb, _evid_hw_key(number), n)
+
+
+def _assign_evid_number(wb, ws, rec):
+    """증빙번호 {거래번호}-{n}: 그 거래번호의 메타 최고값과 시트에 있는 번호 중 큰 값 + 1."""
+    number = str(rec.get("거래번호") or "").strip()
+    mx = int(_to_num(_meta_get(wb, _evid_hw_key(number))))
+    for e in _rows(ws, EVID_COLS):
+        if e["거래번호"] == number:
+            mx = max(mx, _evid_suffix(number, e.get("증빙번호")))
+    rec["증빙번호"] = f"{number}-{mx + 1}"
+    _meta_set(wb, _evid_hw_key(number), mx + 1)
+
+
+def _ensure_evid_numbers(wb, head_font) -> bool:
+    """증빙 시트 보정: 증빙번호 열이 없으면(이전 장부) 맨 끝에 붙이고, 번호가 빈 행에 시트 순서대로 거래번호별 번호를 부여.
+    다른 열·값은 건드리지 않는다. 변경 여부 반환."""
+    ws = wb[SHEET_EVID]
+    heads = _headers(ws)
+    changed = False
+    if "증빙번호" not in heads:
+        col = len(heads) + 1
+        ws.cell(1, col, "증빙번호").font = head_font
+        ws.column_dimensions[get_column_letter(col)].width = 22
+        heads.append("증빙번호")
+        changed = True
+    ci = heads.index("증빙번호") + 1
+    blank = [e for e in _rows(ws, EVID_COLS) if e["거래번호"] and not str(e.get("증빙번호") or "").strip()]
+    if not blank:
+        return changed
+    rows = _rows(ws, EVID_COLS)
+    for e in blank:
+        number = e["거래번호"]
+        mx = int(_to_num(_meta_get(wb, _evid_hw_key(number))))
+        for x in rows:
+            if x["거래번호"] == number:
+                mx = max(mx, _evid_suffix(number, x.get("증빙번호")))
+        e["증빙번호"] = f"{number}-{mx + 1}"
+        ws.cell(e["_row"], ci).value = e["증빙번호"]
+        next(x for x in rows if x["_row"] == e["_row"])["증빙번호"] = e["증빙번호"]
+        _meta_set(wb, _evid_hw_key(number), mx + 1)
+    return True
+
+
 def _assign_number(wb, ws, cols, head_row, key, rec):
     """YYYY-재원코드-NNN 자동 부여 (재원별·연도별 일련번호, 참조된 번호는 재사용하지 않음)."""
     fund = str(rec.get("재원") or "").strip()
@@ -1080,8 +1147,8 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
     _validate_months(rec, cols)
     _validate_text_len(kind, rec, cols)
     if kind == "evidence":
-        if not str(rec.get("거래번호") or "").strip() or not str(rec.get("파일명") or "").strip():
-            raise ValueError("거래번호와 파일명은 필수입니다.")
+        if not str(rec.get("거래번호") or "").strip():
+            raise ValueError("거래번호는 필수입니다.")  # 파일명은 선택 (비면 실물만 항목)
         return
     if kind == "ratt":
         if not str(rec.get("신청번호") or "").strip() or not str(rec.get("파일명") or "").strip():
@@ -1354,6 +1421,8 @@ def create(kind: str, rec: dict) -> dict:
             _assign_request_number(wb, ws, rec)
         elif key and kind not in ("funds", "tags", "people", "payee"):
             _assign_number(wb, ws, cols, head_row, key, rec)
+        if kind == "evidence":  # MCP·API 로 직접 추가해도 증빙번호 부여 (입력값은 무시)
+            _assign_evid_number(wb, ws, rec)
         if kind in ("funds", "tags", "people", "payee"):
             rec[key] = str(rec[key]).strip()
             if any(_same_key(r[key], rec[key]) for r in _rows(ws, cols)):
@@ -1451,6 +1520,8 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
                         raise ValueError(f"재원코드 '{existing[key]}' 는 집행·품의·예산에서 사용 중이라 바꿀 수 없습니다.")
             else:
                 rec[key] = existing[key]  # 번호는 불변
+        if kind == "evidence":
+            rec["증빙번호"] = existing.get("증빙번호") or ""  # 증빙번호는 불변
         _write_row(ws, cols, row, rec, head_row)
         if kind == "budget":
             _refresh_budget_summary(wb)
@@ -1531,6 +1602,8 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
             raise ValueError("적립금 적립과 연결된 집행입니다. 적립금 탭에서 해당 적립 행을 먼저 처리하세요.")
         if kind == "exec" and existing["거래번호"] in _labor_refs(wb):
             raise ValueError("인건비 지급 확정으로 생긴 집행입니다. 인건비 원장에서 '확정 취소' 또는 삭제로 처리하세요.")
+        if kind == "exec" and existing["거래번호"] and any(e["거래번호"] == existing["거래번호"] for e in _rows(wb[SHEET_EVID], EVID_COLS)):
+            raise ValueError("증빙이 등록된 집행입니다(파일 없는 실물만 항목 포함). 증빙을 먼저 지우세요.")  # 화면은 버튼을 끄지만 API·MCP 도 같은 규칙
         if kind == "people" and _person_usage(wb, existing["이름"]):
             raise ValueError(f"'{existing['이름']}' 은 지급·기준급여·조정 내역에서 사용 중이라 삭제할 수 없습니다.")
         if kind == "payee" and _payee_usage(wb, existing["지급처코드"]):
@@ -1539,6 +1612,8 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
             raise ValueError(f"재원코드 '{existing['재원코드']}' 는 인건비 지급 내역에서 사용 중이라 삭제할 수 없습니다.")
         if kind == "labor" and existing.get("연결거래번호"):
             _remove_labor_exec(wb, existing["연결거래번호"])
+        if kind == "evidence":
+            _bump_evid_hw(wb, existing["거래번호"], existing.get("증빙번호"))
         if kind == "request":
             state = _req_state(wb)
             status = request_status(existing, state)
@@ -1868,9 +1943,62 @@ def exec_action(row: int, action: str, expect: dict | None = None) -> dict:
         return rec
 
 
+def evid_has_file(e: dict) -> bool:
+    """파일이 붙은 증빙인지 (파일명 또는 드라이브파일ID). 아니면 '실물만' 항목."""
+    return bool(str(e.get("파일명") or "").strip() or str(e.get("드라이브파일ID") or "").strip())
+
+
+def _evid_out(e: dict) -> dict:
+    e["has_file"] = evid_has_file(e)
+    return e
+
+
 def evidence_for(number: str) -> list[dict]:
     with _lock:
-        return [r for r in _rows(_load()[SHEET_EVID], EVID_COLS) if r["거래번호"] == number]
+        wb = _load()
+        _ensure_structure(wb)  # 메모리 상 보정 (이전 장부·엑셀에서 넣은 행도 증빙번호가 보이게, 저장은 쓰기 시)
+        return [_evid_out(r) for r in _rows(wb[SHEET_EVID], EVID_COLS) if r["거래번호"] == number]
+
+
+def evidence_entry(number: str, kind: str, note: str = "") -> dict:
+    """파일 없이 증빙 항목(실물만)을 만든다: 증빙번호 부여, 파일 열은 빈칸. 드라이브는 건드리지 않음."""
+    number, kind = str(number or "").strip(), str(kind or "").strip()
+    if not kind:
+        raise ValueError("증빙종류를 입력하세요.")
+    with _write_session() as wb:
+        if not any(x["거래번호"] == number for x in _rows(wb[SHEET_EXEC], EXEC_COLS)):
+            raise NotFound("집행 행을 찾을 수 없습니다.")
+        ws = wb[SHEET_EVID]
+        it = {"거래번호": number, "증빙종류": kind, "비고": str(note or "").strip(), **{c: "" for c in EVID_FILE_COLS}}
+        _validate("evidence", it)
+        _assign_evid_number(wb, ws, it)
+        r = _next_row(ws)
+        _write_row(ws, EVID_COLS, r, it)
+        it["_row"] = r
+        _sync_exec_evidence(wb, number)
+        _save(wb)
+        return _evid_out(it)
+
+
+def evidence_attach(row: int, fields: dict, expect: dict | None = None, folder_url: str | None = None) -> dict:
+    """실물만 항목(row)에 파일 열(EVID_FILE_COLS)만 채운다. 증빙번호·증빙종류·비고는 그대로. 이미 파일이 있으면 거부."""
+    with _write_session() as wb:
+        ws = wb[SHEET_EVID]
+        rec = next((x for x in _rows(ws, EVID_COLS) if x["_row"] == row), None)
+        if rec is None:
+            raise NotFound("증빙 행을 찾을 수 없습니다.")
+        _check_expect("evidence", rec, expect)
+        if evid_has_file(rec):
+            raise EvidHasFile(f"증빙 {rec.get('증빙번호') or ''} 에는 이미 파일이 있습니다. 새 파일은 [업로드]로 따로 올리세요.")
+        for c in EVID_FILE_COLS:
+            if c in fields:
+                rec[c] = fields[c]
+        if not evid_has_file(rec):
+            raise ValueError("첨부할 파일 정보가 없습니다.")
+        _write_row(ws, EVID_COLS, row, {c: rec[c] for c in EVID_FILE_COLS})
+        _sync_exec_evidence(wb, rec["거래번호"], folder_url)
+        _save(wb)
+        return _evid_out(rec)
 
 
 def _sync_exec_evidence(wb, number: str, folder_url: str | None = None):
@@ -1896,6 +2024,7 @@ def evidence_add(items: list[dict], folder_url: str | None = None) -> list[dict]
         out = []
         for it in items:
             _validate("evidence", it)
+            _assign_evid_number(wb, ws, it)
             r = _next_row(ws)
             _write_row(ws, EVID_COLS, r, it)
             it["_row"] = r
@@ -1914,6 +2043,7 @@ def evidence_delete(row: int, expect: dict | None = None) -> dict:
         if rec is None:
             raise NotFound("증빙 행을 찾을 수 없습니다.")
         _check_expect("evidence", rec, expect)
+        _bump_evid_hw(wb, rec["거래번호"], rec.get("증빙번호"))  # 지운 번호(마지막 번호 포함)는 다시 쓰지 않음
         _delete_row(ws, row)
         _sync_exec_evidence(wb, rec["거래번호"])
         _save(wb)
@@ -1921,8 +2051,8 @@ def evidence_delete(row: int, expect: dict | None = None) -> dict:
 
 
 def evidence_names(number: str) -> list[str]:
-    """같은 건의 기존 파일명 (중복 번호 부여용)."""
-    return [e["파일명"] for e in evidence_for(number)]
+    """같은 건의 기존 파일명 (중복 번호 부여용). 실물만 항목(빈 파일명)은 제외."""
+    return [e["파일명"] for e in evidence_for(number) if e["파일명"]]
 
 
 # ---------- 신청 (신청_설계_2026-10-14.md) ----------

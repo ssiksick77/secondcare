@@ -29,7 +29,7 @@ const COLS = {
   exec: [
     { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "원인발생일", t: "date", label: "발생일" }, { k: "지급청구일", t: "date", hide: true },
     { k: "지출완료일", t: "date", hide: true }, { k: "결의일", t: "date", hide: true }, { k: "재원" }, { k: "예산목" }, { k: "세목" }, { k: "세세목", minor: true },
-    { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (예산현액 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 파일 수" }, { k: "비고", wrap: true, minor: true },
+    { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (예산현액 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true, minor: true },
   ],
   req: [
     { k: "품의번호" }, { k: "상태", t: "badge" }, { k: "원인발생일", t: "date" }, { k: "지출예정일", t: "date" }, { k: "재원" },
@@ -967,10 +967,11 @@ function showAlert(msg, type = "ok", opts = {}) {
   t.innerHTML = `<span class="toast-msg"></span><button type="button" class="toast-x" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`;
   t.querySelector(".toast-msg").textContent = msg;
   if (opts.undo) { const u = document.createElement("button"); u.type = "button"; u.className = "btn btn-sm toast-undo"; u.textContent = "되돌리기"; u.dataset.wid = LAST_WRITE_ID || ""; u.addEventListener("click", () => undoLast(t, u.dataset.wid)); t.insertBefore(u, t.querySelector(".toast-x")); }
+  if (opts.action) { const a = document.createElement("button"); a.type = "button"; a.className = "btn btn-sm toast-undo toast-act"; a.textContent = opts.action.label; a.addEventListener("click", () => { t.remove(); opts.action.run(); }); t.insertBefore(a, t.querySelector(".toast-x")); }
   t.querySelector(".toast-x").addEventListener("click", () => t.remove());
   box.appendChild(t);
   while (box.children.length > 5) box.firstChild.remove();
-  const ttl = opts.undo ? 12000 : type === "ok" ? 4000 : type === "warn" ? 7000 : 0;
+  const ttl = opts.undo || opts.action ? 12000 : type === "ok" ? 4000 : type === "warn" ? 7000 : 0;
   if (ttl) setTimeout(() => t.remove(), ttl);
 }
 // 지속 배너 (수식 셀 경고처럼 사용자가 해결할 때까지 보여야 하는 것)
@@ -1629,6 +1630,7 @@ async function renderExecDrawer(fetchEvid) {
   updateXdNav();
   // 다른 저장·새로고침으로 다시 그릴 때 입력 중이던 증빙 업로드 폼은 유지
   const oldForm = $("#evid-form"), keep = oldForm && XD.formRow === r._row ? { kind: oldForm.kind.value, date: oldForm.date.value, note: oldForm.note.value, files: oldForm.files.files } : null;
+  const oldEntry = $("#evid-entry-form"), keepEntry = oldEntry && XD.formRow === r._row ? { kind: oldEntry.kind.value, note: oldEntry.note.value } : null;
   const seq = ++XD.seq;  // 빠르게 다른 행을 열면 늦게 온 응답은 버림
   if (fetchEvid || !XD.evid) {
     try { const d = await api("GET", `/api/evidence/${encodeURIComponent(r["거래번호"])}`); if (seq !== XD.seq || XD.row !== r._row) return; XD.evid = d.items; XD.drive = d.drive; }
@@ -1639,6 +1641,7 @@ async function renderExecDrawer(fetchEvid) {
   const st = r["상태"], o = execOrigin(r), locked = !!o?.locked;
   const evid = XD.evid || [];
   const kinds = [...new Set(evid.map(e => e["증빙종류"]).filter(Boolean))];
+  const nFile = evid.filter(evHasFile).length;
   const drive = XD.drive || {};
   // 타임라인: 마지막으로 날짜가 있는 단계의 다음이 '다음 단계'
   const last = XD_STAGES.reduce((a, s, i) => r[s[1]] ? i : a, -1), next = last + 1;
@@ -1657,7 +1660,6 @@ async function renderExecDrawer(fetchEvid) {
   }).join("");
   const kv = (k, v) => `<b>${k}</b><span class="xd-ro">${esc(v || "-")}</span>`;
   const iv = (k, type) => { const v = r[k] == null ? "" : String(r[k]); return `<b>${k}</b><span class="xd-val${v ? "" : " empty"}${type === "textarea" ? " multi" : ""}" role="button" tabindex="0" data-field="${k}" data-type="${type}" title="눌러서 수정" aria-label="${k} ${esc(v || "비어 있음")}, 눌러서 수정">${esc(v || "–")}</span>`; };
-  const thumb = e => { const n = e["파일명"] || "", id = e["드라이브파일ID"]; return XD_IMG.test(n) && id ? `<img class="xd-thumb" loading="lazy" alt="" src="/api/evidence/thumb/${encodeURIComponent(id)}" data-ext="${esc(fileExt(n))}">` : `<span class="xd-chip" aria-hidden="true">${esc(fileExt(n))}</span>`; };
   body.innerHTML = `
     <section class="xd-sec xd-tl-sec" aria-label="처리 단계">
       <h3>처리 단계 <span class="badge ${esc(st)}" title="${esc(STATUS_HELP[st] || "")}">${esc(STATUS_LABEL[st] || st)}</span></h3>
@@ -1672,12 +1674,21 @@ async function renderExecDrawer(fetchEvid) {
       </div>
     </section>
     <section class="xd-sec">
-      <h3>증빙 <span class="toolbar-note">${evid.length}개</span><span class="sp"></span>${r["증빙폴더"] ? `<a class="btn btn-sm" href="${esc(r["증빙폴더"])}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
+      <h3>증빙 <span class="toolbar-note">${evid.length}개${nFile < evid.length ? ` · 파일 ${nFile}개` : ""}</span><span class="sp"></span>${r["증빙폴더"] ? `<a class="btn btn-sm" href="${esc(r["증빙폴더"])}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
       ${!drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않았습니다. 오른쪽 위 설정(톱니)에서 연결하면 업로드할 수 있습니다.${drive.error ? " (" + esc(drive.error) + ")" : ""}</p>` : ""}
-      ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th class="xd-th-cell"><span class="sr-only">미리보기</span></th><th>종류</th><th>파일명</th><th class="num">크기</th><th>업로드</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>
-        ${evid.map(e => `<tr><td class="xd-th-cell">${thumb(e)}</td><td>${esc(e["증빙종류"])}</td><td class="evid-name">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener" title="새 창에서 열기">${esc(e["파일명"])}</a>` : esc(e["파일명"])}${e["원본파일명"] && e["원본파일명"] !== e["파일명"] ? `<div class="toolbar-note">${esc(e["원본파일명"])}</div>` : ""}</td><td class="num">${e["크기"] ? Math.round(e["크기"] / 1024).toLocaleString() + " KB" : ""}</td><td>${esc(mmdd(e["업로드일"]))}</td><td><button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(e["파일명"])}" title="장부에서 삭제하고 드라이브 휴지통으로 이동">삭제</button></td></tr>`).join("")}
+      ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th class="xd-th-cell"><span class="sr-only">미리보기</span></th><th>증빙</th><th>파일</th><th>비고</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>
+        ${evid.map(evidRowHtml).join("")}
       </tbody></table></div>` : '<p class="toolbar-note">등록된 증빙이 없습니다.</p>'}
       <div class="evid-list"><span class="toolbar-note">증빙목록</span><code>${esc(kinds.join(", ") || "(없음)")}</code>${kinds.length ? `<button type="button" class="btn btn-sm" id="evid-copy">복사</button>` : ""}</div>
+    </section>
+    <section class="xd-sec">
+      <h3>증빙 항목 추가 <span class="toolbar-note">파일 없이 실물만</span></h3>
+      <form id="evid-entry-form" class="evid-form evid-entry">
+        <label>증빙종류 <input type="text" name="kind" list="dl-증빙종류" required autocomplete="off" placeholder="예: 영수증, 거래명세서"></label>
+        <label>비고 <input type="text" name="note" placeholder="선택"></label>
+        <div class="wide evid-entry-row"><span class="toolbar-note">첨부 양식을 출력해 실물을 붙입니다. 파일은 나중에 목록의 [파일 첨부]로 올립니다.</span><button type="submit" class="btn btn-sm">항목 추가</button></div>
+      </form>
+      <input type="file" id="evid-attach-input" class="sr-only" tabindex="-1" aria-hidden="true">
     </section>
     <section class="xd-sec">
       <h3>증빙 업로드</h3>
@@ -1693,8 +1704,21 @@ async function renderExecDrawer(fetchEvid) {
   bindEvidForm(r);
   bindXdBody();
   XD.formRow = r._row; XD.shownRow = r._row;
+  if (keepEntry) { const f = $("#evid-entry-form"); f.kind.value = keepEntry.kind; f.note.value = keepEntry.note; }
   if (keep) { const f = $("#evid-form"); f.kind.value = keep.kind; if (keep.date) f.date.value = keep.date; f.note.value = keep.note; try { if (keep.files?.length && !f.files.disabled) f.files.files = keep.files; } catch { } }
   body.scrollTop = scroll;
+}
+// 증빙 한 줄: 파일이 없으면(실물만 항목) '파일 없음' 표시와 [파일 첨부]
+const evHasFile = e => e.has_file ?? !!(e["파일명"] || e["드라이브파일ID"]);
+function evidRowHtml(e) {
+  const has = evHasFile(e), n = e["파일명"] || "", id = e["드라이브파일ID"];
+  const thumb = !has ? "" : XD_IMG.test(n) && id ? `<img class="xd-thumb" loading="lazy" alt="" src="/api/evidence/thumb/${encodeURIComponent(id)}" data-ext="${esc(fileExt(n))}">` : `<span class="xd-chip" aria-hidden="true">${esc(fileExt(n))}</span>`;
+  const meta = [e["원본파일명"] && e["원본파일명"] !== n ? e["원본파일명"] : "", e["크기"] ? Math.max(1, Math.round(e["크기"] / 1024)).toLocaleString() + " KB" : "", e["업로드일"] ? mmdd(e["업로드일"]) : ""].filter(Boolean).join(" · ");
+  const file = has ? `${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener" title="새 창에서 열기">${esc(n)}</a>` : esc(n)}${meta ? `<div class="toolbar-note">${esc(meta)}</div>` : ""}` : `<span class="evid-nofile">파일 없음</span>`;
+  const conn = !!XD.drive?.connected;
+  const attach = has ? "" : `<button type="button" class="btn btn-sm" data-evattach="${e._row}"${conn ? "" : " disabled"} title="${conn ? "이 항목에 파일 1개를 올려 붙입니다" : "구글 드라이브를 연결하면 첨부할 수 있습니다"}">파일 첨부</button>`;
+  const label = has ? n : `${e["증빙번호"]} ${e["증빙종류"]}`;
+  return `<tr${has ? "" : ' class="evid-row-nofile"'}><td class="xd-th-cell">${thumb}</td><td class="evid-id"><span class="evid-kind">${esc(e["증빙종류"])}</span><span class="evid-no">${esc(e["증빙번호"])}</span></td><td class="evid-name">${file}</td><td class="evid-note">${esc(e["비고"])}</td><td class="evid-acts"><button type="button" class="btn btn-sm" data-evmount="${e._row}" title="이 증빙의 첨부 양식 인쇄">양식</button>${attach}<button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(label)}" data-file="${has ? 1 : ""}" title="${has ? "장부에서 삭제하고 드라이브 휴지통으로 이동" : "장부에서 이 항목을 삭제"}">삭제</button></td></tr>`;
 }
 function bindXdBody() {
   const body = $("#xd-body");
@@ -1730,17 +1754,52 @@ function bindEvidForm(r) {
       const res = await fetch(`/api/evidence/${encodeURIComponent(r["거래번호"])}`, { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       const d = await res.json();
-      showAlert(`${d.items.length}개 업로드 완료`, "ok");
+      const up = d.items || [];
+      showAlert(`${up.length}개 업로드 완료`, "ok", up.length ? { action: { label: "양식 인쇄", run: () => openMount(up, 0, null) } } : {});
       await load();
       await renderExecDrawer(true);
     } catch (err) { showAlert("업로드 실패: " + err.message, "error"); btn.disabled = false; btn.textContent = "업로드"; }
   });
+  // 증빙 항목 추가 (파일 없이 실물만): 증빙번호를 받고, 알림에서 바로 첨부 양식 인쇄
+  const ef = $("#evid-entry-form");
+  ef?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const kind = ef.kind.value.trim(), note = ef.note.value.trim();
+    if (!kind) { showAlert("증빙종류를 입력하세요.", "warn"); ef.kind.focus(); return; }
+    const btn = ef.querySelector("button[type=submit]"); btn.disabled = true; btn.textContent = "추가 중…";
+    try {
+      const it = await api("POST", `/api/evidence/${encodeURIComponent(r["거래번호"])}/entry`, { 증빙종류: kind, 비고: note });
+      ef.kind.value = ""; ef.note.value = "";
+      showAlert(`증빙 항목 ${it["증빙번호"]} 을 추가했습니다 (파일 없음)`, "ok", { action: { label: "양식 인쇄", run: () => openMount([it], 0, null) } });
+      await load(); await renderExecDrawer(true);
+    } catch (err) { showAlert("항목 추가 실패: " + err.message, "error"); btn.disabled = false; btn.textContent = "항목 추가"; }
+  });
+  // [파일 첨부]: 실물만 항목에 파일 1개를 붙임 (같은 증빙번호·종류·비고, 드라이브 이름·폴더 규칙은 업로드와 같음)
+  const ai = $("#evid-attach-input");
+  $$("#xd-body [data-evattach]").forEach(b => b.addEventListener("click", () => { if (!ai) return; XD.attachRow = Number(b.dataset.evattach); ai.value = ""; ai.click(); }));
+  ai?.addEventListener("change", async () => {
+    const f = ai.files[0], row = XD.attachRow, e = (XD.evid || []).find(x => x._row === row); if (!f || !e) return;
+    const b = $(`#xd-body [data-evattach="${row}"]`); if (b) { b.disabled = true; b.textContent = "첨부 중…"; }
+    const fd = new FormData(); fd.append("files", f); fd.append("row", String(row)); fd.append("증빙번호", e["증빙번호"]);
+    const d = $("#evid-form")?.date.value; if (d) fd.append("date", d);
+    try {
+      const res = await fetch(`/api/evidence/${encodeURIComponent(r["거래번호"])}`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+      showAlert(`증빙 ${e["증빙번호"]} 에 파일을 첨부했습니다`, "ok");
+      await load(); await renderExecDrawer(true);
+      $(`#xd-body [data-evmount="${row}"]`)?.focus();
+    } catch (err) { showAlert("첨부 실패: " + err.message, "error"); if (b?.isConnected) { b.disabled = false; b.textContent = "파일 첨부"; b.focus(); } }
+  });
   $("#evid-copy")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText($(".evid-list code").textContent); showAlert("증빙목록을 복사했습니다.", "ok"); } catch { } });
+  $$("#xd-body [data-evmount]").forEach(b => b.addEventListener("click", () => {
+    const e = (XD.evid || []).find(x => x._row === Number(b.dataset.evmount)); if (e) openMount([e], 0, b);
+  }));
   $$("#xd-body [data-evdel]").forEach(b => b.addEventListener("click", async () => {
-    if (!await confirmDlg({ title: "증빙 삭제", body: `'${b.dataset.name}' 을 장부에서 지우고 드라이브 휴지통으로 옮깁니다.`, verb: "삭제", danger: true })) return;
+    const body = b.dataset.file ? `'${b.dataset.name}' 을 장부에서 지우고 드라이브 휴지통으로 옮깁니다.` : `'${b.dataset.name}' 항목을 장부에서 지웁니다(파일 없음). 지운 증빙번호는 다시 쓰지 않습니다.`;
+    if (!await confirmDlg({ title: "증빙 삭제", body, verb: "삭제", danger: true })) return;
     const row = Number(b.dataset.evdel); const e = (XD.evid || []).find(x => x._row === row);
     try {
-      const res = await api("DELETE", `/api/evidence/${row}`, { expect: e ? { 거래번호: e["거래번호"], 파일명: e["파일명"] } : undefined });
+      const res = await api("DELETE", `/api/evidence/${row}`, { expect: e ? { 거래번호: e["거래번호"], 증빙번호: e["증빙번호"], 파일명: e["파일명"] } : undefined });
       showAlert(res.warning || "증빙을 삭제했습니다.", res.warning ? "warn" : "ok");
       await load(); await renderExecDrawer(true);
     } catch (err) { showAlert(err.message, "error"); }
@@ -1907,3 +1966,70 @@ $("#dlg-voucher").addEventListener("close", () => {
 });
 window.addEventListener("beforeprint", () => { if (!document.body.classList.contains("printing-voucher")) preparePrintVoucher(); });
 window.addEventListener("afterprint", () => { if (!document.body.classList.contains("printing-voucher")) return; document.body.classList.remove("printing-voucher"); $("#print-voucher").innerHTML = ""; });
+
+// ================= 증빙 첨부 양식 (증빙 1건 = 1장 · 시안 .impeccable/mocks/voucher/E3_첨부양식.html, 기관명 줄 없음 · 거래처/적요 같은 폭) =================
+// 실물 증빙(영수증 등)을 붙이는 A4 한 장: 위 3행 표(증빙번호·증빙종류·금액 / 거래처·적요 / 비고) + 아래 빈 부착란. 집행 단계와 무관하게 출력
+let MOUNT = null;   // { items: [증빙 행], i, btn }
+function mountHtml(e) {
+  const r = DATA.exec.find(x => x["거래번호"] === e["거래번호"]), t = x => esc(x == null ? "" : x);
+  const amt = r ? vcNum(r["금액"] || 0) + "원" : "";
+  return `<article class="ev-mount">
+  <table class="mt-f"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"><col class="c6"><col class="c7"><col class="c8"></colgroup><tbody>
+    <tr><th scope="row">증빙번호</th><td class="mt-no"><span>${t(e["증빙번호"])}</span></td><th scope="row">증빙종류</th><td colspan="3">${t(e["증빙종류"])}</td><th scope="row">금액</th><td class="mt-num">${t(amt)}</td></tr>
+    <tr><th scope="row">거래처</th><td colspan="3" class="mt-vendor" title="${t(r?.["거래처"])}">${t(r?.["거래처"])}</td><th scope="row">적요</th><td colspan="3" class="mt-memo" title="${t(r?.["적요"])}">${t(r?.["적요"])}</td></tr>
+    <tr><th scope="row">비고</th><td colspan="7">${t(e["비고"])}</td></tr>
+  </tbody></table>
+  <section class="mt-frame" aria-label="실물 증빙 부착란"></section>
+</article>`;
+}
+// 증빙번호는 잘리면 안 되는 값: 36mm 칸에 다 들어가도록 글자만 줄임 (10.5pt → 최소 7.5pt, 인쇄 글꼴 차이 여유 4%). 열린 미리보기에서 재서 인쇄 사본에도 같은 크기
+function fitMountNo() {
+  const td = $("#mount-sheet .mt-no"), span = td?.firstElementChild; if (!span) return "";
+  td.style.fontSize = "";
+  const cs = getComputedStyle(td), avail = (td.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)) * 0.96;
+  for (let pt = 10; span.getBoundingClientRect().width > avail && pt >= 7.5; pt -= 0.5) td.style.fontSize = pt + "pt";
+  return td.style.fontSize;
+}
+function renderMount() {
+  const { items, i } = MOUNT, e = items[i], n = items.length;
+  $("#mount-sheet").innerHTML = `<div class="mt-page">${mountHtml(e)}</div>`; $("#mount-sheet").scrollTop = 0;
+  MOUNT.noSize = fitMountNo();
+  $("#mount-no").textContent = e["증빙번호"] ? " · " + e["증빙번호"] : "";
+  $("#mount-pos").hidden = n < 2; $("#mount-pos").textContent = `${n}건 중 ${i + 1}번째`;
+  $("#mount-prev").hidden = $("#mount-next").hidden = n < 2;
+  $("#mount-prev").disabled = i === 0; $("#mount-next").disabled = i === n - 1;
+}
+function openMount(items, i, btn) {
+  if (!items?.length) return;
+  MOUNT = { items, i: Math.max(0, Math.min(i || 0, items.length - 1)), btn: btn || null };
+  if (!$("#dlg-mount").open) $("#dlg-mount").showModal();   // 먼저 열어야 증빙번호 칸 폭을 잴 수 있음
+  renderMount();
+  $("#mount-print").focus();
+}
+function mountStep(d) {
+  if (!MOUNT) return;
+  const i = MOUNT.i + d; if (i < 0 || i >= MOUNT.items.length) return;
+  MOUNT.i = i; renderMount();
+  const b = d < 0 ? $("#mount-prev") : $("#mount-next");   // 끝에 닿아 꺼진 버튼에서 초점이 사라지지 않게
+  (b.disabled ? (d < 0 ? $("#mount-next") : $("#mount-prev")) : b).focus();
+}
+// 인쇄 사본: [인쇄] 버튼이든 Ctrl+P든 양식 대화상자가 열려 있으면 지금 보이는 한 장만 (A4 세로 15mm, 쪽 번호 없음)
+function preparePrintMount() {
+  if (!MOUNT || !$("#dlg-mount").open) return false;
+  $("#print-mount").innerHTML = mountHtml(MOUNT.items[MOUNT.i]);
+  if (MOUNT.noSize) $("#print-mount .mt-no").style.fontSize = MOUNT.noSize;
+  document.body.classList.add("printing-mount");
+  return true;
+}
+$("#mount-close").addEventListener("click", () => $("#dlg-mount").close());
+$("#mount-print").addEventListener("click", () => { if (preparePrintMount()) window.print(); });
+$("#mount-prev").addEventListener("click", () => mountStep(-1));
+$("#mount-next").addEventListener("click", () => mountStep(1));
+$("#dlg-mount").addEventListener("close", () => {
+  // 드로어가 다시 그려졌어도 같은 증빙의 [양식] 버튼으로 초점을 돌려줌 (업로드 알림에서 열었으면 지금 보던 증빙의 버튼)
+  const e = MOUNT?.items[MOUNT.i];
+  const b = MOUNT?.btn?.isConnected ? MOUNT.btn : e && $(`#xd-body [data-evmount="${e._row}"]`);
+  if (b) b.focus();
+});
+window.addEventListener("beforeprint", () => { if (!document.body.classList.contains("printing-mount")) preparePrintMount(); });
+window.addEventListener("afterprint", () => { if (!document.body.classList.contains("printing-mount")) return; document.body.classList.remove("printing-mount"); $("#print-mount").innerHTML = ""; });

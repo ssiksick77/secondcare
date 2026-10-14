@@ -54,6 +54,11 @@ async def _too_large(_: Request, e: store.TooLarge):
     return JSONResponse({"detail": str(e)}, status_code=413)
 
 
+@app.exception_handler(store.EvidHasFile)
+async def _has_file(_: Request, e: store.EvidHasFile):
+    return JSONResponse({"detail": str(e)}, status_code=409)
+
+
 @app.exception_handler(ValueError)
 async def _bad(_: Request, e: ValueError):
     return JSONResponse({"detail": str(e)}, status_code=400)
@@ -501,13 +506,36 @@ def evidence_list(number: str):
     return {"items": items, "drive": drive.status()}
 
 
+@app.post("/api/evidence/{number}/entry")
+def evidence_entry(number: str, body: dict):
+    """파일 없이 증빙 항목(실물만)을 만든다. body: {증빙종류, 비고}. 증빙번호를 부여하고 드라이브는 건드리지 않음."""
+    kind = body.get("증빙종류") if body.get("증빙종류") is not None else body.get("kind")
+    note = body.get("비고") if body.get("비고") is not None else body.get("note")
+    return store.evidence_entry(number, str(kind or ""), str(note or ""))
+
+
 @app.post("/api/evidence/{number}")
 async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind: str = Form(""),
-                          date: str = Form(""), note: str = Form("")):
-    """여러 파일을 드라이브 증빙관리/YYYY/재원코드/거래번호 에 올리고 증빙 시트에 기록."""
+                          date: str = Form(""), note: str = Form(""), row: str = Form(""),
+                          evno: str = Form("", alias="증빙번호")):
+    """여러 파일을 드라이브 증빙관리/YYYY/재원코드/거래번호 에 올리고 증빙 시트에 기록.
+    row(증빙 시트 행) 또는 증빙번호를 주면 그 '실물만' 항목에 파일 1개를 첨부한다 (증빙번호·증빙종류·비고 유지, 이미 파일이 있으면 409)."""
     rec = next((r for r in store.read_all()["exec"] if r["거래번호"] == number), None)
     if rec is None:
         raise HTTPException(404, "집행 행을 찾을 수 없습니다.")
+    target = None
+    if row.strip() or evno.strip():
+        if row.strip() and not row.strip().isdigit():
+            raise HTTPException(400, "row 는 숫자여야 합니다.")
+        target = next((e for e in store.evidence_for(number)
+                       if (not row.strip() or e["_row"] == int(row)) and (not evno.strip() or e["증빙번호"] == evno.strip())), None)
+        if target is None:
+            raise HTTPException(404, "첨부할 증빙 항목을 찾을 수 없습니다. 새로고침 후 다시 시도하세요.")
+        if target["has_file"]:
+            raise HTTPException(409, f"증빙 {target['증빙번호']} 에는 이미 파일이 있습니다. 새 파일은 [업로드]로 따로 올리세요.")
+        if len(files) != 1:
+            raise HTTPException(400, "증빙 항목 하나에는 파일 1개만 첨부할 수 있습니다.")
+        kind = target["증빙종류"] or kind
     if not kind.strip():
         raise HTTPException(400, "증빙종류를 입력하세요.")
     d = store._to_date(date) or rec["원인발생일"] or dt.date.today().isoformat()
@@ -535,7 +563,11 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
             uploaded.append(up["id"])
             items.append({"거래번호": number, "증빙종류": kind.strip(), "파일명": name, "원본파일명": f.filename or "",
                           "드라이브파일ID": up["id"], "크기": up["size"], "업로드일": dt.date.today().isoformat(), "비고": note})
-        saved = store.evidence_add(items, folder["url"])
+        if target is not None:  # 실물만 항목에 첨부: 파일 열만 채움 (증빙번호·종류·비고 유지)
+            saved = [store.evidence_attach(target["_row"], {c: items[0][c] for c in store.EVID_FILE_COLS},
+                                           {"거래번호": number, "증빙번호": target["증빙번호"]}, folder["url"])]
+        else:
+            saved = store.evidence_add(items, folder["url"])
     except Exception:
         for fid in uploaded:  # 이번 요청에서 올린 파일은 되돌림(휴지통)
             try:
@@ -545,7 +577,8 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
         raise
     for it in saved:
         it["url"] = drive.file_url(it["드라이브파일ID"])
-    return {"items": saved, "folder": folder}
+        it["has_file"] = True
+    return {"items": saved, "folder": folder, "attached": target is not None}
 
 
 @app.delete("/api/evidence/{row}")

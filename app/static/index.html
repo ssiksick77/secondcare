@@ -501,6 +501,15 @@
   </form>
 </dialog>
 
+<!-- 집행: 증빙 첨부 양식 (증빙 1건 = 1장, 집행 단계와 무관). 미리보기 + A4 세로 인쇄 -->
+<dialog id="dlg-mount" class="dlg-sheet dlg-mount" aria-labelledby="mount-title">
+  <form method="dialog">
+    <h2 class="mt-head" id="mount-title">증빙 첨부 양식<span id="mount-no"></span></h2>
+    <div class="vc-preview" id="mount-sheet" role="region" aria-label="증빙 첨부 양식 미리보기" tabindex="0"></div>
+    <div class="dlg-actions"><button type="button" class="btn btn-sm" id="mount-prev" hidden>이전</button><span class="toolbar-note mt-pos" id="mount-pos" aria-live="polite" hidden></span><button type="button" class="btn btn-sm" id="mount-next" hidden>다음</button><span class="sp"></span><button type="button" class="btn btn-ghost" id="mount-close">닫기</button><button type="button" class="btn btn-primary" id="mount-print">인쇄</button></div>
+  </form>
+</dialog>
+
 <!-- 신청: 학회 여비 계산기 (conf.js). 신청 폼 [여비 계산기] 또는 상세 패널 [산출 내역 보기](보기 전용)로 연다 -->
 <dialog id="dlg-conf" aria-labelledby="conf-title" class="dlg-conf">
   <form id="conf-form" method="dialog" novalidate>
@@ -623,5 +632,6 @@
 <div id="print-sheet" class="print-root" aria-hidden="true"></div>
 <div id="print-conf" class="print-root" aria-hidden="true"></div>
 <div id="print-voucher" class="print-root" aria-hidden="true"></div>
+<div id="print-mount" class="print-root" aria-hidden="true"></div>
 </body>
 </html>
