@@ -224,6 +224,8 @@ function renderAll() {
 }
 
 const SORT = {};  // kind -> {k, dir}
+// 행이 많으면 처음 LIST_LIMIT 건만 그리고 '더 보기'로 나머지 (합계·CSV 는 항상 전체 기준). 필터가 바뀌면 다시 접힘
+const LIST_LIMIT = 400, LIST_MORE = {};
 const norm = s => String(s ?? "").toLowerCase().replace(/,/g, "");
 function filtered(kind) {
   const f = FILTERS[kind] || {};
@@ -274,14 +276,17 @@ function renderList(kind) {
   const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="sortbtn">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</button></th>`).join("")}${kind === "exec" ? "" : '<th class="actions">작업</th>'}</tr></thead>`;
   const selHead = kind === "exec" && DELMODE ? `<th class="sel"><input type="checkbox" id="exec-sel-all" aria-label="표시된 행 모두 선택"></th>` : "";
   const headFinal = selHead ? head.replace("<thead><tr>", "<thead><tr>" + selHead) : head;
-  const body = rows.length ? rows.map(r => {
+  const shown = rows.length > LIST_LIMIT && !LIST_MORE[kind] ? rows.slice(0, LIST_LIMIT) : rows;
+  const span = cols.length + (kind === "exec" ? (DELMODE ? 1 : 0) : 1);
+  const more = shown.length < rows.length ? `<tr class="more-row"><td colspan="${span}"><button type="button" class="btn btn-sm" data-more="${kind}">더 보기 (${(rows.length - shown.length).toLocaleString("ko-KR")}건 남음)</button></td></tr>` : "";
+  const body = rows.length ? shown.map(r => {
     const tds = cols.map(c => {
       const v = c.calc ? c.calc(r) : r[c.k];
       const td = html => { let h = html.replace(/^<td(?=[\s>])/, `<td data-col="${esc(c.k)}"`); if (ctrCls(c)) h = /^<td[^>]*\sclass="/.test(h) ? h.replace(/^(<td[^>]*\sclass=")/, "$1ctr ") : h.replace(/^<td/, '<td class="ctr"'); return h; };
       return td(cellHtml(c, r, v));
     }).join("");
     return rowHtml(r, tds);
-  }).join("") : `<tr><td class="empty" colspan="${cols.length + (kind === "exec" ? (DELMODE ? 1 : 0) : 1)}">표시할 항목이 없습니다.</td></tr>`;
+  }).join("") + more : `<tr><td class="empty" colspan="${span}">표시할 항목이 없습니다.</td></tr>`;
   function cellHtml(c, r, v) {
       if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미입력">-</span>' : fmt(v)}</td>`;
       if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit")) {
@@ -310,7 +315,7 @@ function renderList(kind) {
   let foot = "";
   if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor")) {
     const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
-    foot = `<tfoot><tr class="total">${cols.map(c => c.k === "금액" ? `<td class="num amt${minorCls(c)}">${fmt(sum)}</td>` : `<td class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}${kind === "exec" ? "" : '<td class="actions"></td>'}</tr></tfoot>`;
+    foot = `<tfoot><tr class="total">${cols.map(c => c.k === "금액" ? `<td data-col="${esc(c.k)}" class="num amt${minorCls(c)}">${fmt(sum)}</td>` : `<td data-col="${esc(c.k)}" class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}${kind === "exec" ? "" : '<td class="actions"></td>'}</tr></tfoot>`;
   }
   table.innerHTML = headFinal + `<tbody>${body}</tbody>` + foot;
   table.querySelectorAll("th.sortable").forEach(th => th.addEventListener("click", () => {
@@ -500,6 +505,25 @@ function toCSV(cols, rows) { const q = v => `"${String(v ?? "").replace(/"/g, '"
 function downloadCSV(name, cols, rows) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([toCSV(cols, rows)], { type: "text/csv;charset=utf-8" })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 $("#dash-csv").addEventListener("click", () => { if (!DASH_ROWS.length) { showAlert("저장할 표가 없습니다.", "warn"); return; } downloadCSV(`집행현황_${$("#dash-fund").value || "전체"}_${$("#dash-year").value || "전체"}${$("#dash-month").value ? "-" + $("#dash-month").value : ""}.csv`, DASH_COLS, DASH_ROWS); });
 $("#dash-print").addEventListener("click", () => window.print());
+// 인쇄 머리글: 화면 이름·재원·기간·출력일 (대시보드는 합계 한 줄 포함). 집계 기준은 펼쳐서 인쇄
+window.addEventListener("beforeprint", () => {
+  const labor = document.body.classList.contains("labor-mode");
+  const tab = $(`${labor ? "#labor-tabs" : "#main-tabs"} [role=tab][aria-selected="true"]`);
+  const panel = tab ? $("#" + tab.getAttribute("aria-controls")) : null, dash = panel?.id === "panel-dash";
+  const val = sel => panel?.querySelector(sel)?.value || "";
+  const fund = dash ? $("#dash-fund").value : (val('[data-filter="재원"]') || val('[data-filter="지급처"]'));
+  const year = dash ? $("#dash-year").value : (val('[data-filter="year"]') || (labor && panel?.id === "lpanel-plan" ? $("#labor-year").value : ""));
+  const month = dash ? $("#dash-month").value : val('[data-filter="month"]');
+  const period = year ? `${year}년${month ? " " + parseInt(month) + "월" : ""}` : month ? `${parseInt(month)}월` : "전체 기간";
+  let name = (labor ? "인건비 " : "") + (tab?.textContent.trim() || "");
+  if (dash) name += ` (${$(".subtabs [aria-selected=true]")?.textContent.trim() || ""})`;
+  const note = dash ? $("#dash-note").textContent.trim() : "";
+  $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
+  $$("details.defs-box").forEach(d => { if (!d.open) { d.open = true; d.dataset.printOpened = "1"; } });
+});
+window.addEventListener("afterprint", () => {
+  $$("details.defs-box[data-print-opened]").forEach(d => { d.open = false; delete d.dataset.printOpened; });
+});
 $("#dash-month").addEventListener("change", renderDashboard);
 $$("[data-csv]").forEach(b => b.addEventListener("click", () => {
   const kind = b.dataset.csv; const cols = COLS[kind].filter(c => !c.calc).map(c => c.k); const rows = filtered(kind).map(r => cols.map(k => k === "상태" ? (STATUS_LABEL[r[k]] || r[k]) : r[k]));
@@ -521,22 +545,26 @@ function renderChart(execs, allFunds, year, budget) {
   const lastIdx = totals.map((v, i) => v > 0 ? i : -1).reduce((a, b) => Math.max(a, b), -1);  // 데이터가 있는 마지막 달까지만 누적선
   const cumEnd = lastIdx >= 0 ? cum[lastIdx] : 0;
   const showBudget = budget > 0 && budget <= Math.max(cumEnd, ...totals) * 2.5;  // 예산선이 그래프를 납작하게 만들면 글자로만 표기
-  const max = Math.max(1, ...totals, cumEnd, showBudget ? budget : 0) * 1.15;  // 최대 막대 위 값 라벨 여유
+  const rawMax = Math.max(1, ...totals, cumEnd, showBudget ? budget : 0) * 1.15;  // 최대 막대 위 값 라벨 여유
+  // 눈금은 1·2·2.5·5×10ⁿ 간격의 깔끔한 수 (0/25/50/75/100 등)
+  const step = (raw => { const p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; })(rawMax / 4);
+  const nTick = Math.max(1, Math.ceil(rawMax / step - 1e-9)), max = step * nTick;
   const W = 720, H = 248, padL = 70, padB = 28, padT = 20;
   const man = max >= 2e4;  // 축 표기 통일: 만원 또는 원
   const tick = v => man ? (v / 1e4).toFixed(v / 1e4 >= 10 ? 0 : 1).replace(/\.0$/, "") : fmt(Math.round(v));
   const bw = (W - padL - 10) / Math.max(1, months.length);
   let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="월별 집행 추이 막대 그래프">`;
   let lastLabel = null;
-  for (let g = 0; g <= 4; g++) {
-    const y = padT + (H - padT - padB) * (1 - g / 4);
-    const label = tick(max * g / 4);
+  for (let g = 0; g <= nTick; g++) {
+    const y = padT + (H - padT - padB) * (1 - g / nTick);
+    const label = tick(step * g);
     svg += `<line x1="${padL}" x2="${W - 10}" y1="${y}" y2="${y}" stroke="#E7EAEE"/>` + (label !== lastLabel ? `<text x="${padL - 6}" y="${y + 4}" font-size="10" text-anchor="end" fill="#5A6270">${label}</text>` : "");
     lastLabel = label;
   }
   svg += `<text x="${W - 10}" y="${padT - 6}" font-size="10" text-anchor="end" fill="#5A6270">단위: ${man ? "만원" : "원"}${budget > 0 && !showBudget ? ` · 예산현액 ${fmt(budget)}원` : ""}</text>`;
   const Y = v => H - padB - (v / max) * (H - padT - padB);
-  if (showBudget) svg += `<line x1="${padL}" x2="${W - 10}" y1="${Y(budget)}" y2="${Y(budget)}" stroke="#B3261E" stroke-width="1" stroke-dasharray="4 3"/><text x="${padL + 4}" y="${Y(budget) - 3}" font-size="9" fill="#B3261E">예산현액 ${man ? tick(budget) : fmt(budget)}</text>`;
+  const budgetColor = cumEnd > budget ? "#B3261E" : "#5A6270";  // 예산선은 회색 점선, 누적 집행이 넘으면 붉은색
+  if (showBudget) svg += `<line x1="${padL}" x2="${W - 10}" y1="${Y(budget)}" y2="${Y(budget)}" stroke="${budgetColor}" stroke-width="1" stroke-dasharray="4 3"/><text x="${padL + 4}" y="${Y(budget) - 3}" font-size="9" fill="${budgetColor}">예산현액 ${man ? tick(budget) : fmt(budget)}${cumEnd > budget ? " (초과)" : ""}</text>`;
   months.forEach((mo, i) => {
     let y0 = H - padB;
     series.forEach((s, si) => {
@@ -544,7 +572,7 @@ function renderChart(execs, allFunds, year, budget) {
       if (h > 0) { svg += `<rect x="${padL + i * bw + bw * .15}" y="${y0 - h}" width="${bw * .7}" height="${h}" fill="${PALETTE[si % PALETTE.length]}"><title>${esc(funds[si])} ${mo}: ${fmt(s[i])}원</title></rect>`; y0 -= h; }
     });
     if (totals[i] > 0) svg += `<text x="${padL + i * bw + bw / 2}" y="${y0 - 4}" font-size="9" text-anchor="middle" fill="#1E2124">${man ? tick(totals[i]) : fmt(totals[i])}</text>`;
-    svg += `<text x="${padL + i * bw + bw / 2}" y="${H - 8}" font-size="10" text-anchor="middle" fill="#5A5C60">${year ? parseInt(mo.slice(5)) + "월" : esc(mo)}</text>`;
+    svg += `<text x="${padL + i * bw + bw / 2}" y="${H - 8}" font-size="10" text-anchor="middle" fill="#5A6270">${year ? parseInt(mo.slice(5)) + "월" : esc(mo)}</text>`;
   });
   if (lastIdx >= 0) {
     const firstIdx = totals.findIndex(v => v > 0);  // 첫 집행 달부터 누적선
@@ -555,7 +583,7 @@ function renderChart(execs, allFunds, year, budget) {
     svg += `<text x="${Math.min(ex + 6, W - 12)}" y="${ey - 6}" font-size="9" text-anchor="${lastIdx >= months.length - 2 ? "end" : "start"}" fill="#1F3A93">누적 ${man ? tick(cumEnd) : fmt(cumEnd)}</text>`;
   }
   svg += "</svg>";
-  const legend = `<div class="legend">${funds.map((f, i) => `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>${esc(f)}</span>`).join("")}<span><i style="background:#1F3A93;height:2px;vertical-align:3px"></i>누적 집행</span>${showBudget ? `<span><i style="background:#B3261E;height:2px;vertical-align:3px"></i>예산현액</span>` : ""}</div>`;
+  const legend = `<div class="legend">${funds.map((f, i) => `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>${esc(f)}</span>`).join("")}<span><i style="background:#1F3A93;height:2px;vertical-align:3px"></i>누적 집행</span>${showBudget ? `<span><i style="background:${budgetColor};height:2px;vertical-align:3px"></i>예산현액</span>` : ""}</div>`;
   const mlabel = mo => year ? parseInt(mo.slice(5)) + "월" : mo;
   const srTable = `<table class="sr-only"><caption>월별 집행 추이 표</caption><thead><tr><th scope="col">월</th>${funds.map(f => `<th scope="col">${esc(f)}</th>`).join("")}<th scope="col">합계</th><th scope="col">누적</th></tr></thead><tbody>${months.map((mo, i) => `<tr><th scope="row">${esc(mlabel(mo))}</th>${series.map(s => `<td>${fmt(s[i])}원</td>`).join("")}<td>${fmt(totals[i])}원</td><td>${fmt(cum[i])}원</td></tr>`).join("")}</tbody></table>`;
   $("#dash-chart").innerHTML = svg + legend + srTable;
@@ -894,7 +922,7 @@ function closeExecDrawer() {
   // 포커스가 드로어 안(또는 body)에 있을 때만 연 행으로 되돌림 — 탭 전환 등으로 닫힐 때는 건드리지 않음
   const ae = document.activeElement, restore = wasOpen && (!ae || ae === document.body || dr.contains(ae));
   dr.hidden = true; document.body.classList.remove("drawer-open");
-  if (XD.row != null) { XD.row = null; if (DATA) renderList("exec"); }
+  if (XD.row != null) { XD.row = null; if (DATA) markExecRow(row, null); }
   if (restore && row != null) $(`#exec-table tbody tr[data-row="${row}"] .rowbtn`)?.focus();
 }
 // Esc: 열린 대화상자가 있으면 그 대화상자가 먼저 처리 (드로어는 닫지 않음)
@@ -1010,11 +1038,21 @@ document.addEventListener("dblclick", e => {
   window.getSelection()?.removeAllRanges();
   openForm(kind, row);
 });
+const FILTER_T = {};  // 종류별 검색 디바운스 타이머
 $$("[data-filter]").forEach(el => el.addEventListener("input", () => {
   const k = el.dataset.kind;
   FILTERS[k][el.dataset.filter] = el.type === "checkbox" ? el.checked : el.value;
-  renderList(k);
+  LIST_MORE[k] = false;
+  clearTimeout(FILTER_T[k]);
+  if (el.dataset.filter === "q") FILTER_T[k] = setTimeout(() => renderList(k), 150);  // 검색은 타자가 멈춘 뒤 한 번만
+  else renderList(k);
 }));
+// 더 보기: 나머지 행을 그리고 처음 새로 보인 행으로 포커스
+document.addEventListener("click", e => {
+  const b = e.target.closest("button[data-more]"); if (!b) return;
+  const kind = b.dataset.more; LIST_MORE[kind] = true; renderList(kind);
+  $(`#${kind}-table`)?.querySelectorAll("tbody tr")[LIST_LIMIT]?.querySelector("button, input")?.focus();
+});
 $("#dash-fund").addEventListener("change", renderDashboard);
 $("#dash-year").addEventListener("change", renderDashboard);
 $("#btn-reload").addEventListener("click", load);
@@ -1375,11 +1413,20 @@ async function execAction(row, action, btn) {
   } catch (e) { showAlert(e.message, "error"); if (btn) btn.disabled = false; }
 }
 
+// 선택 행 표시만 옮김 (1,500건에서 renderList 는 수백 ms). 새 행을 표에서 못 찾을 때만 다시 그림
+function markExecRow(prev, next) {
+  const t = $("#exec-table"), find = r => r == null ? null : t.querySelector(`tbody tr[data-row="${r}"]`);
+  const n = find(next);
+  if (next != null && !n) { renderList("exec"); return; }
+  find(prev)?.classList.remove("selected"); n?.classList.add("selected");
+  const wrap = t.closest(".table-wrap"); if (wrap) wrap.classList.toggle("scrollable", t.scrollWidth > wrap.clientWidth + 4);  // 열 접기로 폭이 바뀜
+}
 function openExecDrawer(row) {
+  const prev = XD.row;
   XD.row = row; XD.evid = null;
   $("#ai-drawer").hidden = true;
   $("#exec-drawer").hidden = false; document.body.classList.add("drawer-open");
-  renderList("exec");
+  markExecRow(prev, row);
   renderExecDrawer(true);
   $("#xd-close").focus();
 }

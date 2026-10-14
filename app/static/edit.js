@@ -74,7 +74,7 @@ function tabTarget(ri, ci, back) {
 }
 function leaveGrid(back) {
   if (back) { $("#edit-all")?.focus(); return; }
-  const save = $("#edit-save"); (save.disabled ? $("#edit-cancel") : save).focus();
+  const save = $("#edit-save"); (save.disabled ? $("#edit-close") : save).focus();  // 저장할 것이 없으면 닫기(X)로
 }
 function tabMove(back) { const [ri, ci] = ED.focus; const t = tabTarget(ri, ci, back); if (t) focusCell(t[0], t[1]); else leaveGrid(back); }
 
@@ -346,7 +346,6 @@ async function closeEditMode() {
   if ((ch.updates.length || ch.creates.length || ch.deletes.length) && !await confirmDlg({ title: "편집 취소", body: "저장하지 않은 변경을 버리고 닫습니다.", verb: "버리고 닫기", danger: true })) return;
   $("#dlg-edit").close(); ED.open = false;
 }
-$("#edit-cancel").addEventListener("click", closeEditMode);
 $("#edit-close").addEventListener("click", closeEditMode);
 $("#dlg-edit").addEventListener("cancel", e => { e.preventDefault(); closeEditMode(); });
 $("#edit-add").addEventListener("click", () => { const last = ED.rows.length - 1; focusCell(last, 2); startEdit(last, 2); });

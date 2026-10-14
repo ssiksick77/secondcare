@@ -48,6 +48,7 @@
 </nav>
 
 <main id="main" tabindex="-1">
+  <div class="print-head" id="print-head" aria-hidden="true"></div>
   <div id="alert" class="alert" role="alert" hidden></div>
 
   <!-- 인건비: 계획표 -->
@@ -60,7 +61,7 @@
       <button type="button" class="btn" data-labor="bulk" title="인원·기간·지급처별 배분액으로 여러 달 예정 건을 한 번에 생성">기간 일괄 생성</button>
       <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
     </div>
-    <p class="toolbar-note defs plan-legend"><span class="lg ok">소요 일치</span> <span class="lg short">부족</span> <span class="lg over">초과</span> <span class="lg none">미배정</span> <span class="lg off">재직 아님</span> · 칸을 클릭하면 그 달 배분을 편집합니다.</p>
+    <p class="toolbar-note defs plan-legend"><span class="lg ok">소요 일치</span> <span class="lg short">부족</span> <span class="lg over">초과</span> <span class="lg none">미배정</span> <span class="lg off">재직 아님</span> <span class="lg done">확정 포함</span> · 칸을 클릭하면 그 달 배분을 편집합니다.</p>
     <div class="table-wrap"><table class="grid plan" id="labor-plan"></table></div>
   </section>
 
@@ -139,7 +140,7 @@
       </div>
       <div>
         <h2>거래처별 적립금 잔액</h2>
-        <table class="grid compact" id="dash-deposit"></table>
+        <div class="table-wrap"><table class="grid compact" id="dash-deposit"></table></div>
       </div>
     </div>
     <h2>재원별 · 예산목별 집행 현황</h2>
@@ -257,7 +258,6 @@
     <p id="dlg-error" class="field-error" role="alert" hidden></p>
     <div class="dlg-actions">
       <span class="toolbar-note" id="dlg-keys">Enter: 다음 칸 · Ctrl+Enter: 저장</span>
-      <span style="flex:1"></span>
       <button type="button" class="btn btn-ghost" id="dlg-cancel">취소</button>
       <button type="button" class="btn" id="dlg-save-more" title="저장하고 같은 종류의 다음 건을 바로 입력 (재원·예산목·날짜 유지)">저장 후 계속</button>
       <button type="submit" class="btn btn-primary" id="dlg-save">저장</button>
@@ -321,7 +321,6 @@
     <span class="edit-count" id="edit-count">변경 없음</span>
     <button type="button" class="btn btn-sm" id="edit-add" title="맨 아래 빈 행으로 이동">새 행</button>
     <button type="button" class="btn btn-sm" id="edit-del" title="선택 범위의 행을 삭제 표시/해제">행 삭제 표시</button>
-    <button type="button" class="btn btn-sm" id="edit-cancel">취소</button>
     <button type="button" class="btn btn-sm btn-primary" id="edit-save" disabled>저장</button>
     <button type="button" class="btn btn-sm btn-x" id="edit-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
   </div>
@@ -335,7 +334,7 @@
     <h2 id="confirm-title"></h2>
     <div id="confirm-body" class="confirm-body"></div>
     <label class="fld" id="confirm-input-wrap" hidden><span id="confirm-input-label"></span><input id="confirm-input" type="text"></label>
-    <div class="dlg-actions"><span style="flex:1"></span><button type="button" class="btn" id="confirm-cancel">취소</button><button type="submit" class="btn btn-primary" id="confirm-ok">확인</button></div>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="confirm-cancel">취소</button><button type="submit" class="btn btn-primary" id="confirm-ok">확인</button></div>
   </form>
 </dialog>
 
@@ -346,16 +345,18 @@
     <p id="pay-label" class="dlg-strong"></p>
     <label class="fld">지급일<input type="date" id="pay-date" required></label>
     <p class="toolbar-note" id="pay-note"></p>
-    <div class="dlg-actions"><span style="flex:1"></span><button type="button" class="btn" id="dlg-pay-cancel">취소</button><button type="submit" class="btn btn-primary">확정</button></div>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="dlg-pay-cancel">취소</button><button type="submit" class="btn btn-primary">확정</button></div>
   </form>
 </dialog>
 
 <!-- 인건비: 계획표 셀 편집 -->
 <dialog id="dlg-cell" aria-labelledby="cell-title" class="dlg-cell">
-  <h2 id="cell-title"></h2>
-  <p class="toolbar-note" id="cell-note"></p>
-  <div class="table-wrap"><table class="grid compact" id="cell-table"></table></div>
-  <div class="dlg-actions"><button type="button" class="btn" data-cell="add">이 달 배분 추가</button><span style="flex:1"></span><button type="button" class="btn" data-cell="close">닫기</button></div>
+  <form method="dialog">
+    <h2 id="cell-title"></h2>
+    <p class="toolbar-note" id="cell-note"></p>
+    <div class="table-wrap"><table class="grid compact" id="cell-table"></table></div>
+    <div class="dlg-actions"><button type="button" class="btn" data-cell="add">이 달 배분 추가</button><span class="sp"></span><button type="button" class="btn btn-ghost" data-cell="close">닫기</button></div>
+  </form>
 </dialog>
 
 <!-- 인건비: 기간 일괄 생성 -->
@@ -373,7 +374,7 @@
     <div id="bulk-rows" class="bulk-rows"></div>
     <button type="button" class="btn btn-sm" data-bulk="add">배분 행 추가</button>
     <p class="toolbar-note" id="bulk-preview" style="margin:10px 0 0"></p>
-    <div class="dlg-actions"><span class="toolbar-note">달마다 지급처별 '예정' 건을 만듭니다. 이미 있는 건은 건너뜁니다.</span><span style="flex:1"></span><button type="button" class="btn" data-bulk="cancel">취소</button><button type="submit" class="btn btn-primary" id="bulk-save">생성</button></div>
+    <div class="dlg-actions"><span class="toolbar-note">달마다 지급처별 '예정' 건을 만듭니다. 이미 있는 건은 건너뜁니다.</span><button type="button" class="btn btn-ghost" data-bulk="cancel">취소</button><button type="submit" class="btn btn-primary" id="bulk-save">생성</button></div>
   </form>
 </dialog>
 
@@ -442,7 +443,7 @@
     <p id="settings-msg" class="dlg-ai-msg" aria-live="polite" style="margin:10px 0 0"></p>
     <div class="dlg-actions">
       <button type="button" class="btn" id="s-clear-key">현재 제공자 키 삭제</button>
-      <span style="flex:1"></span>
+      <span class="sp"></span>
       <button type="button" class="btn" id="s-test" title="입력한 값으로 짧은 호출을 보내 확인하고, 성공하면 저장합니다">연결 확인 후 저장</button>
       <button type="button" class="btn btn-ghost" id="s-cancel">닫기</button>
       <button type="submit" class="btn btn-primary" id="s-save" title="AI 설정 저장">AI 설정 저장</button>

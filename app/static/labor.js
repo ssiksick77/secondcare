@@ -176,7 +176,7 @@ function renderLaborPlan() {
       return `<td class="num ${cls}${i === 0 ? " amt" : ""}" data-name="${esc(p["이름"])}" data-month="${m}" tabindex="0" role="button" aria-label="${esc(aria)}" title="${esc(p["이름"])} ${m} · 클릭하여 배분 편집">${rows.length ? fmt(sum) : '<span class="muted">—</span>'}<small>${esc(sub)}</small></td>`;
     }).join("");
     const pp = prepaid(p, y, through);
-    const ppTxt = pp.balance > 0 ? `<span class="muted">선급</span> ${fmt(pp.balance)}` : pp.balance < 0 ? `<span class="warn">미지급</span> ${fmt(-pp.balance)}` : "-";
+    const ppTxt = pp.balance > 0 ? `<span class="muted">선급</span> ${fmt(pp.balance)}` : pp.balance < 0 ? `<span class="neg">미지급</span> ${fmt(-pp.balance)}` : "-";
     return `<tr><td>${esc(p["이름"])}</td><td class="muted">${esc(p["인건비구분"])}</td>${cells}<td class="num amt">${fmt(year)}</td><td class="num">${fmt(done)}</td><td class="num">${fmt(plan)}</td><td class="num" title="${through}까지: 이월 ${fmt(pp.opening)} + 확정지급 ${fmt(pp.paid)} − 발생 ${fmt(pp.accrued)} + 조정 ${fmt(pp.adj)}">${ppTxt}</td></tr>`;
   }).join("");
   const tot = months.map(m => DATA.labor.filter(r => r["귀속월"] === m).reduce((a, r) => a + (r["금액"] || 0), 0));
