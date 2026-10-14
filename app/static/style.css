@@ -541,6 +541,10 @@ body.request-mode:not(.req-admin) #btn-settings, body.request-mode:not(.req-admi
 table.grid th.sel, table.grid td.sel { width: 32px; text-align: center; padding: 0; }
 table.grid .rej, .xd-info .rej { color: var(--alert); }
 #request-table td.tit { min-width: 180px; }
+#request-table th[data-col="구매처"] { width: 84px; }
+.req-sup-info { margin: 0 0 8px; }
+.s-sup-checks { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.fields .s-sup-checks label.chk { min-height: 28px; }
 #order-section { margin-top: 16px; }
 #order-table td .lnk, .xd-info .lnk { border: 0; background: none; padding: 0 2px; font: inherit; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 #order-table td .lnk:hover, .xd-info .lnk:hover { color: var(--ink); }

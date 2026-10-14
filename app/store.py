@@ -72,7 +72,7 @@ EVID_COLS = ["거래번호", "증빙종류", "파일명", "원본파일명", "�
 DEP_TYPES = ["적립", "사용"]
 # 신청 (신청_설계_2026-10-14.md)
 REQUEST_COLS = ["신청번호", "구분", "상태", "신청인", "신청일", "관련과제", "품목", "규격", "단가", "수량", "금액", "사유",
-                "희망일", "온라인코드", "상품코드", "상품링크", "결재인", "결재일", "반려사유", "주문번호", "연결품의번호",
+                "희망일", "온라인코드", "상품코드", "상품링크", "구매처", "결재인", "결재일", "반려사유", "주문번호", "연결품의번호",
                 "첨부폴더", "첨부목록", "상세", "비고"]
 ORDER_COLS = ["주문번호", "주문일", "배송일", "거래처", "주문금액", "결제금액", "적립금사용", "신청번호목록", "비고"]
 RATT_COLS = ["신청번호", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
@@ -83,6 +83,9 @@ REQUEST_LOCKED = ("품의전환", "완료")  # 비고만 수정 가능
 REQUEST_SYSTEM = ["신청번호", "상태", "결재인", "결재일", "반려사유", "주문번호", "연결품의번호", "첨부폴더", "첨부목록"]
 ORDER_VENDOR = "알파몰"
 ORDER_PREFIX = "알파"
+# 소모품 구매처: 목록·이용 불가는 설정(.env)의 REQUEST_SUPPLIERS / REQUEST_SUPPLIERS_OFF (settings.FIELDS 기본값과 같게 유지)
+SUPPLIERS_DEFAULT = "알파몰,드림디포"
+ORDER_PREFIXES = {"알파몰": "알파", "드림디포": "드림"}  # 주문번호 앞자리. 그 밖의 거래처는 이름 앞 두 글자
 BUDGET_HEAD_ROW = 8
 BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS  # A~D + E~M
 
@@ -345,7 +348,7 @@ def _ensure_structure(wb) -> bool:
                                (SHEET_LABOR, LABOR_COLS, (10, 10, 14, 16, 14, 8, 12, 18, 30)),
                                (SHEET_LADJ, LADJ_COLS, (10, 14, 14, 30)),
                                (SHEET_RQ, REQUEST_COLS, (14, 8, 10, 10, 12, 16, 30, 20, 12, 8, 14, 30,
-                                                         12, 14, 14, 30, 10, 12, 24, 18, 18, 30, 30, 20, 24)),
+                                                         12, 14, 14, 30, 12, 10, 12, 24, 18, 18, 30, 30, 20, 24)),
                                (SHEET_ORDER, ORDER_COLS, (18, 12, 12, 14, 14, 14, 10, 40, 24)),
                                (SHEET_RATT, RATT_COLS, (14, 44, 30, 36, 10, 12, 20))):
         if name not in wb.sheetnames:
@@ -570,6 +573,7 @@ def read_all() -> dict:
             "req_status": REQ_STATUS,
             "request_types": REQUEST_TYPES,
             "request_status": REQUEST_STATUS,
+            **supplier_meta(),
             "file": str(XLSX_PATH),
             "mtime": dt.datetime.fromtimestamp(XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"),
             "locked": XLSX_PATH.with_name("~$" + XLSX_PATH.name).exists(),
@@ -702,10 +706,64 @@ def _assign_request_number(wb, ws, rec):
     rec["신청번호"] = f"R-{year}-{mx + 1:03d}"
 
 
+def split_suppliers(v) -> list[str]:
+    """쉼표(또는 、 ， 줄바꿈)로 구분된 구매처 목록 → 공백 제거·중복 제거한 목록."""
+    out: list[str] = []
+    for x in re.split(r"[,，、\n]", str(v or "")):
+        x = x.strip()
+        if x and x not in out:
+            out.append(x)
+    return out
+
+
+def suppliers() -> list[dict]:
+    """[{name, available}] — 설정의 구매처 목록과 '현재 이용 불가' 목록 (서버 재시작 없이 os.environ 기준)."""
+    names = split_suppliers(os.environ.get("REQUEST_SUPPLIERS") or SUPPLIERS_DEFAULT) or split_suppliers(SUPPLIERS_DEFAULT)
+    off = set(split_suppliers(os.environ.get("REQUEST_SUPPLIERS_OFF", "")))
+    return [{"name": n, "available": n not in off} for n in names]
+
+
+def supplier_meta() -> dict:
+    """연구원 화면용 (설정 API 없이 읽음): 구매처 목록·이용 가능 여부·안내 문구."""
+    return {"suppliers": suppliers(), "supplier_note": str(os.environ.get("REQUEST_SUPPLIER_NOTE", "") or "").strip()}
+
+
+def _check_supplier(rec: dict, existing: dict | None = None):
+    """소모품 구매처 검증: 필수 · 목록에 있어야 함 · '현재 이용 불가'면 거부. 수정에서 값이 그대로면 통과 (이용 불가로 바뀐 뒤에도 비고 등 수정 가능)."""
+    if rec.get("구분") != "소모품":
+        rec["구매처"] = ""
+        return
+    if existing is not None and "구매처" not in rec:
+        rec["구매처"] = existing.get("구매처") or ""
+    v = str(rec.get("구매처") or "").strip()
+    rec["구매처"] = v
+    if existing is not None and existing.get("구분") == "소모품" and v == str(existing.get("구매처") or "").strip():
+        return
+    sup = suppliers()
+    names = [x["name"] for x in sup]
+    avail = [x["name"] for x in sup if x["available"]]
+    if not v:
+        raise ValueError(f"소모품은 구매처를 선택하세요 (지금 신청 가능: {', '.join(avail) or '없음'}).")
+    if v not in names:
+        raise ValueError(f"구매처 '{v}' 은(는) 목록에 없습니다. 가능한 값: {', '.join(names)}")
+    if v not in avail:
+        raise ValueError(f"구매처 '{v}' 은(는) 지금 신청할 수 없습니다. 담당자가 설정(톱니) › 신청 · 발주서에서 '{v}'를 '현재 신청 가능'으로 바꿔야 합니다."
+                         + (f" 지금 신청 가능한 구매처: {', '.join(avail)}" if avail else " 지금은 신청 가능한 구매처가 없습니다."))
+
+
+def order_prefix(vendor) -> str:
+    """주문번호 앞자리: 알파몰→알파, 드림디포→드림, 그 밖에는 거래처 이름 앞 두 글자 (한글·영문·숫자만)."""
+    v = str(vendor or "").strip()
+    if v in ORDER_PREFIXES:
+        return ORDER_PREFIXES[v]
+    clean = re.sub(r"[^0-9A-Za-z가-힣]", "", v)
+    return clean[:2] or ORDER_PREFIX
+
+
 def _assign_order_number(wb, ws, rec):
-    """알파-YYYYMMDD-NN (주문일별 일련번호)."""
+    """{앞자리}-YYYYMMDD-NN (거래처·주문일별 일련번호, 예: 알파-20261014-01, 드림-20261014-01)."""
     d = _to_date(rec.get("주문일")) or dt.date.today().isoformat()
-    prefix = f"{ORDER_PREFIX}-{d.replace('-', '')}-"
+    prefix = f"{order_prefix(rec.get('거래처'))}-{d.replace('-', '')}-"
     mx = 0
     seen = [str(r.get("주문번호") or "") for r in _rows(ws, ORDER_COLS)] + list(_number_refs(wb, "주문번호"))
     for v in seen:
@@ -898,6 +956,10 @@ def _validate_request(rec: dict):
         rec[c] = str(rec.get(c) or "").strip()
         if not rec[c]:
             raise ValueError(f"{c}은(는) 필수입니다.")
+    if rec["구분"] != "소모품":
+        rec["구매처"] = ""
+    elif "구매처" in rec:
+        rec["구매처"] = str(rec.get("구매처") or "").strip()
     if not _to_date(rec.get("신청일")):
         rec["신청일"] = dt.date.today().isoformat()
     if rec.get("수량") in (None, ""):
@@ -988,6 +1050,7 @@ def create(kind: str, rec: dict) -> dict:
             if any(_same_key(f["재원코드"], rec[key]) for f in _rows(wb[SHEET_FUND], FUND_COLS)):
                 raise ValueError("재원코드와 같은 지급처코드는 쓸 수 없습니다 (재원은 그대로 지급처로 사용 가능).")
         if kind == "request":
+            _check_supplier(rec)
             _assign_request_number(wb, ws, rec)
         elif key and kind not in ("funds", "tags", "people", "payee"):
             _assign_number(wb, ws, cols, head_row, key, rec)
@@ -1094,9 +1157,10 @@ def _prepare_request_update(wb, existing: dict, rec: dict):
             if c in rec and c != "비고" and c not in REQUEST_SYSTEM and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c)):
                 raise ValueError(f"'{status}' 상태의 신청은 비고만 수정할 수 있습니다 ({c} 변경 불가).")
     if existing.get("주문번호"):
-        for c in ("구분", "단가", "수량", "금액"):
+        for c in ("구분", "단가", "수량", "금액", "구매처"):
             if c in rec and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c)):
                 raise ValueError(f"주문 {existing['주문번호']} 에 묶인 신청이라 {c}을(를) 바꿀 수 없습니다. 주문을 먼저 취소하세요.")
+    _check_supplier(rec, existing)
     for c in REQUEST_SYSTEM:
         rec[c] = existing.get(c)
     if rec["구분"] != "학회" and rec.get("단가") not in (None, "") and _norm_cmp("금액", rec.get("금액")) == _norm_cmp("금액", existing.get("금액")) \
@@ -1663,6 +1727,11 @@ def order_create(rows: list, extra: dict | None = None, expects: list | None = N
                 raise ValueError(f"{q['신청번호']}: '{st}' 상태라 주문할 수 없습니다 (승인된 신청만 가능).")
             if q.get("주문번호"):
                 raise ValueError(f"{q['신청번호']}: 이미 주문 {q['주문번호']} 에 묶여 있습니다.")
+        sups = list(dict.fromkeys(str(q.get("구매처") or "").strip() for q in picked))
+        if len(sups) > 1:
+            detail = ", ".join(f"{q['신청번호']} {str(q.get('구매처') or '').strip() or '구매처 없음'}" for q in picked)
+            raise ValueError(f"구매처가 같은 신청만 한 주문으로 묶을 수 있습니다 ({detail}).")
+        bundle_vendor = sups[0] if sups else ""
         d = _to_date(extra.get("주문일")) or dt.date.today().isoformat()
         if not _valid_date(d):
             raise ValueError(f"주문일 형식이 올바르지 않습니다 (YYYY-MM-DD): {extra.get('주문일')}")
@@ -1671,7 +1740,7 @@ def order_create(rows: list, extra: dict | None = None, expects: list | None = N
         if pay < 0:
             raise ValueError("결제금액은 0 이상이어야 합니다.")
         use = _yes(extra.get("적립금사용"))
-        order = {"주문번호": "", "주문일": d, "배송일": "", "거래처": str(extra.get("거래처") or "").strip() or ORDER_VENDOR,
+        order = {"주문번호": "", "주문일": d, "배송일": "", "거래처": str(extra.get("거래처") or "").strip() or bundle_vendor or ORDER_VENDOR,
                  "주문금액": total, "결제금액": pay, "적립금사용": "Y" if use else "N",
                  "신청번호목록": ", ".join(q["신청번호"] for q in picked), "비고": str(extra.get("비고") or "")}
         ws_o = wb[SHEET_ORDER]
@@ -1748,7 +1817,7 @@ def order_sheet(row: int) -> dict:
         reqs = [q for q in _rows(wb[SHEET_RQ], REQUEST_COLS) if q.get("주문번호") == order["주문번호"]]
         reqs.sort(key=lambda q: listed.index(q["신청번호"]) if q["신청번호"] in listed else len(listed))
         lines = [{"순번": i, **{c: q.get(c) for c in ("온라인코드", "상품코드", "품목", "규격", "수량", "단가", "금액",
-                                                   "신청번호", "신청인", "상품링크", "관련과제")}}
+                                                   "신청번호", "신청인", "상품링크", "관련과제", "구매처")}}
                  for i, q in enumerate(reqs, 1)]
         return {"order": order, "lines": lines, "total": sum(_to_num(x["금액"]) for x in lines)}
 

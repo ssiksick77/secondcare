@@ -134,6 +134,7 @@
       <label>상태 <select data-filter="상태" data-kind="request"><option value="">전체</option><option>신청</option><option>승인</option><option>반려</option><option>품의전환</option><option>완료</option></select></label>
       <label>신청인 <select data-filter="신청인" data-kind="request"><option value="">전체</option></select></label>
       <label>관련과제 <select data-filter="관련과제" data-kind="request"><option value="">전체</option></select></label>
+      <label id="rq-sup-filter" hidden>구매처 <select data-filter="구매처" data-kind="request"><option value="">전체</option></select></label>
       <label>검색 <input type="search" data-filter="q" data-kind="request" placeholder="품목, 규격, 사유, 번호"></label>
       <span class="toolbar-sum" id="request-sum"></span>
       <button type="button" class="btn req-admin-only" data-csv="request" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
@@ -147,9 +148,11 @@
       <button type="button" class="btn btn-sm" data-rq="order" id="rq-order-btn" disabled title="승인된 소모품 신청을 주문 1건으로 묶음">주문 생성</button>
       <button type="button" class="btn btn-sm btn-danger" data-rq="delete" disabled>삭제</button>
       <button type="button" class="btn btn-sm btn-ghost" data-rq="clear" disabled>선택 해제</button>
-      <span class="toolbar-note">체크한 신청에 한꺼번에 적용합니다. 행을 누르면 상세 패널이 열립니다.</span>
+      <span class="toolbar-note warn" id="req-sel-why" aria-live="polite" hidden></span>
+      <span class="toolbar-note" id="req-sel-help">체크한 신청에 한꺼번에 적용합니다. 행을 누르면 상세 패널이 열립니다.</span>
     </div>
     <p class="toolbar-note req-researcher-note">신청을 추가하면 담당자가 승인 또는 반려합니다. 신청 상태일 때만 수정·삭제할 수 있습니다. 행을 누르면 상세 패널(첨부 업로드)이, 두 번 누르면 수정 창이 열립니다.</p>
+    <p class="toolbar-note req-sup-info" id="req-sup-info" hidden></p>
     <div class="table-wrap"><table class="grid clickable" id="request-table"></table></div>
     <section id="order-section" class="req-admin-only" aria-labelledby="order-h" hidden>
       <h2 id="order-h">주문 <span class="muted" style="font-weight:400">(소모품 묶음 · 적립금 사용)</span></h2>
@@ -451,7 +454,7 @@
     <div class="table-wrap"><table class="grid compact" id="order-lines"></table></div>
     <div class="fields" style="margin-top:12px">
       <label for="ord-date">주문일<input type="date" id="ord-date" required></label>
-      <label for="ord-vendor">거래처<input type="text" id="ord-vendor" list="dl-거래처" autocomplete="off"></label>
+      <label for="ord-vendor">거래처 <small>(기본: 신청의 구매처)</small><input type="text" id="ord-vendor" list="dl-거래처" autocomplete="off"></label>
       <label for="ord-pay">결제금액 <small>(비우면 주문금액)</small><input type="text" id="ord-pay" inputmode="numeric" class="num-input" placeholder="0"></label>
       <label class="chk wide" for="ord-dep"><input type="checkbox" id="ord-dep" checked> 적립금 사용으로 기록 (적립금 탭에 거래처 '사용' 1건, 증빙번호 = 주문번호)</label>
       <label for="ord-user">사용자<input type="text" id="ord-user" list="dl-사용자" autocomplete="off"></label>
@@ -498,9 +501,13 @@
       <p class="toolbar-note" style="margin:8px 0 0">버튼을 누르면 바로 적용됩니다(아래 저장 버튼과 무관). 앱이 만든 '증빙관리' 폴더만 접근합니다. 발급 절차: <a href="/readme#drive" target="_blank" rel="noopener">사용 안내 열기</a></p>
     </fieldset>
     <fieldset class="wide s-group" id="s-request" style="margin:0 0 14px">
-      <legend>신청 · 발주서 (소모품 주문 발주서 머리글)</legend>
+      <legend>신청 · 발주서 (소모품 구매처 · 발주서 머리글)</legend>
       <div class="fields">
-        <label for="s-rq-buyer">구매처<input id="s-rq-buyer" name="REQUEST_BUYER" type="text" autocomplete="off" placeholder="예: 의료인공지능센터"></label>
+        <label class="wide" for="s-rq-sup">소모품 구매처 목록 <small>(쉼표로 구분 · 비우면 알파몰, 드림디포)</small><input id="s-rq-sup" name="REQUEST_SUPPLIERS" type="text" autocomplete="off" placeholder="알파몰,드림디포"></label>
+        <div class="wide s-sup-checks" id="s-rq-sup-checks" role="group" aria-label="구매처별 현재 신청 가능 여부"></div>
+        <input type="hidden" id="s-rq-sup-off" name="REQUEST_SUPPLIERS_OFF">
+        <label class="wide" for="s-rq-sup-note">연구원 안내 <small>(소모품 신청 화면에 표시 · 예: 드림디포는 10월 말까지 이용 불가)</small><input id="s-rq-sup-note" name="REQUEST_SUPPLIER_NOTE" type="text" autocomplete="off" maxlength="200"></label>
+        <label for="s-rq-buyer">발주처<input id="s-rq-buyer" name="REQUEST_BUYER" type="text" autocomplete="off" placeholder="예: 의료인공지능센터"></label>
         <label class="mid" for="s-rq-ship">배송지<input id="s-rq-ship" name="REQUEST_SHIP_TO" type="text" autocomplete="off" placeholder="주소 · 호실"></label>
         <label class="wide" for="s-rq-contact">담당자 <small>(이름 · 연락처)</small><input id="s-rq-contact" name="REQUEST_CONTACT" type="text" autocomplete="off"></label>
       </div>

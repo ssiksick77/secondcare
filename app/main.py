@@ -76,9 +76,10 @@ def undo_last(body: dict | None = None):
 
 @app.get("/api/meta")
 def meta():
-    """가벼운 상태 확인: 파일 수정 시각 (다른 창·MCP 변경 감지용)."""
+    """가벼운 상태 확인: 파일 수정 시각 (다른 창·MCP 변경 감지용) + 소모품 구매처 목록·이용 가능 여부·안내 (연구원 화면은 설정 API를 쓰지 않음)."""
     import datetime as _dt
-    return {"mtime": _dt.datetime.fromtimestamp(store.XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"), "write_id": store.last_write_id()}
+    return {"mtime": _dt.datetime.fromtimestamp(store.XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"), "write_id": store.last_write_id(),
+            **store.supplier_meta()}
 
 
 @app.middleware("http")
@@ -200,9 +201,9 @@ def request_action(row: int, body: dict):
 
 @app.get("/api/request/order-sheet/{order_row}")
 def request_order_sheet(order_row: int):
-    """발주서 데이터: {order, lines, total, settings: {구매처, 배송지, 담당자}}"""
+    """발주서 데이터: {order, lines, total, settings: {발주처, 배송지, 담당자}} — 구매처(공급)는 order.거래처"""
     data = store.order_sheet(order_row)
-    data["settings"] = {"구매처": settings.get("REQUEST_BUYER"), "배송지": settings.get("REQUEST_SHIP_TO"),
+    data["settings"] = {"발주처": settings.get("REQUEST_BUYER"), "배송지": settings.get("REQUEST_SHIP_TO"),
                         "담당자": settings.get("REQUEST_CONTACT")}
     return data
 
@@ -342,7 +343,8 @@ def get_settings():
 @app.put("/api/settings")
 def put_settings(body: dict):
     vals = settings.save(body or {})
-    return {"values": vals, "status": {"enabled": ai.enabled(), "model": ai.model(), "provider": ai.provider()}}
+    return {"values": vals, "status": {"enabled": ai.enabled(), "model": ai.model(), "provider": ai.provider()},
+            "request": store.supplier_meta()}
 
 
 @app.post("/api/settings/test")

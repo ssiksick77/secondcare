@@ -18,10 +18,24 @@ FIELDS = {
     "OPENAI_MODEL": ("gpt-4.1", False),
     "OPENAI_REASONING_EFFORT": ("", False),       # 비우면 미전송. 추론 모델(o-시리즈 등)에서만 low/medium/high
     # 신청 화면 발주서 (소모품 주문)
-    "REQUEST_BUYER": ("", False),                  # 구매처 (예: 의료인공지능센터)
+    "REQUEST_BUYER": ("", False),                  # 발주처 = 우리 기관 (예: 의료인공지능센터)
     "REQUEST_SHIP_TO": ("", False),                # 배송지
     "REQUEST_CONTACT": ("", False),                # 담당자 (이름·연락처)
+    # 소모품 구매처 (store.SUPPLIERS_DEFAULT 와 같은 기본값)
+    "REQUEST_SUPPLIERS": ("알파몰,드림디포", False),  # 구매처 목록 (쉼표 구분)
+    "REQUEST_SUPPLIERS_OFF": ("", False),          # 지금 신청할 수 없는 구매처 (쉼표 구분, 목록에 있는 이름만)
+    "REQUEST_SUPPLIER_NOTE": ("", False),          # 연구원 화면 안내 (예: 드림디포는 10월 말까지 이용 불가)
 }
+SUPPLIER_KEYS = ("REQUEST_SUPPLIERS", "REQUEST_SUPPLIERS_OFF")
+
+
+def _split(v) -> list[str]:
+    out: list[str] = []
+    for x in re.split(r"[,，、\n]", str(v or "")):
+        x = x.strip()
+        if x and x not in out:
+            out.append(x)
+    return out
 
 
 def get(key: str) -> str:
@@ -57,6 +71,13 @@ def save(values: dict) -> dict:
         if "\n" in v or "\r" in v:
             raise ValueError(f"{k} 값에 줄바꿈을 넣을 수 없습니다.")
         updates[k] = v
+    if any(k in updates for k in SUPPLIER_KEYS):
+        # 구매처 목록 정리 (비우면 기본값), 이용 불가는 목록에 있는 이름만
+        master = _split(updates.get("REQUEST_SUPPLIERS", get("REQUEST_SUPPLIERS"))) or _split(FIELDS["REQUEST_SUPPLIERS"][0])
+        if "REQUEST_SUPPLIERS" in updates:
+            updates["REQUEST_SUPPLIERS"] = ",".join(master)
+        off = _split(updates.get("REQUEST_SUPPLIERS_OFF", get("REQUEST_SUPPLIERS_OFF")))
+        updates["REQUEST_SUPPLIERS_OFF"] = ",".join(x for x in master if x in off)
 
     seen = set()
     out = []

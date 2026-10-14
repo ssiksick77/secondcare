@@ -245,6 +245,7 @@ function filtered(kind) {
     if (f["지급처"] && r["지급처"] !== f["지급처"]) return false;
     if (f["신청인"] && r["신청인"] !== f["신청인"]) return false;
     if (f["관련과제"] && r["관련과제"] !== f["관련과제"]) return false;
+    if (f["구매처"] && r["구매처"] !== f["구매처"]) return false;
     const d = r["원인발생일"] || r["일자"] || r["지급월"] || r["신청일"] || "";
     if (f.year && d.slice(0, 4) !== f.year) return false;
     if (f.month && d.slice(5, 7) !== f.month) return false;
@@ -1082,7 +1083,7 @@ document.addEventListener("keydown", e => {
 // 다른 창·MCP·엑셀이 장부를 바꿨으면 탭으로 돌아올 때 자동 새로고침 (입력 중인 대화상자가 없을 때만)
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || !DATA || document.querySelector("dialog[open]")) return;
-  try { const m = await api("GET", "/api/meta"); if (m.mtime !== DATA.meta.mtime) { await load(); showAlert("다른 곳에서 바뀐 장부를 다시 불러왔습니다.", "ok"); } } catch { }
+  try { const m = await api("GET", "/api/meta"); if (m.mtime === DATA.meta.mtime && m.suppliers && typeof requestSettingsSaved === "function" && JSON.stringify([m.suppliers, m.supplier_note]) !== JSON.stringify([DATA.meta.suppliers, DATA.meta.supplier_note])) requestSettingsSaved({ suppliers: m.suppliers, supplier_note: m.supplier_note }); if (m.mtime !== DATA.meta.mtime) { await load(); showAlert("다른 곳에서 바뀐 장부를 다시 불러왔습니다.", "ok"); } } catch { }
 });
 
 try { const t = localStorage.getItem("ledger-tab"); if (t && $("#tab-" + t)) switchTab(t); } catch { }
@@ -1317,7 +1318,7 @@ $("#rep-copy").addEventListener("click", async () => {
 aiInit();
 
 // ================= 설정 (관리 패널) =================
-const SET_FIELDS = ["REQUEST_BUYER", "REQUEST_SHIP_TO", "REQUEST_CONTACT", "LEDGER_PROVIDER", "ANTHROPIC_API_KEY", "LEDGER_MODEL", "LEDGER_EFFORT", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENAI_REASONING_EFFORT"];
+const SET_FIELDS = ["REQUEST_SUPPLIERS", "REQUEST_SUPPLIERS_OFF", "REQUEST_SUPPLIER_NOTE", "REQUEST_BUYER", "REQUEST_SHIP_TO", "REQUEST_CONTACT", "LEDGER_PROVIDER", "ANTHROPIC_API_KEY", "LEDGER_MODEL", "LEDGER_EFFORT", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENAI_REASONING_EFFORT"];
 function setMsg(text, warn) { const m = $("#settings-msg"); m.textContent = text; m.classList.toggle("warn", !!warn); }
 function syncProviderGroups() {
   const p = $("#s-provider").value;
@@ -1334,6 +1335,7 @@ async function openSettings() {
       else el.value = v ?? "";
     });
     syncProviderGroups(); setMsg("");
+    if (typeof requestSettingsOpen === "function") requestSettingsOpen();
     refreshDriveStatus();
     $("#dlg-settings").showModal();
   } catch (e) { showAlert("설정을 불러오지 못했습니다: " + e.message, "error"); }
@@ -1347,6 +1349,7 @@ async function saveSettings() {
   const r = await api("PUT", "/api/settings", collectSettings());
   AI = { enabled: r.status.enabled, model: r.status.model, provider: r.status.provider };
   applyAIState();
+  if (r.request && typeof requestSettingsSaved === "function") requestSettingsSaved(r.request, r.values);
   // 비밀 입력칸은 비우고 힌트 갱신
   ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"].forEach(k => { const el = $(`[name=${k}]`); el.value = ""; const h = $(`#${el.id}-hint`); const v = r.values[k]; if (h) h.textContent = v.set ? `(설정됨 ${v.hint})` : "(미설정)"; });
   return r;

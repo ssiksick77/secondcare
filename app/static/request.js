@@ -7,7 +7,7 @@
 Object.assign(IDENT, { request: ["신청번호"], order: ["주문번호"], ratt: ["신청번호", "파일명"] });
 FILTERS.request = {};
 const REQ_LOCKED = ["품의전환", "완료"];  // 비고만 수정 가능, 삭제 불가
-const REQ_ORDER_LOCK = ["구분", "단가", "수량", "금액"];  // 주문에 묶인 신청
+const REQ_ORDER_LOCK = ["구분", "단가", "수량", "금액", "구매처"];  // 주문에 묶인 신청
 const REQ_CONF_KEYS = [["_시작일", "시작일"], ["_종료일", "종료일"], ["_국내외", "국내외"], ["_장소", "장소"], ["_참가자", "참가자"], ["_등록비", "등록비"]];
 const reqExcerpt = (s, n = 24) => { s = String(s ?? "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n) + "…" : s; };
 const rattCount = r => (DATA.ratt || []).filter(a => a["신청번호"] === r["신청번호"]).length;
@@ -18,6 +18,20 @@ const safeUrl = u => /^https?:\/\/\S+$/i.test(String(u ?? "").trim()) ? String(u
 const reqFind = row => (DATA?.request || []).find(x => x._row === row);
 const listLabel = (list, n = 3) => list.slice(0, n).map(r => r["신청번호"]).join(", ") + (list.length > n ? ` 외 ${list.length - n}건` : "");
 function reqDetail(r) { try { const d = JSON.parse(r?.["상세"] || "{}"); return d && typeof d === "object" && !Array.isArray(d) ? d : {}; } catch { return {}; } }
+// 소모품 구매처: 목록·이용 가능 여부·안내는 /api/all meta (설정 › 신청 · 발주서에서 담당자가 관리)
+const reqSuppliers = () => DATA?.meta?.suppliers || [];
+const supOff = name => reqSuppliers().some(x => x.name === name && !x.available);
+const supAvail = () => reqSuppliers().filter(x => x.available).map(x => x.name);
+const supSplit = v => [...new Set(String(v ?? "").split(/[,，、\n]/).map(x => x.trim()).filter(Boolean))];
+const OFF_SUFFIX = " (현재 이용 불가)";
+function supNoteText() {
+  const off = reqSuppliers().filter(x => !x.available).map(x => x.name), note = String(DATA?.meta?.supplier_note || "").trim();
+  const parts = [];
+  if (note) parts.push(note);
+  if (!supAvail().length) parts.push("지금은 신청 가능한 구매처가 없습니다. 담당자에게 문의하세요.");
+  else if (off.length) parts.push(`현재 이용 불가: ${off.join(", ")}`);
+  return parts.join(" · ");
+}
 function numOf(v) { const ev = evalAmount(v); if (ev !== undefined) return ev; const t = String(v ?? "").replace(/[,\s원]/g, ""); return t === "" || isNaN(Number(t)) ? null : Number(t); }
 
 COLS.request = [
@@ -27,6 +41,7 @@ COLS.request = [
   { k: "신청일", t: "date" },
   { k: "관련과제" },
   { k: "품목", t: "title", subCalc: r => r["규격"] || reqExcerpt(r["사유"], 40) },
+  { k: "구매처", get hide() { return reqType() !== "소모품"; } },  // 소모품 탭에서만 표시
   { k: "수량", t: "num" },
   { k: "금액", t: "num", amt: true },
   { k: "첨부", t: "num", calc: rattCount, title: "첨부 파일 수" },
@@ -60,6 +75,7 @@ const REQUEST_FORMS = {
       { k: "_참가자", type: "text", label: "참가자", dep: "학회", hint: "쉼표로 구분" },
       { k: "_등록비", type: "num", label: "등록비", dep: "학회" },
       { k: "사유", type: "text", cls: "wide", hint: "용도·필요한 이유" },
+      { k: "구매처", type: "select", opts: isReqAdmin() ? reqSuppliers().map(x => x.name) : supAvail(), req: true, dep: "소모품", hint: "주문할 쇼핑몰" },
       { k: "온라인코드", type: "text", dep: "소모품" },
       { k: "상품코드", type: "text", dep: "소모품" },
       { k: "상품링크", type: "text", dep: "소모품", hint: "https://…" },
@@ -70,7 +86,8 @@ const REQUEST_FORMS = {
 function requestDefaults(kind) {
   if (kind !== "request") return {};
   let name = ""; try { name = localStorage.getItem("request-name") || ""; } catch { }
-  return { 구분: reqType(), 신청일: today(), 신청인: name, 수량: 1, _국내외: "국내", 관련과제: FILTERS.request["관련과제"] || "" };
+  const av = supAvail();
+  return { 구분: reqType(), 신청일: today(), 신청인: name, 수량: 1, _국내외: "국내", 관련과제: FILTERS.request["관련과제"] || "", 구매처: av.length === 1 ? av[0] : (FILTERS.request["구매처"] && av.includes(FILTERS.request["구매처"]) ? FILTERS.request["구매처"] : "") };
 }
 
 // ---------- 화면 전환 · 담당자/연구원 ----------
@@ -79,6 +96,7 @@ function switchReqTab(t, render = true) {
   $$("#request-tabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rtype === t)));
   $("#rpanel").setAttribute("aria-labelledby", "rtab-" + t);
   FILTERS.request["구분"] = t; LIST_MORE.request = false; REQSEL.clear();
+  if (t !== "소모품" && FILTERS.request["구매처"]) { FILTERS.request["구매처"] = ""; const fs = $("#rq-sup-filter select"); if (fs) fs.value = ""; }
   closeReqDrawer();
   try { localStorage.setItem("ledger-rtab", t); } catch { }
   if (render && DATA) renderRequest();
@@ -109,6 +127,8 @@ function fillRequestSelects() {
   const names = uniq("신청인"), tasks = uniq("관련과제");
   $$("select[data-filter='신청인'][data-kind=request]").forEach(sel => setOptions(sel, ["", ...names], ["전체", ...names]));
   $$("select[data-filter='관련과제'][data-kind=request]").forEach(sel => setOptions(sel, ["", ...tasks], ["전체", ...tasks]));
+  const sups = [...new Set([...reqSuppliers().map(x => x.name), ...uniq("구매처")])];
+  $$("select[data-filter='구매처'][data-kind=request]").forEach(sel => { setOptions(sel, ["", ...sups], ["전체", ...sups]); FILTERS.request["구매처"] = sel.value; });
   const dl = (id, html) => { let el = $("#" + id); if (!el) { el = document.createElement("datalist"); el.id = id; document.body.appendChild(el); } el.innerHTML = html; };
   const people = [...new Set([...names, ...(DATA.people || []).map(p => p["이름"])])].sort((a, b) => a.localeCompare(b, "ko"));
   dl("dl-신청인", people.map(v => `<option value="${esc(v)}">`).join(""));
@@ -123,6 +143,10 @@ function renderRequest() {
   renderOrders();
   updateReqTabCounts();
   $("#rq-order-btn").hidden = reqType() !== "소모품";
+  $("#rq-sup-filter").hidden = reqType() !== "소모품";
+  const info = $("#req-sup-info"), txt = reqType() === "소모품" ? supNoteText() : "";
+  info.hidden = !txt;
+  info.innerHTML = txt ? `<b>구매처 안내</b> ${esc(txt)}` : "";
   if (RD.row != null && !$("#req-drawer").hidden) renderReqDrawer(false);
 }
 function updateReqTabCounts() {
@@ -151,6 +175,7 @@ const canReject = r => (r["상태"] === "신청" || r["상태"] === "승인") &&
 const canConvert = r => r["상태"] === "승인" && !r["연결품의번호"];
 const canOrder = r => r["구분"] === "소모품" && r["상태"] === "승인" && !r["주문번호"] && !r["연결품의번호"];
 const canDelete = r => !reqLocked(r) && !r["주문번호"];
+const SUP_MIXED = "구매처가 같은 신청만 한 주문으로 묶을 수 있습니다";
 function updateSelBar() {
   const list = selRows(), n = list.length;
   $("#req-sel-n").textContent = n ? `${n}건 선택 · ${fmt(list.reduce((a, r) => a + (r["금액"] || 0), 0))}원` : "선택 없음";
@@ -158,7 +183,10 @@ function updateSelBar() {
   set("approve", list.some(canApprove), "신청·반려 상태의 선택 건을 승인");
   set("reject", list.some(canReject), "신청·승인 상태의 선택 건을 반려 (사유 입력)");
   set("convert", n > 0 && list.every(canConvert), n && !list.every(canConvert) ? "승인된 신청만 품의로 전환할 수 있습니다" : "선택한 승인 건을 품의 1건으로");
-  set("order", n > 0 && list.every(canOrder), n && !list.every(canOrder) ? "주문 전 승인된 소모품 신청만 묶을 수 있습니다" : "선택한 승인 소모품을 주문 1건으로 묶음");
+  const mixed = new Set(list.map(r => r["구매처"] || "")).size > 1;
+  const orderWhy = n && !list.every(canOrder) ? "주문 전 승인된 소모품 신청만 묶을 수 있습니다" : mixed ? SUP_MIXED : "";
+  set("order", n > 0 && !orderWhy, orderWhy || "선택한 승인 소모품을 주문 1건으로 묶음");
+  const why = $("#req-sel-why"); why.textContent = mixed && reqType() === "소모품" ? SUP_MIXED : ""; why.hidden = !why.textContent; $("#req-sel-help").hidden = !why.hidden;
   set("delete", n > 0 && list.every(canDelete), n && !list.every(canDelete) ? "품의전환·완료·주문에 묶인 신청은 삭제할 수 없습니다" : "선택한 신청 삭제");
   set("clear", n > 0);
   const all = $("#request-sel-all"); if (all) { const boxes = $$("#request-table input[data-rsel]"); all.checked = boxes.length > 0 && boxes.every(b => b.checked); all.indeterminate = boxes.some(b => b.checked) && !all.checked; }
@@ -215,6 +243,13 @@ function requestFormAfterOpen(row) {
     calc.innerHTML = `<button type="button" class="btn btn-sm" id="req-calc-btn" aria-haspopup="dialog">여비 계산기</button><span class="toolbar-note">항공·숙박·일비를 계산해 금액과 상세에 채웁니다</span>`;
     amt.after(calc);
   }
+  const sup = F("구매처");
+  if (sup) {  // 이용 불가 구매처 표시 (담당자 목록, 또는 기존 값) + 안내 문구
+    [...sup.options].forEach(o => { if (o.value && supOff(o.value)) o.textContent = o.value + OFF_SUFFIX; });
+    const p = document.createElement("p"); p.className = "wide toolbar-note req-sup-note"; p.id = "req-sup-note";
+    p.textContent = supNoteText(); p.hidden = !p.textContent;
+    sup.closest("label").after(p);
+  }
   const det = reqDetail(rec);
   if (rec) REQ_CONF_KEYS.forEach(([k, dk]) => { const el = F(k); if (el && det[dk] != null && det[dk] !== "") el.value = el.classList.contains("num-input") ? fmt(det[dk]) : det[dk]; });
   const lock = (pred, note) => {
@@ -227,7 +262,7 @@ function requestFormAfterOpen(row) {
     const p = $("#dlg-error"); p.textContent = note; p.hidden = false; p.classList.add("info");
   };
   if (rec && reqLocked(rec)) { lock(k => k !== "비고", `'${rec["상태"]}' 상태(연결 품의 ${rec["연결품의번호"] || "-"})라 비고만 바꿀 수 있습니다.`); $("#req-calc-btn")?.setAttribute("disabled", ""); F("비고")?.focus(); }
-  else if (rec && rec["주문번호"]) lock(k => REQ_ORDER_LOCK.includes(k), `주문 ${rec["주문번호"]} 에 묶여 구분·단가·수량·금액은 바꿀 수 없습니다. 주문을 취소하면 바꿀 수 있습니다.`);
+  else if (rec && rec["주문번호"]) lock(k => REQ_ORDER_LOCK.includes(k), `주문 ${rec["주문번호"]} 에 묶여 구분·단가·수량·금액·구매처는 바꿀 수 없습니다. 주문을 취소하면 바꿀 수 있습니다.`);
   if (det["합계"] != null && F("금액") && !F("금액").readOnly) { F("금액").readOnly = true; F("금액").classList.add("locked"); F("금액").title = "여비 계산기 합계 (계산기에서 바꾸세요)"; }
   requestFormSync();
   $("#dlg").dataset.initial = formSnapshot();
@@ -238,6 +273,7 @@ function requestFormSync() {
   const lab = F("품목")?.closest("label")?.querySelector(".lab");
   if (lab?.firstChild?.nodeType === 3) lab.firstChild.nodeValue = t === "학회" ? "학회명" : "품목";
   const calc = $("#req-calc-row"); if (calc) calc.hidden = t !== "학회";
+  const sn = $("#req-sup-note"); if (sn) sn.hidden = t !== "소모품" || !sn.textContent;
   updateAmtPreview();
 }
 function updateAmtPreview() {
@@ -269,7 +305,7 @@ function requestPrepare(rec, row) {
     if (out["수량"] === "" || out["수량"] == null) out["수량"] = 1;
     if (out["단가"] !== "" && out["단가"] != null) out["금액"] = Math.round(Number(out["단가"]) * Number(out["수량"]));
   }
-  if (t !== "소모품") { out["온라인코드"] = ""; out["상품코드"] = ""; out["상품링크"] = ""; }
+  if (t !== "소모품") { out["온라인코드"] = ""; out["상품코드"] = ""; out["상품링크"] = ""; out["구매처"] = ""; }
   if (out["상품링크"] && !safeUrl(out["상품링크"])) return "상품링크는 http:// 또는 https:// 로 시작하는 주소여야 합니다.";
   if (cur?.["주문번호"]) REQ_ORDER_LOCK.forEach(k => { out[k] = cur[k]; });
   if (Number(out["수량"]) <= 0) return "수량은 0보다 커야 합니다.";
@@ -412,7 +448,7 @@ async function renderReqDrawer(fetchItems) {
       kv("참가자", t(det["참가자"])), kv("등록비", det["등록비"] !== "" && det["등록비"] != null ? fmt(det["등록비"]) + "원" : ""), kv("금액", `<b>${fmt(r["금액"])}원</b>`),
     ] : [kv("규격", t(r["규격"])), kv("단가", r["단가"] != null && r["단가"] !== "" ? fmt(r["단가"]) + "원" : ""), kv("수량", fmt(r["수량"])), kv("금액", `<b>${fmt(r["금액"])}원</b>`)]),
     kv("사유", t(r["사유"]), " multi"), kv("희망일", t(r["희망일"])),
-    ...(r["구분"] === "소모품" ? [kv("온라인코드", t(r["온라인코드"])), kv("상품코드", t(r["상품코드"])),
+    ...(r["구분"] === "소모품" ? [kv("구매처", r["구매처"] ? `${t(r["구매처"])}${supOff(r["구매처"]) ? ' <span class="muted">(현재 이용 불가)</span>' : ""}` : ""), kv("온라인코드", t(r["온라인코드"])), kv("상품코드", t(r["상품코드"])),
       kv("상품링크", link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(reqExcerpt(link, 48))}</a>` : t(r["상품링크"]))] : []),
     kv("주문", order ? `${t(order["주문번호"])} <span class="muted">주문 ${t(mmdd(order["주문일"]))}${order["배송일"] ? ` · 배송 ${t(mmdd(order["배송일"]))}` : " · 배송 전"}</span>` : t(r["주문번호"])),
     kv("연결 품의", r["연결품의번호"] ? `${t(r["연결품의번호"])}${admin ? ` <button type="button" class="lnk" data-rd="gotoreq">품의내역에서 보기</button>` : ""}` : ""),
@@ -519,10 +555,12 @@ const depBalance = vendor => DATA.deposit.filter(x => x["거래처"] === vendor)
 function openOrderDialog(list) {
   const bad = list.filter(r => !canOrder(r));
   if (!list.length || bad.length) { showAlert(`주문 전인 승인된 소모품 신청만 주문으로 묶을 수 있습니다${bad.length ? ": " + listLabel(bad) : ""}.`, "warn"); return; }
+  const sups = [...new Set(list.map(r => r["구매처"] || ""))];
+  if (sups.length > 1) { showAlert(`${SUP_MIXED}: ${list.map(r => `${r["신청번호"]} ${r["구매처"] || "구매처 없음"}`).join(", ")}`, "warn"); return; }
   ORDER_ROWS = list.map(r => r._row);
   const sum = list.reduce((a, r) => a + (r["금액"] || 0), 0);
   $("#order-lines").innerHTML = `<thead><tr><th>신청번호</th><th>품목</th><th>온라인코드</th><th class="num">수량</th><th class="num amt">금액</th><th>신청인</th></tr></thead><tbody>${list.map(r => `<tr><td>${esc(r["신청번호"])}</td><td>${esc(r["품목"])}${r["규격"] ? ` <span class="muted">${esc(r["규격"])}</span>` : ""}</td><td>${esc(r["온라인코드"] || "")}</td><td class="num">${fmt(r["수량"])}</td><td class="num amt">${fmt(r["금액"])}</td><td>${esc(r["신청인"])}</td></tr>`).join("")}</tbody><tfoot><tr class="total"><td>합계 ${list.length}건</td><td></td><td></td><td class="num">${fmt(list.reduce((a, r) => a + (Number(r["수량"]) || 0), 0))}</td><td class="num amt">${fmt(sum)}</td><td></td></tr></tfoot>`;
-  let vendor = "알파몰"; try { vendor = localStorage.getItem("request-order-vendor") || vendor; } catch { }
+  let vendor = sups[0] || "알파몰"; if (!sups[0]) try { vendor = localStorage.getItem("request-order-vendor") || vendor; } catch { }  // 기본: 신청의 구매처
   $("#ord-date").value = today(); $("#ord-vendor").value = vendor; $("#ord-pay").value = fmt(sum); $("#ord-dep").checked = true; $("#ord-user").value = ""; $("#ord-memo").value = "";
   $("#dlg-order").dataset.sum = sum;
   updateOrderNote();
@@ -602,7 +640,7 @@ function sheetHtml(d, withIds) {
   const qty = d.lines.reduce((a, l) => a + (Number(l["수량"]) || 0), 0);
   return `<header class="os-head"><h2${withIds ? ' id="sheet-title"' : ""}>구매발주서</h2><div class="os-no">주문번호 <b>${esc(o["주문번호"])}</b> · 주문일 ${esc(o["주문일"])}</div></header>
     <table class="os-meta"><tbody>
-      <tr><th scope="row">구매처</th><td>${v(s["구매처"])}</td><th scope="row">거래처</th><td>${v(o["거래처"])}</td></tr>
+      <tr><th scope="row">발주처</th><td>${v(s["발주처"])}</td><th scope="row">구매처</th><td>${v(o["거래처"])}</td></tr>
       <tr><th scope="row">배송지</th><td colspan="3">${v(s["배송지"])}</td></tr>
       <tr><th scope="row">담당자</th><td colspan="3">${v(s["담당자"])}</td></tr>
     </tbody></table>
@@ -616,7 +654,7 @@ async function openOrderSheet(row) {
   try {
     SHEET = await api("GET", `/api/request/order-sheet/${row}`);
     $("#order-sheet").innerHTML = sheetHtml(SHEET, true);
-    const s = SHEET.settings || {}, miss = ["구매처", "배송지", "담당자"].filter(k => !s[k]);
+    const s = SHEET.settings || {}, miss = ["발주처", "배송지", "담당자"].filter(k => !s[k]);
     $("#sheet-note").hidden = !miss.length;
     $("#sheet-note").textContent = miss.length ? `${miss.join("·")}이(가) 비어 있습니다. 설정(톱니) › '신청 · 발주서'에서 입력하면 발주서 머리글에 들어갑니다.` : "";
     $("#dlg-order-sheet").showModal(); $("#sheet-print").focus();
@@ -630,6 +668,24 @@ $("#sheet-print").addEventListener("click", () => {
   window.print();
 });
 window.addEventListener("afterprint", () => { if (!document.body.classList.contains("printing-sheet")) return; document.body.classList.remove("printing-sheet"); $("#print-sheet").innerHTML = ""; });
+
+// ---------- 설정 › 신청 · 발주서: 구매처 목록 · 현재 신청 가능 · 안내 (app.js 설정 열기/저장에서 호출) ----------
+function renderSupChecks() {
+  const box = $("#s-rq-sup-checks"); if (!box) return;
+  const names = supSplit($("#s-rq-sup").value || "알파몰,드림디포"), off = new Set(supSplit($("#s-rq-sup-off").value));
+  box.innerHTML = names.map((n, i) => `<label class="chk" for="s-rq-sup-${i}"><input type="checkbox" id="s-rq-sup-${i}" data-sup="${esc(n)}"${off.has(n) ? "" : " checked"}> ${esc(n)} 현재 신청 가능</label>`).join("");
+  syncSupOff();
+}
+function syncSupOff() { $("#s-rq-sup-off").value = $$("#s-rq-sup-checks input[data-sup]").filter(c => !c.checked).map(c => c.dataset.sup).join(","); }
+function requestSettingsOpen() { renderSupChecks(); }
+function requestSettingsSaved(meta, values) {
+  if (values) { $("#s-rq-sup").value = values.REQUEST_SUPPLIERS ?? ""; $("#s-rq-sup-off").value = values.REQUEST_SUPPLIERS_OFF ?? ""; renderSupChecks(); }
+  if (!DATA?.meta) return;
+  Object.assign(DATA.meta, meta);
+  fillRequestSelects(); renderRequest();
+}
+$("#s-rq-sup").addEventListener("input", renderSupChecks);
+$("#s-rq-sup-checks").addEventListener("change", syncSupOff);
 
 // ---------- 시작 ----------
 try { const t = localStorage.getItem("ledger-rtab"); if (t && $(`#request-tabs [data-rtype="${t}"]`)) switchReqTab(t, false); else FILTERS.request["구분"] = reqType(); } catch { FILTERS.request["구분"] = reqType(); }
