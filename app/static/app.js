@@ -904,6 +904,16 @@ document.addEventListener("click", e => {
   else if (b.dataset.act === "toexec") toExec(row);
 });
 
+// 행 더블클릭 → 수정 창 (표 안 버튼·입력·링크 제외, 확정된 인건비 건 제외)
+document.addEventListener("dblclick", e => {
+  if (e.target.closest("button, a, input, select, label")) return;
+  const tr = e.target.closest("table.grid tbody tr[data-kind][data-row]"); if (!tr) return;
+  const kind = tr.dataset.kind, row = Number(tr.dataset.row);
+  if (!COLS[kind]) return;
+  if (kind === "labor") { const r = DATA.labor.find(x => x._row === row); if (r && r["상태"] === "확정") { showAlert("확정된 지급 건은 '확정 취소' 뒤에 수정할 수 있습니다.", "warn"); return; } }
+  window.getSelection()?.removeAllRanges();
+  openForm(kind, row);
+});
 $$("[data-filter]").forEach(el => el.addEventListener("input", () => {
   const k = el.dataset.kind;
   FILTERS[k][el.dataset.filter] = el.type === "checkbox" ? el.checked : el.value;
