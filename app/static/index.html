@@ -169,6 +169,7 @@
       <label class="chk" title="관리번호·세세목·사용자·비고 열 표시"><input type="checkbox" id="exec-cols-all"> 상세 열</label>
       <span class="toolbar-sum" id="exec-sum"></span>
       <button type="button" class="btn" data-csv="exec" title="현재 필터의 목록을 CSV로 저장">CSV</button>
+      <button type="button" class="btn" id="btn-edit-mode" title="현재 필터의 집행을 팝업 격자에서 엑셀처럼 한꺼번에 편집">편집 모드</button>
       <button type="button" class="btn btn-primary" data-add="exec">집행 추가</button>
     </div>
     <p class="toolbar-note" style="margin:0 0 6px">행을 클릭하면 오른쪽에 상세·증빙 패널이 열립니다.</p>
@@ -309,6 +310,22 @@
   </form>
 </aside>
 
+<!-- 집행내역 편집 모드 (팝업 격자) -->
+<dialog id="dlg-edit" class="dlg-edit" aria-labelledby="edit-title">
+  <div class="edit-head">
+    <h2 id="edit-title">집행내역 편집 모드</h2>
+    <span class="toolbar-note" id="edit-note"></span>
+    <span class="edit-count" id="edit-count">변경 없음</span>
+    <button type="button" class="btn btn-sm" id="edit-add" title="맨 아래 빈 행으로 이동">새 행</button>
+    <button type="button" class="btn btn-sm" id="edit-del" title="선택 범위의 행을 삭제 표시/해제">행 삭제 표시</button>
+    <button type="button" class="btn btn-sm" id="edit-cancel">취소</button>
+    <button type="button" class="btn btn-sm btn-primary" id="edit-save" disabled>저장</button>
+    <button type="button" class="btn btn-sm btn-x" id="edit-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="edit-wrap"><table class="grid edit" id="edit-grid"></table></div>
+  <p class="toolbar-note edit-legend"><span class="lg chg">수정됨</span> <span class="lg new">새 행</span> <span class="lg del">삭제 표시</span> <span class="lg ro">편집 불가(자동·연결 행 잠금)</span> <span class="lg err">오류</span> · 저장은 전부 성공 또는 전부 취소이며, 저장 직후 토스트의 '되돌리기'로 복구할 수 있습니다.</p>
+</dialog>
+
 <!-- 공용 확인 대화상자 (네이티브 confirm 대체) -->
 <dialog id="dlg-confirm" aria-labelledby="confirm-title" class="dlg-small">
   <form id="dlg-confirm-form" method="dialog" novalidate>
@@ -438,5 +455,6 @@
 
 <script src="/static/app.js"></script>
 <script src="/static/labor.js"></script>
+<script src="/static/edit.js"></script>
 </body>
 </html>

@@ -462,3 +462,32 @@ table.grid td.tit .t .origin { margin-left: 6px; vertical-align: 0; }
 /* 세로 스크롤바 유무와 무관하게 표 폭 고정 (scrollbar-gutter) · 상태 칸 두 줄이 36px 안에 들어오도록 */
 table.grid td.st-cell .t { min-height: 18px; }
 table.grid td.st-cell .s { line-height: 1.15; }
+
+/* 편집 모드 팝업 격자 */
+dialog.dlg-edit { width: min(96vw, 1800px); max-width: none; padding: 0; height: 92vh; display: none; flex-direction: column; }
+dialog.dlg-edit[open] { display: flex; }
+.edit-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--ink); flex: none; }
+.edit-head h2 { margin: 0; font-size: 14px; white-space: nowrap; }
+.edit-head .toolbar-note { flex: 1; line-height: 1.4; }
+.edit-count { font-weight: 700; white-space: nowrap; font-size: 12px; }
+.edit-wrap { flex: 1; overflow: auto; background: var(--bg-table); scrollbar-gutter: stable; }
+.edit-legend { margin: 6px 14px 8px; flex: none; }
+.edit-legend .lg { display: inline-block; padding: 0 6px; border: 1px solid var(--rule); border-radius: 2px; margin-right: 2px; font-size: 12px; }
+.edit-legend .lg.chg, table.grid.edit td.chg { background: #FFF6D6; }
+.edit-legend .lg.new, table.grid.edit tr.new td { background: #EEF6EE; }
+.edit-legend .lg.del, table.grid.edit tr.del td { background: var(--bg-head); color: var(--ink-3); text-decoration: line-through; }
+.edit-legend .lg.ro, table.grid.edit td.ro { background: var(--bg-head); color: var(--ink-2); }
+.edit-legend .lg.err, table.grid.edit tr.err td:first-child { box-shadow: inset 3px 0 0 var(--alert); }
+table.grid.edit { table-layout: fixed; width: max-content; min-width: 100%; font-size: 12.5px; }
+table.grid.edit th, table.grid.edit td { height: 26px; padding: 0 6px; border-right: 1px solid var(--rule-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.grid.edit th { position: sticky; top: 0; z-index: 2; }
+table.grid.edit th.sel, table.grid.edit td.sel { width: 32px; text-align: center; padding: 0; }
+table.grid.edit td[data-ci] { cursor: cell; user-select: none; }
+table.grid.edit td.rng { background: var(--primary-bg); }
+table.grid.edit td.cur { outline: 2px solid var(--primary); outline-offset: -2px; }
+table.grid.edit td.editing { padding: 0; overflow: visible; }
+table.grid.edit td .cell-input { width: 100%; height: 26px; min-height: 0; border: 2px solid var(--primary); border-radius: 0; padding: 0 4px; font: inherit; background: #fff; box-sizing: border-box; }
+table.grid.edit td.num .cell-input { text-align: right; }
+table.grid.edit td.ro.cur { outline-color: var(--ink-3); }
+
+.edit-legend .lg.chg, table.grid.edit td.chg, .edit-legend .lg.new, table.grid.edit tr.new td { color: var(--ink); }

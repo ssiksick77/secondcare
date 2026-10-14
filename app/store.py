@@ -1064,6 +1064,79 @@ def labor_bulk(rows: list[dict], skip_dup: bool = False) -> dict:
         return {"created": len(created), "skipped": skipped}
 
 
+def exec_batch(creates: list[dict], updates: list[dict], deletes: list[dict]) -> dict:
+    """집행내역 편집 모드 일괄 저장: 전부 검증한 뒤 한 번에 쓴다 (하나라도 오류면 아무것도 저장하지 않음).
+    updates: [{row, rec, expect}], deletes: [{row, expect}], creates: [rec]. 오류 메시지는 '행 <거래번호|새 행 N>: ...' 형식."""
+    if len(creates) + len(updates) + len(deletes) == 0:
+        raise ValueError("저장할 변경이 없습니다.")
+    if len(creates) + len(updates) + len(deletes) > 2000:
+        raise ValueError("한 번에 2,000건까지만 저장할 수 있습니다.")
+    with _write_session() as wb:
+        ws = wb[SHEET_EXEC]
+        cur = _rows(ws, EXEC_COLS)
+        by_row = {r["_row"]: r for r in cur}
+        linked = _labor_refs(wb) | _number_refs(wb, "거래번호")
+        evid_nos = {e["거래번호"] for e in _rows(wb[SHEET_EVID], EVID_COLS)}
+        prepared_u, prepared_d, prepared_c = [], [], []
+        for u in updates:
+            ex = by_row.get(int(u.get("row", 0)))
+            if ex is None:
+                raise NotFound(f"행 {u.get('row')}: 행을 찾을 수 없습니다. 편집 모드를 닫고 새로고침하세요.")
+            tag = f"행 {ex['거래번호']}"
+            try:
+                _check_expect("exec", ex, u.get("expect"))
+                rec = {c: ex.get(c) for c in EXEC_COLS}
+                rec.update({c: v for c, v in (u.get("rec") or {}).items() if c in EXEC_COLS})
+                rec["거래번호"] = ex["거래번호"]
+                rec["상태"] = "보완" if str(rec.get("상태") or "") == "보완" else ex.get("상태")
+                _validate("exec", rec)
+                if ex["거래번호"] in linked:
+                    for c in LINKED_LOCKED:
+                        if _cell_out(c, rec.get(c)) != ex.get(c):
+                            raise ValueError(f"인건비·적립금과 연결된 집행이라 {c}은(는) 바꿀 수 없습니다.")
+                if str(rec.get("태그") or "").strip() != str(ex.get("태그") or ""):
+                    _validate_tag(rec, wb)
+            except (ValueError, NotFound) as e:
+                raise type(e)(f"{tag}: {e}") from None
+            prepared_u.append((ex["_row"], rec))
+        for d in deletes:
+            ex = by_row.get(int(d.get("row", 0)))
+            if ex is None:
+                raise NotFound(f"행 {d.get('row')}: 행을 찾을 수 없습니다. 편집 모드를 닫고 새로고침하세요.")
+            tag = f"행 {ex['거래번호']}"
+            try:
+                _check_expect("exec", ex, d.get("expect"))
+                if ex["거래번호"] in linked:
+                    raise ValueError("인건비·적립금과 연결된 집행은 원본 화면에서 처리하세요.")
+                if ex["거래번호"] in evid_nos:
+                    raise ValueError("증빙이 등록된 집행입니다. 증빙을 먼저 지우세요.")
+            except (ValueError, NotFound) as e:
+                raise type(e)(f"{tag}: {e}") from None
+            prepared_d.append(ex["_row"])
+        for i, c in enumerate(creates, 1):
+            rec = {col: "" for col in EXEC_COLS}
+            rec.update({k: v for k, v in (c or {}).items() if k in EXEC_COLS})
+            rec["거래번호"] = ""; rec["증빙폴더"] = ""; rec["증빙목록"] = ""
+            try:
+                _validate("exec", rec)
+                _validate_tag(rec, wb)
+            except ValueError as e:
+                raise ValueError(f"새 행 {i}: {e}") from None
+            prepared_c.append(rec)
+        # 적용: 수정 → 추가(번호 부여) → 삭제(아래 행부터)
+        for row, rec in prepared_u:
+            _write_row(ws, EXEC_COLS, row, rec)
+        numbers = []
+        for rec in prepared_c:
+            _assign_number(wb, ws, EXEC_COLS, 1, "거래번호", rec)
+            _write_row(ws, EXEC_COLS, _next_row(ws), rec)
+            numbers.append(rec["거래번호"])
+        for row in sorted(prepared_d, reverse=True):
+            _delete_row(ws, row)
+        _save(wb)
+        return {"updated": len(prepared_u), "created": numbers, "deleted": len(prepared_d)}
+
+
 def _rename_tag(wb, old: str, new: str):
     """태그명 변경 시 집행·품의·적립금의 태그 값을 함께 바꾼다."""
     for sheet in (SHEET_EXEC, SHEET_REQ, SHEET_DEP):
