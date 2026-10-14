@@ -104,7 +104,7 @@ input:disabled, select:disabled, textarea:disabled { background: var(--bg-head);
 .btn-x { width: 28px; height: 28px; min-height: 0; padding: 0; justify-content: center; }
 
 /* ---------- 표 (컬럼너 패드) ---------- */
-.table-wrap { overflow: auto; background: var(--bg-table); border: 1px solid var(--rule); border-top: 1px solid var(--ink); max-height: calc(100vh - 290px); position: relative; }
+.table-wrap { overflow: auto; scrollbar-gutter: stable; background: var(--bg-table); border: 1px solid var(--rule); border-top: 1px solid var(--ink); max-height: calc(100vh - 290px); position: relative; }
 .table-wrap.scrollable::after { content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 16px; pointer-events: none; background: linear-gradient(to right, rgba(250,251,252,0), rgba(30,33,36,.10)); }
 table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
 table.grid th, table.grid td { border-bottom: 1px solid var(--rule); padding: 0 6px; height: var(--row); text-align: left; vertical-align: middle; white-space: nowrap; line-height: 1.3; }
@@ -415,8 +415,8 @@ body.drawer-open #exec-table [data-col="결의일"], body.drawer-open #exec-tabl
 
 /* 상태 열: 배지 + 다음 단계 체크 버튼 */
 table.grid td.st-cell { white-space: nowrap; }
-table.grid td.st-cell .next { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 8px; padding: 0; border: 1px solid var(--rule); border-radius: 50%; background: #fff; color: var(--ink-3); cursor: pointer; vertical-align: middle; }
-table.grid td.st-cell .next svg { width: 12px; height: 12px; }
+table.grid td.st-cell .next { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 6px; padding: 0; border: 1px solid var(--rule); border-radius: 50%; background: #fff; color: var(--ink-3); cursor: pointer; vertical-align: middle; }
+table.grid td.st-cell .next svg { width: 11px; height: 11px; }
 table.grid td.st-cell .next:hover, table.grid td.st-cell .next:focus-visible { color: #fff; background: var(--primary); border-color: var(--primary); outline: none; }
 
 /* 상태 칸 두 줄: 윗줄 상태+체크, 아랫줄 단계 날짜·보완 링크 */
@@ -458,3 +458,7 @@ table.grid td.tit .t .origin { margin-left: 6px; vertical-align: 0; }
 #exec-table th.actions { width: 112px; }
 #exec-table td { overflow: hidden; text-overflow: ellipsis; }
 #exec-table td.tit { max-width: none; min-width: 0; }
+
+/* 세로 스크롤바 유무와 무관하게 표 폭 고정 (scrollbar-gutter) · 상태 칸 두 줄이 36px 안에 들어오도록 */
+table.grid td.st-cell .t { min-height: 18px; }
+table.grid td.st-cell .s { line-height: 1.15; }
