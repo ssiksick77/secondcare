@@ -265,7 +265,7 @@ function addBulkRow(code = "", amt = "") {
   $("#bulk-rows").appendChild(div);
 }
 function bulkRows() {
-  return $$("#bulk-rows .bulk-row").map(div => ({ code: div.querySelector("select").value, amt: Number(div.querySelector("input").value.replace(/[,\s원]/g, "")) || 0 })).filter(x => x.code || x.amt);
+  return $$("#bulk-rows .bulk-row").map(div => ({ code: div.querySelector("select").value, amt: (v => { const ev = evalAmount(v); return ev != null ? ev : Number(String(v).replace(/[,\s원]/g, "")) || 0; })(div.querySelector("input").value) })).filter(x => x.code || x.amt);
 }
 function updateBulkPreview() {
   const from = $("#bulk-from").value, to = $("#bulk-to").value, name = $("#bulk-name").value;

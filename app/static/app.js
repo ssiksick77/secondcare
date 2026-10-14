@@ -583,7 +583,7 @@ function openForm(kind, row, preset, opts = {}) {
     }
     else if (f.type === "date") input = `<input id="${id}" name="${esc(f.k)}" type="date" value="${esc(v)}"${f.req ? " required" : ""}>`;
     else if (f.type === "month") input = `<input id="${id}" name="${esc(f.k)}" type="month" value="${esc(v)}"${f.req ? " required" : ""}>`;
-    else if (f.type === "num") input = `<input id="${id}" name="${esc(f.k)}" type="text" inputmode="numeric" class="num-input" value="${v === "" || v == null ? "" : fmt(v)}"${f.req ? " required" : ""} placeholder="0">`;
+    else if (f.type === "num") input = `<input id="${id}" name="${esc(f.k)}" type="text" inputmode="numeric" class="num-input" value="${v === "" || v == null ? "" : fmt(v)}"${f.req ? " required" : ""} placeholder="0" title="'=' 로 시작하면 계산식 입력 가능 (예: =12000*3)">`;
     else if (f.type === "datalist") input = `<input id="${id}" name="${esc(f.k)}" type="text" list="dl-${esc(f.list || (f.k === "품의자" ? "사용자" : f.k))}" value="${esc(v)}" autocomplete="off">`;
     else input = `<input id="${id}" name="${esc(f.k)}" type="text" value="${esc(v)}"${f.req ? " required" : ""}>`;
     return `<label class="${f.cls || ""}" for="${id}" data-dep="${esc(f.dep || "")}"><span class="lab">${lab}${f.hint ? ` <small>(${esc(f.hint)})</small>` : ""}</span>${input}</label>`;
@@ -648,7 +648,12 @@ $("#dlg-form").addEventListener("submit", async e => {
     let v = el.value.trim();
     el.removeAttribute("aria-invalid");
     const mark = () => { el.setAttribute("aria-invalid", "true"); firstBad = firstBad || el; };
-    if (f.type === "num") { v = v.replace(/[,\s원]/g, ""); if (v && isNaN(Number(v))) { invalid.push(`${f.label || f.k}(숫자 아님)`); mark(); } v = v === "" ? "" : Number(v); }
+    if (f.type === "num") {
+      const ev = evalAmount(v);
+      if (ev === null) { invalid.push(`${f.label || f.k}(수식 계산 불가)`); mark(); }
+      else if (ev !== undefined) { v = ev; el.value = ev.toLocaleString("ko-KR"); }
+      else { v = v.replace(/[,\s원]/g, ""); if (v && isNaN(Number(v))) { invalid.push(`${f.label || f.k}(숫자 아님)`); mark(); } v = v === "" ? "" : Number(v); }
+    }
     if (f.req === "exec" && recordExec && v === "") { missing.push(f.label || f.k); mark(); }
     if (f.req === true && (v === "" || v == null)) { missing.push(f.label || f.k); mark(); }
     rec[f.k] = v;
@@ -736,9 +741,21 @@ $("#dlg-cancel").addEventListener("click", () => { if (formDirty() && !confirm("
 $("#dlg").addEventListener("close", () => { DLG_ON_SAVED = null; });
 function showFormError(msg) { const p = $("#dlg-error"); p.textContent = msg; p.hidden = false; }
 
-// 금액 입력 자동 쉼표 (입력 중 캐럿 이동을 막기 위해 포커스를 벗어날 때만)
+// 금액 칸의 '=' 수식: "=12000*3+500" 처럼 사칙연산·괄호만 허용해 계산하고, 저장은 숫자로. 계산 불가면 null
+function evalAmount(str) {
+  const t = String(str ?? "").trim();
+  if (!t.startsWith("=")) return undefined;  // 수식 아님
+  const body = t.slice(1).replace(/[,\s원]/g, "");
+  if (!body || !/^[\d.+\-*/()]+$/.test(body) || /[+\-*/.]{2,}/.test(body.replace(/\*\*/g, "x"))) return null;
+  try { const n = Function(`"use strict"; return (${body});`)(); return Number.isFinite(n) ? Math.round(n) : null; } catch { return null; }
+}
+// 금액 입력 자동 쉼표 (입력 중 캐럿 이동을 막기 위해 포커스를 벗어날 때만). '=' 로 시작하면 수식을 계산해 숫자로 바꿈
 document.addEventListener("focusout", e => {
   if (!e.target.classList?.contains("num-input")) return;
+  const ev = evalAmount(e.target.value);
+  if (ev === null) { e.target.setAttribute("aria-invalid", "true"); e.target.title = "수식을 계산할 수 없습니다. 숫자와 + - * / ( ) 만 쓸 수 있습니다."; return; }
+  e.target.removeAttribute("aria-invalid"); e.target.title = "";
+  if (ev !== undefined) { e.target.value = ev.toLocaleString("ko-KR"); e.target.dispatchEvent(new Event("input", { bubbles: true })); return; }
   const raw = e.target.value.replace(/[^\d.-]/g, "");
   if (raw === "" || raw === "-") return;
   const n = Number(raw); if (isNaN(n)) return;
