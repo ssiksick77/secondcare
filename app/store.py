@@ -63,9 +63,14 @@ LABOR_KINDS = ["내부", "외부"]
 LABOR_STATUS = ["예정", "확정"]
 LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(공통)"}
 MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
-EXEC_COLS = ["거래번호", "관리번호", "원인발생일", "지급청구일", "지출완료일", "결의일", "재원", "예산목", "세목", "결제수단",
+EXEC_COLS = ["거래번호", "관리번호", "연결품의번호", "원인발생일", "지급청구일", "지출완료일", "결의일", "재원", "예산목", "세목", "결제수단",
              "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록"]
 EXEC_STATUS = ["발생", "청구", "보완", "완료", "결의"]  # 날짜에서 계산, '보완'만 수동. 순서: 발생→요구→(보완)→완료→결의 (2026-10-14)
+# 화면 표시명 (app.js STATUS_LABEL 과 같음): 저장값 '완료'(지출완료일) = 승인, '결의'(결의일) = 완료. 저장값은 바꾸지 않고 API 에 '상태표시'로 함께 내보냄
+EXEC_STATUS_LABEL = {"발생": "발생", "청구": "청구", "보완": "보완", "완료": "승인", "결의": "완료"}
+# 연결품의번호: 품의→집행 전환 때 기록하는 시스템 열 (비고의 '품의 X' 문구는 호환용으로 남기고 자유 편집). 화면·API 수정으로는 바뀌지 않음
+EXEC_LINK_COL = "연결품의번호"
+REQ_NOTE_RE = re.compile(r"^품의 (\S+)")  # 이전 장부: 집행 비고 '품의 X' → 연결품의번호 이관
 LINKED_LOCKED = ["재원", "예산목", "금액", "거래처", "원인발생일"]  # 인건비·적립 연결 집행에서 잠그는 열
 REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예산목", "세목", "세세목", "거래처",
             "결제수단", "적요", "금액", "태그", "품의자", "비고", "상태"]
@@ -426,6 +431,9 @@ def _ensure_structure(wb) -> bool:
             ws.column_dimensions[get_column_letter(col)].width = width
             changed = True
 
+    if _ensure_exec_link(wb, head_font):
+        changed = True
+
     for name, cols in ((SHEET_RQ, REQUEST_COLS), (SHEET_ORDER, ORDER_COLS), (SHEET_RATT, RATT_COLS)):
         ws = wb[name]  # 신청 계열 시트: 나중에 추가된 열 보정
         heads = _headers(ws)
@@ -470,6 +478,35 @@ def _ensure_structure(wb) -> bool:
                     ws.column_dimensions[get_column_letter(col)].width = 16
                 changed = True
     return changed
+
+
+def _ensure_exec_link(wb, head_font) -> bool:
+    """집행내역에 연결품의번호 열이 없으면 머리글 이름으로 맨 끝에 붙이고, 비고가 '품의 X' 로 시작하고 품의내역에 X 가 있는 행은 X 를 채운다.
+    열이 이미 있으면 아무것도 하지 않음 (이후 비고를 고쳐도 연결은 그대로)."""
+    ws = wb[SHEET_EXEC]
+    heads = _headers(ws)
+    if EXEC_LINK_COL in heads:
+        return False
+    col = len(heads) + 1
+    ws.cell(1, col, EXEC_LINK_COL).font = head_font
+    ws.column_dimensions[get_column_letter(col)].width = 16
+    if "비고" in heads and SHEET_REQ in wb.sheetnames:
+        known = {str(r["품의번호"]) for r in _rows(wb[SHEET_REQ], REQ_COLS) if r.get("품의번호")}
+        note_col = heads.index("비고") + 1
+        for r in range(2, ws.max_row + 1):
+            m = REQ_NOTE_RE.match(str(ws.cell(r, note_col).value or ""))
+            if m and m[1] in known:
+                ws.cell(r, col, m[1])
+    return True
+
+
+def exec_req_link(rec: dict) -> str:
+    """집행 행이 전환된 품의번호: 연결품의번호 열 우선, 비어 있으면 비고 '품의 X' (이관 전 장부 호환)."""
+    no = str(rec.get(EXEC_LINK_COL) or "").strip()
+    if no:
+        return no
+    m = REQ_NOTE_RE.match(str(rec.get("비고") or ""))
+    return m[1] if m else ""
 
 
 def _backup():
@@ -646,8 +683,9 @@ def read_all() -> dict:
             r["인건비예산"] = None if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산") else r["인건비예산"]
         for r in data["payee"]:
             r["인건비예산"] = None if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산") else r["인건비예산"]
-        for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용)
+        for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
             r["상태"] = exec_status(r)
+            r["상태표시"] = EXEC_STATUS_LABEL.get(r["상태"], r["상태"])
         data["meta"] = {
             "labor_kinds": LABOR_KINDS,
             "labor_status": LABOR_STATUS,
@@ -655,6 +693,7 @@ def read_all() -> dict:
             "budget_items": BUDGET_ITEMS,
             "pay_methods": PAY_METHODS,
             "req_status": REQ_STATUS,
+            "exec_status_labels": EXEC_STATUS_LABEL,
             "request_types": REQUEST_TYPES,
             "request_status": REQUEST_STATUS,
             **supplier_meta(),
@@ -806,6 +845,8 @@ def _number_refs(wb, key: str) -> set[str]:
                 refs.add(str(r["연결거래번호"]))
     elif key == "품의번호":
         for r in _rows(wb[SHEET_EXEC], EXEC_COLS):
+            if r.get(EXEC_LINK_COL):
+                refs.add(str(r[EXEC_LINK_COL]).strip())
             m = re.search(r"품의 (\d{4}-.+?-\d+)", str(r.get("비고") or ""))
             if m:
                 refs.add(m[1])
@@ -1398,6 +1439,8 @@ def create(kind: str, rec: dict) -> dict:
         for c in REQUEST_SYSTEM:
             rec[c] = ""
         rec["상태"] = "신청"
+    if kind == "exec" and EXEC_LINK_COL in rec:  # 시스템 열: 품의→집행 전환으로만 기록
+        rec = {k: v for k, v in rec.items() if k != EXEC_LINK_COL}
     with _write_session() as wb:
         ws = wb[sheet]
         _validate(kind, rec)
@@ -1482,6 +1525,8 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
                                      + ("주문을 취소한 뒤 다시 만드세요." if kind == "order" else "파일을 지우고 다시 올리세요."))
             rec = {**existing, **{c: rec[c] for c in free if c in rec}}
             rec.pop("_row", None)
+        if kind == "exec":
+            rec.pop(EXEC_LINK_COL, None)  # 시스템 열: 기존 값 유지 (_write_row 는 rec 에 없는 열을 건드리지 않음)
         if kind == "exec" and (existing["거래번호"] in _labor_refs(wb) or existing["거래번호"] in _number_refs(wb, "거래번호")):
             # 인건비 확정·적립 기록으로 생긴 행: 원본과 어긋나지 않도록 핵심 열은 잠금 (부가 정보만 수정 가능)
             for c in LINKED_LOCKED:
@@ -1662,6 +1707,7 @@ def req_to_exec(row: int, extra: dict, expect: dict | None = None) -> dict:
         rec["사용자"] = req.get("품의자")
         rec["비고"] = f"품의 {req['품의번호']}" + (f" / {req['비고']}" if req.get("비고") else "")
         rec.update({k: v for k, v in extra.items() if k in EXEC_COLS})
+        rec[EXEC_LINK_COL] = req["품의번호"]  # 연결은 이 열로 (비고 문구는 호환용, 자유 편집)
         _validate("exec", rec)
         _assign_number(wb, ws_exec, EXEC_COLS, 1, "거래번호", rec)
         r = _next_row(ws_exec)
@@ -1787,7 +1833,7 @@ def exec_batch(creates: list[dict], updates: list[dict], deletes: list[dict]) ->
                 _check_expect("exec", ex, u.get("expect"))
                 rec = {c: ex.get(c) for c in EXEC_COLS}
                 rec.update({c: v for c, v in (u.get("rec") or {}).items() if c in EXEC_COLS})
-                rec["거래번호"] = ex["거래번호"]
+                rec["거래번호"] = ex["거래번호"]; rec[EXEC_LINK_COL] = ex.get(EXEC_LINK_COL)
                 rec["상태"] = "보완" if str(rec.get("상태") or "") == "보완" else ex.get("상태")
                 _validate("exec", rec)
                 if ex["거래번호"] in linked:
@@ -1816,7 +1862,7 @@ def exec_batch(creates: list[dict], updates: list[dict], deletes: list[dict]) ->
         for i, c in enumerate(creates, 1):
             rec = {col: "" for col in EXEC_COLS}
             rec.update({k: v for k, v in (c or {}).items() if k in EXEC_COLS})
-            rec["거래번호"] = ""; rec["증빙폴더"] = ""; rec["증빙목록"] = ""
+            rec["거래번호"] = ""; rec["증빙폴더"] = ""; rec["증빙목록"] = ""; rec[EXEC_LINK_COL] = ""
             try:
                 _validate("exec", rec)
                 _validate_tag(rec, wb)

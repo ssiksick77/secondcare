@@ -20,11 +20,11 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
+import settings  # noqa: E402  (외부 의존 없음: LEDGER_ENV 로 설정 파일 경로 결정)
+load_dotenv(settings.ENV_PATH)  # 기본 app/.env, LEDGER_ENV 가 있으면 그 파일
 
 import ai  # noqa: E402
 import drive  # noqa: E402
-import settings  # noqa: E402
 import store  # noqa: E402
 
 HOST, PORT = "127.0.0.1", int(os.environ.get("LEDGER_PORT", "8791"))
@@ -100,7 +100,7 @@ def meta():
     """가벼운 상태 확인: 파일 수정 시각 (다른 창·MCP 변경 감지용) + 소모품 구매처 목록·이용 가능 여부·안내 (연구원 화면은 설정 API를 쓰지 않음)."""
     import datetime as _dt
     return {"mtime": _dt.datetime.fromtimestamp(store.XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"), "write_id": store.last_write_id(),
-            **store.supplier_meta()}
+            "exec_status_labels": store.EXEC_STATUS_LABEL, **store.supplier_meta()}
 
 
 @app.middleware("http")
@@ -137,16 +137,23 @@ def all_data():
     return data
 
 
+def excluded_reason(r: dict, funds: set, items) -> str:
+    """예산 집계 제외 사유 (웹 isExcludedExec 와 같은 규칙): 재원 시트에 없는 재원(외부 지급처 인건비 등) 또는 BUDGET_ITEMS 밖 예산목. 집계 대상이면 ''."""
+    out = []
+    if r.get("재원") not in funds:
+        out.append("재원 목록 밖")
+    if r.get("예산목") not in items:
+        out.append("예산목 목록 밖")
+    return " · ".join(out)
+
+
 def build_dashboard(data: dict) -> dict:
+    """웹 대시보드와 같은 집계 범위: 재원 시트의 재원 × BUDGET_ITEMS 예산목만 table 에 집계.
+    목록 밖 집행(전체)과 대기 품의는 excluded.exec / excluded.req 로 따로 돌려주고 합계는 excluded_total.
+    monthly·vendors·unpaid_count·tag_table 은 웹과 같이 전체 집행 기준 (예산 집계만 제외)."""
     items = list(store.BUDGET_ITEMS)
-    for r in data["exec"] + data["req"]:  # 엑셀에서 직접 입력한 목록 밖 예산목도 집계에 포함
-        if r["예산목"] and r["예산목"] not in items:
-            items.append(r["예산목"])
-    funds = [f["재원코드"] for f in data["funds"]]
-    # 집행·품의에 쓰인 재원이 마스터에 없으면 함께 표시
-    for r in data["exec"] + data["req"] + data["budget"]:
-        if r["재원"] and r["재원"] not in funds:
-            funds.append(r["재원"])
+    funds = [f["재원코드"] for f in data["funds"] if f.get("재원코드")]
+    fund_set = set(funds)
 
     budget = {f: {i: 0.0 for i in items} for f in funds}
     for r in data["budget"]:
@@ -158,9 +165,14 @@ def build_dashboard(data: dict) -> dict:
     monthly = defaultdict(lambda: defaultdict(float))  # fund -> 'YYYY-MM' -> amt
     vendors = defaultdict(float)
     unpaid = 0
+    excluded = {"exec": [], "req": []}
     for r in data["exec"]:
         f, i = r["재원"], r["예산목"]
-        if f in spent and i in items:
+        why = excluded_reason(r, fund_set, items)
+        if why:
+            excluded["exec"].append({"거래번호": r.get("거래번호"), "원인발생일": r.get("원인발생일"), "재원": f, "예산목": i,
+                                     "금액": r["금액"], "거래처": r.get("거래처"), "사유": why, "_row": r.get("_row")})
+        else:
             spent[f][i] += r["금액"]
         if r["원인발생일"]:
             monthly[f][r["원인발생일"][:7]] += r["금액"]
@@ -171,7 +183,13 @@ def build_dashboard(data: dict) -> dict:
 
     pending = {f: {i: 0.0 for i in items} for f in funds}
     for r in data["req"]:
-        if r["상태"] == "대기" and r["재원"] in pending and r["예산목"] in items:
+        if r["상태"] != "대기":
+            continue
+        why = excluded_reason(r, fund_set, items)
+        if why:
+            excluded["req"].append({"품의번호": r.get("품의번호"), "원인발생일": r.get("원인발생일"), "재원": r["재원"], "예산목": r["예산목"],
+                                    "금액": r["금액"], "거래처": r.get("거래처"), "사유": why, "_row": r.get("_row")})
+        else:
             pending[r["재원"]][r["예산목"]] += r["금액"]
 
     table = []
@@ -200,6 +218,9 @@ def build_dashboard(data: dict) -> dict:
     return {
         "funds": funds,
         "table": table,
+        "excluded": excluded,
+        "excluded_total": {"exec": sum(x["금액"] or 0 for x in excluded["exec"]), "exec_count": len(excluded["exec"]),
+                           "req": sum(x["금액"] or 0 for x in excluded["req"]), "req_count": len(excluded["req"])},
         "tag_table": sorted(tag_table.values(), key=lambda e: (e["분류"], e["태그"])),
         "monthly": {f: dict(sorted(m.items())) for f, m in monthly.items()},
         "vendors": sorted(vendors.items(), key=lambda x: -x[1])[:15],

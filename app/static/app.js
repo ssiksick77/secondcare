@@ -27,7 +27,7 @@ const FILTERS = { exec: {}, req: {}, budget: {}, deposit: {} };
 // ---------- 열 정의 ----------
 const COLS = {
   exec: [
-    { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "원인발생일", t: "date", label: "발생일" }, { k: "지급청구일", t: "date", hide: true },
+    { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "연결품의번호", hide: true }, { k: "원인발생일", t: "date", label: "발생일" }, { k: "지급청구일", t: "date", hide: true },
     { k: "지출완료일", t: "date", hide: true }, { k: "결의일", t: "date", hide: true }, { k: "재원" }, { k: "예산목" }, { k: "세목" }, { k: "세세목", minor: true },
     { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (예산현액 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true, minor: true },
   ],
@@ -447,7 +447,8 @@ function renderDashboard() {
   $("#dash-month").disabled = !year;
   renderTagDashboard(fund, year);
   const items = DATA.meta.budget_items;
-  const funds = fund ? [fund] : fundOptions();
+  // 집계 범위 = 재원 시트의 재원 × 예산목 목록 (isExcludedExec · 서버 build_dashboard 와 같은 규칙). 목록 밖은 '집계 제외'로 따로 표시
+  const funds = (fund ? [fund] : fundOptions()).filter(f => DATA.funds.some(x => x["재원코드"] === f));
 
   // 연도 필터는 집행·품의에 적용 (예산은 연도 개념 없이 재원 기준). 월을 고르면 '당월'과 '누계(연초~당월)'를 함께 표시
   const inYear = r => !year || (r["원인발생일"] || "").startsWith(year);
@@ -456,7 +457,7 @@ function renderDashboard() {
   // 잔액·가용잔액·집행률은 파일 전체 기준(sa), 연·월 필터는 '집행액'(s)·'M월 집행'(sm) 열에만 적용. 대기 품의는 날짜 무관 전부 차감 (2026-10-13 결정)
   const execsAll = DATA.exec.filter(r => !fund || r["재원"] === fund);
   const execs = execsAll.filter(r => inYear(r) && upTo(r));
-  const reqs = DATA.req.filter(r => r["상태"] === "대기" && (!fund || r["재원"] === fund));
+  const reqs = DATA.req.filter(r => r["상태"] === "대기" && (!fund || r["재원"] === fund) && !isExcludedExec(r));  // 목록 밖 재원·예산목 품의는 집계 제외
   const budgets = DATA.budget.filter(r => !fund || r["재원"] === fund);
 
   const cell = () => ({ b: 0, s: 0, sm: 0, sa: 0, p: 0 });
@@ -464,8 +465,8 @@ function renderDashboard() {
   funds.forEach(f => { m[f] = {}; items.forEach(i => m[f][i] = cell()); });
   budgets.forEach(r => m[r["재원"]] && items.forEach(i => m[r["재원"]][i].b += r[i] || 0));
   const excluded = [];  // 재원 목록 밖(외부 지급처 인건비 등)·예산목 목록 밖 집행: 예산 집계에서 제외
-  execsAll.forEach(r => { const c = m[r["재원"]]?.[r["예산목"]]; if (!c) { if (inYear(r) && upTo(r)) excluded.push(r); return; } c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } });
-  reqs.forEach(r => m[r["재원"]]?.[r["예산목"]] && (m[r["재원"]][r["예산목"]].p += r["금액"] || 0));
+  execsAll.forEach(r => { const c = !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]]; if (!c) { if (inYear(r) && upTo(r)) excluded.push(r); return; } c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } });
+  reqs.forEach(r => !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]] && (m[r["재원"]][r["예산목"]].p += r["금액"] || 0));
   const add = (t, c) => { t.b += c.b; t.s += c.s; t.sm += c.sm; t.sa += c.sa; t.p += c.p; };
 
   // 카드
@@ -546,7 +547,7 @@ window.addEventListener("afterprint", () => {
 });
 $("#dash-month").addEventListener("change", renderDashboard);
 $$("[data-csv]").forEach(b => b.addEventListener("click", () => {
-  const kind = b.dataset.csv; const cols = COLS[kind].filter(c => !c.calc).map(c => c.k); const rows = filtered(kind).map(r => cols.map(k => k === "상태" && kind === "exec" ? (STATUS_LABEL[r[k]] || r[k]) : r[k]));
+  const kind = b.dataset.csv; const cols = COLS[kind].filter(c => !c.calc).map(c => c.k); const rows = filtered(kind).map(r => cols.map(k => k === "상태" && kind === "exec" ? (r["상태표시"] || STATUS_LABEL[r[k]] || r[k]) : r[k]));  // 집행 상태는 화면 이름 (서버 상태표시와 같음)
   if (!rows.length) { showAlert("저장할 행이 없습니다.", "warn"); return; }
   downloadCSV(`${{ exec: "집행내역", req: "품의내역", labor: "인건비지급", request: "지출신청" }[kind] || kind}_${today()}.csv`, cols, rows);
 }));
@@ -1438,9 +1439,11 @@ function execOrigin(r) {
   if (!r || !r["거래번호"]) return null;
   const lab = (DATA.labor || []).find(x => x["연결거래번호"] === r["거래번호"]); if (lab) return { kind: "인건비", locked: true, row: lab._row, label: `${lab["지급월"]} ${lab["이름"]} · ${lab["지급처"]}` };
   const dep = DATA.deposit.find(x => x["연결거래번호"] === r["거래번호"]); if (dep) return { kind: "적립", locked: true, row: dep._row, label: `${dep["일자"]} ${dep["거래처"]} 적립` };
-  const m = /^품의 (\S+)/.exec(r["비고"] || ""); if (m) { const req = DATA.req.find(x => x["품의번호"] === m[1]); return { kind: "품의", locked: false, row: req?._row, no: m[1], label: `품의 ${m[1]}` }; }
+  const no = execReqNo(r); if (no) { const req = DATA.req.find(x => x["품의번호"] === no); return { kind: "품의", locked: false, row: req?._row, no, label: `품의 ${no}` }; }
   return null;
 }
+// 품의→집행 전환으로 생긴 집행의 품의번호: 연결품의번호 열 우선, 비어 있으면 비고 '품의 X' (이관 전 장부 호환). 비고는 자유 편집
+function execReqNo(r) { const v = String(r?.["연결품의번호"] ?? "").trim(); if (v) return v; const m = /^품의 (\S+)/.exec(r?.["비고"] || ""); return m ? m[1] : ""; }
 function originBadge(r) { const o = execOrigin(r); return o ? ` <button type="button" class="origin ${o.kind}" data-act="origin" data-row="${r._row}" title="${esc(o.label)} 에서 생성${o.locked ? " · 재원·예산목·금액·거래처·원인발생일은 원본에서만 변경" : ""} · 클릭하면 원본으로 이동">${o.kind}</button>` : ""; }
 function gotoOrigin(row) {
   const r = DATA.exec.find(x => x._row === row); const o = execOrigin(r); if (!o) return;
@@ -1889,13 +1892,13 @@ function voucherFund(r) {
   return { rows, own: rows.some(x => x.own), before: sum("before"), cur: sum("cur"), after: sum("after") };
 }
 function voucherModel(r, evid, cfg) {
-  const m = /^품의 (\S+)/.exec(r["비고"] || ""), req = m && DATA.req.find(x => x["품의번호"] === m[1]);
+  const no = execReqNo(r), req = no && DATA.req.find(x => x["품의번호"] === no);
   const fund = DATA.funds.find(f => f["재원코드"] === r["재원"]);
   return {
     r, evid, fund: voucherFund(r),
     org: cfg.LEDGER_ORG || "", contact: String(cfg.REQUEST_CONTACT || "").split("(")[0].trim(),
     title: fund?.["과제명"] || "",
-    req: req ? [req["품의번호"], req["품의자"]].filter(Boolean).join(" · ") : m ? m[1] : "-",
+    req: req ? [req["품의번호"], req["품의자"]].filter(Boolean).join(" · ") : no || "-",
   };
 }
 function voucherHtml(v, withIds) {

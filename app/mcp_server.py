@@ -15,7 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.chdir(Path(__file__).resolve().parent)
 from dotenv import load_dotenv  # noqa: E402
-load_dotenv(Path(__file__).resolve().parent / ".env")  # store 를 불러오기 전에 .env 적용 (LEDGER_XLSX 등)
+import settings  # noqa: E402
+load_dotenv(settings.ENV_PATH)  # store 를 불러오기 전에 .env 적용 (LEDGER_XLSX 등). LEDGER_ENV 가 있으면 그 파일
 
 from mcp.server.mcpserver import MCPServer  # mcp 2.x
 from mcp.server.mcpserver.exceptions import ToolError
@@ -100,7 +101,9 @@ def list_tags() -> str:
 @_safe
 def get_dashboard(fund: str = "", year: str = "") -> str:
     """재원×예산목별 예산현액·집행액·잔액·집행률·품의대기·가용잔액 표와 월별 집행액, 거래처/태그별 집계를 반환한다.
-    fund 로 재원코드를, year 로 연도(YYYY)를 지정하면 집행·품의가 그 범위로 좁혀진다."""
+    fund 로 재원코드를, year 로 연도(YYYY)를 지정하면 집행·품의가 그 범위로 좁혀진다.
+    웹 대시보드와 같은 집계 범위: 재원 시트에 없는 재원(외부 지급처 인건비 등)이나 11개 예산목 밖의 집행·대기 품의는 table 에 넣지 않고
+    excluded.exec / excluded.req (거래번호·품의번호, 재원, 예산목, 금액, 사유)와 excluded_total 로 따로 반환한다."""
     data = store.read_all()
     if year:
         data["exec"] = [r for r in data["exec"] if str(r["원인발생일"] or "").startswith(year)]
@@ -109,6 +112,9 @@ def get_dashboard(fund: str = "", year: str = "") -> str:
     if fund:
         d["table"] = [t for t in d["table"] if t["재원"] == fund]
         d["monthly"] = {fund: d["monthly"].get(fund, {})}
+        d["excluded"] = {k: [x for x in v if x["재원"] == fund] for k, v in d["excluded"].items()}
+        d["excluded_total"] = {"exec": sum(x["금액"] or 0 for x in d["excluded"]["exec"]), "exec_count": len(d["excluded"]["exec"]),
+                               "req": sum(x["금액"] or 0 for x in d["excluded"]["req"]), "req_count": len(d["excluded"]["req"])}
     return _j(d)
 
 
@@ -117,7 +123,9 @@ def get_dashboard(fund: str = "", year: str = "") -> str:
 def list_exec(fund: str = "", year: str = "", month: str = "", vendor: str = "", q: str = "", unpaid_only: bool = False,
               limit: int = 200, offset: int = 0) -> str:
     """집행내역을 조회한다. month 는 MM, vendor 는 거래처 부분일치, q 는 전체 열 검색, unpaid_only 는 지출완료일이 비어 있는 건만.
-    각 행의 _row 는 수정/삭제에 쓰는 행 번호(삭제 후 바뀜). 최신순 정렬, limit/offset 으로 나눠 받는다. 반환: {total, rows}."""
+    각 행의 _row 는 수정/삭제에 쓰는 행 번호(삭제 후 바뀜). 최신순 정렬, limit/offset 으로 나눠 받는다. 반환: {total, rows}.
+    상태는 저장값(발생/청구/보완/완료/결의), 상태표시는 화면 이름(발생/청구/보완/승인/완료: 완료→승인, 결의→완료). 사용자에게는 상태표시로 말할 것.
+    연결품의번호는 품의→집행 전환으로 생긴 행의 원 품의번호."""
     rows = _filter(store.read_all()["exec"], fund, year, month, vendor, q)
     if unpaid_only:
         rows = [r for r in rows if not r.get("지출완료일")]
@@ -170,7 +178,7 @@ def list_deposit(vendor: str = "") -> str:
 def add_exec(원인발생일: str, 재원: str, 예산목: str, 금액: float, 거래처: str = "", 적요: str = "",
              세목: str = "", 세세목: str = "", 사용자: str = "", 태그: str = "", 관리번호: str = "",
              지급청구일: str = "", 지출완료일: str = "", 비고: str = "") -> str:
-    """집행내역에 한 행을 추가한다. 날짜는 YYYY-MM-DD. 재원은 list_funds 의 재원코드, 예산목은 9개 목록 중 하나, 태그는 list_tags 의 태그명 1개(없으면 빈 값).
+    """집행내역에 한 행을 추가한다. 날짜는 YYYY-MM-DD. 재원은 list_funds 의 재원코드, 예산목은 11개 목록 중 하나, 태그는 list_tags 의 태그명 1개(없으면 빈 값).
     금액은 원 단위 양수 정수. 지출완료일이 비어 있으면 '지급대기'. 관리번호는 병원 ERP/전자결재 문서번호(선택). 거래번호는 자동 부여. 반환값에 거래번호와 _row."""
     rec = dict(원인발생일=원인발생일, 재원=재원, 예산목=예산목, 금액=금액, 거래처=거래처, 적요=적요, 세목=세목,
                세세목=세세목, 사용자=사용자, 태그=태그, 관리번호=관리번호, 지급청구일=지급청구일, 지출완료일=지출완료일, 비고=비고)
@@ -182,7 +190,7 @@ def add_exec(원인발생일: str, 재원: str, 예산목: str, 금액: float, �
 def add_req(원인발생일: str, 재원: str, 예산목: str, 금액: float, 거래처: str = "", 적요: str = "",
             지출예정일: str = "", 세목: str = "", 세세목: str = "", 결제수단: str = "", 태그: str = "",
             품의자: str = "", 비고: str = "") -> str:
-    """품의내역에 한 행을 추가한다(상태=대기). 재원은 list_funds 의 재원코드, 예산목은 9개 목록 중 하나, 태그는 list_tags 값. 결제수단은 연구비카드/계좌이체/연구자선지출/공금통장/적립금/기타 중 하나 또는 빈 값. 금액은 원 단위 양수."""
+    """품의내역에 한 행을 추가한다(상태=대기). 재원은 list_funds 의 재원코드, 예산목은 11개 목록 중 하나, 태그는 list_tags 값. 결제수단은 연구비카드/계좌이체/연구자선지출/공금통장/적립금/기타 중 하나 또는 빈 값. 금액은 원 단위 양수."""
     rec = dict(원인발생일=원인발생일, 재원=재원, 예산목=예산목, 금액=금액, 거래처=거래처, 적요=적요, 지출예정일=지출예정일,
                세목=세목, 세세목=세세목, 결제수단=결제수단, 태그=태그, 품의자=품의자, 비고=비고, 상태="대기")
     return _j(store.create("req", rec))

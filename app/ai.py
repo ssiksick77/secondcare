@@ -324,6 +324,7 @@ def report_facts(fund: str, year: str, month: str) -> str:
         "미완료_집행": [{k: r.get(k) for k in ("거래번호", "거래처", "금액", "지급청구일")} for r in sub["exec"] if not r.get("지출완료일")],
         "상위_지출": [{k: r.get(k) for k in ("거래번호", "원인발생일", "거래처", "적요", "예산목", "금액")} for r in top],
         "태그별": [{k: t[k] for k in ("태그", "분류", "금액", "건수")} for t in dash["tag_table"]],
+        "예산집계_제외": dash["excluded_total"],  # 재원·예산목 목록 밖 (재원별_예산목별 표에 없음)
     }
     return json.dumps(facts, ensure_ascii=False, default=str)
 

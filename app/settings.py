@@ -1,11 +1,24 @@
-"""앱 설정: app/.env 파일을 읽고 쓰며 os.environ 에 즉시 반영한다 (서버 재시작 불필요)."""
+"""앱 설정: app/.env 파일을 읽고 쓰며 os.environ 에 즉시 반영한다 (서버 재시작 불필요).
+환경변수 LEDGER_ENV 로 다른 설정 파일을 쓸 수 있다 (QA 장부 실행 run_qa.bat 등). 상대 경로는 app 폴더 기준."""
 from __future__ import annotations
 
 import os
 import re
 from pathlib import Path
 
-ENV_PATH = Path(__file__).resolve().parent / ".env"
+APP_DIR = Path(__file__).resolve().parent
+
+
+def env_path() -> Path:
+    """설정 파일 경로: LEDGER_ENV 가 있으면 그 파일 (상대 경로는 app 폴더 기준), 없으면 app/.env."""
+    v = os.environ.get("LEDGER_ENV", "").strip()
+    if not v:
+        return APP_DIR / ".env"
+    p = Path(v)
+    return p if p.is_absolute() else (APP_DIR / p).resolve()
+
+
+ENV_PATH = env_path()
 
 # 키: (기본값, 비밀 여부)
 FIELDS = {
