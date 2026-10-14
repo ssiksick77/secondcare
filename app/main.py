@@ -205,7 +205,8 @@ def build_dashboard(data: dict) -> dict:
 # ---------- 신청 / 주문 / 신청 첨부 ----------
 @app.post("/api/request/convert")
 def request_convert(body: dict):
-    """body: {rows: [신청 _row...], expects: [{신청번호, _snapshot?}...], extra: {품의 열...}} → {req, numbers, 품의번호}"""
+    """body: {rows: [신청 _row...], expects: [{신청번호, _snapshot?}...], extra: {품의 열..., amount_override?}} → {req, numbers, 품의번호, order}
+    주문에 묶인 신청은 같은 주문의 미전환 신청 전부를 함께 (주문 1건 = 품의 1건), 금액 기본 = 주문 결제금액."""
     return store.request_convert(body.get("rows") or [], body.get("extra") or {}, body.get("expects"))
 
 
@@ -224,22 +225,26 @@ def request_action(row: int, body: dict):
 
 @app.get("/api/request/order-sheet/{order_row}")
 def request_order_sheet(order_row: int):
-    """발주서 데이터: {order, lines, total, settings: {발주처, 배송지, 담당자}} — 구매처(공급)는 order.거래처"""
+    """발주서 데이터 (독자 = 공급처): {order, lines, internal, totals: {공급가합계, 부가세, 총액}, total, vat_total,
+    header: {발주기관, 공급처, 배송지, 담당자}, settings: {발주처, 배송지, 담당자}(이전 이름, 호환)}.
+    발주기관 = 설정 REQUEST_BUYER(우리 센터), 공급처 = 주문 구매처(order.거래처). 신청번호는 internal 에만 (적립금 정보 없음)."""
     data = store.order_sheet(order_row)
-    data["settings"] = {"발주처": settings.get("REQUEST_BUYER"), "배송지": settings.get("REQUEST_SHIP_TO"),
-                        "담당자": settings.get("REQUEST_CONTACT")}
+    buyer, ship, contact = settings.get("REQUEST_BUYER"), settings.get("REQUEST_SHIP_TO"), settings.get("REQUEST_CONTACT")
+    data["header"] = {"발주기관": buyer, "공급처": data["order"].get("거래처") or "", "배송지": ship, "담당자": contact}
+    data["settings"] = {"발주처": buyer, "배송지": ship, "담당자": contact}
     return data
 
 
 @app.post("/api/order/create")
 def order_create(body: dict):
-    """body: {rows: [소모품 신청 _row...], expects: [...], extra: {주문일?, 거래처?, 결제금액?, 적립금사용?, 사용자?, 태그?, 비고?}}"""
+    """body: {rows: [소모품 신청 _row...], expects: [...], extra: {주문일?, 구매처?(또는 거래처), vendor_override?, 결제금액?, 적립금사용?, 사용자?, 태그?, 비고?}}
+    → {order, deposit, numbers, warnings: [..]} (warnings: 결제금액 > 주문금액, 적립금 잔액 음수 — 저장은 됨)"""
     return store.order_create(body.get("rows") or [], body.get("extra") or {}, body.get("expects"))
 
 
 @app.post("/api/order/{row}/action")
 def order_action(row: int, body: dict):
-    """body: {action: deliver|undeliver|cancel, extra: {배송일?}, expect}"""
+    """body: {action: deliver|undeliver|cancel, extra: {배송일?}, expect}. cancel → {cancelled, deposit_removed, deposit_missing, released}"""
     return store.order_action(row, body.get("action") or "", body.get("extra") or {}, body.get("expect"))
 
 

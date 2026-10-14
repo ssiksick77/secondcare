@@ -18,7 +18,7 @@ FIELDS = {
     "OPENAI_MODEL": ("gpt-4.1", False),
     "OPENAI_REASONING_EFFORT": ("", False),       # 비우면 미전송. 추론 모델(o-시리즈 등)에서만 low/medium/high
     # 신청 화면 발주서 (소모품 주문)
-    "REQUEST_BUYER": ("", False),                  # 발주처 = 우리 기관 (예: 의료인공지능센터)
+    "REQUEST_BUYER": ("", False),                  # 발주기관 = 우리 기관 (예: 의료인공지능센터). 발주서 독자는 공급처(쇼핑몰)
     "REQUEST_SHIP_TO": ("", False),                # 배송지
     "REQUEST_CONTACT": ("", False),                # 담당자 (이름·연락처)
     # 소모품 구매처 (store.SUPPLIERS_DEFAULT 와 같은 기본값)

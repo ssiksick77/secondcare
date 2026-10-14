@@ -92,6 +92,7 @@ body:not([data-tab="exec"]) #alert.formula, body.labor-mode #alert.formula, body
 .toolbar label { display: flex; flex-direction: column; font-size: 12px; color: var(--ink-2); gap: 2px; }
 .toolbar label.chk { flex-direction: row; align-items: center; gap: 6px; min-height: 32px; color: var(--ink); font-size: 12px; }
 .toolbar-note { font-size: 12px; color: var(--ink-2); flex: 1; align-self: center; line-height: 1.5; }
+.toolbar-note.warn { color: var(--warn); }   /* 앞의 .warn 보다 뒤에 선언된 회색을 이김: 주의 안내는 갈색 */
 .toolbar-sum { margin-left: auto; font-weight: 700; align-self: center; white-space: nowrap; }
 .toolbar > .toolbar-note { align-self: flex-end; padding: 7px 0; }   /* 18px 줄 + 7px×2 = 32px 컨트롤 높이 */
 .toolbar > .toolbar-sum { align-self: flex-end; line-height: 32px; }
@@ -105,11 +106,13 @@ body:not([data-tab="exec"]) #alert.formula, body.labor-mode #alert.formula, body
 .defs-box > summary:hover { color: var(--ink); }
 .defs-box .defs { margin-top: 4px; }
 
-/* 대시보드 하위 탭 (분할 버튼) */
+/* 하위 보기 전환 (분할 버튼): 대시보드 예산|태그, 신청 소모품 신청|주문. 툴바 맨 왼쪽, 따로 줄을 만들지 않음 */
 .subtabs { display: flex; border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; align-self: flex-end; margin-right: 8px; }
 .subtabs button { border: 0; background: var(--bg); font: inherit; font-weight: 600; padding: 0 14px; min-height: 32px; cursor: pointer; color: var(--ink-2); }
 .subtabs button + button { border-left: 1px solid var(--rule); }
 .subtabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+.subtabs .tab-n { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg); text-align: center; }
+.subtabs button[aria-selected="true"] .tab-n { color: var(--bg); background: transparent; border-color: var(--ink-3); }
 
 /* ---------- 컨트롤 ---------- */
 select, input[type="text"], input[type="search"], input[type="date"], input[type="month"], input[type="number"], input[type="url"], input[type="password"], textarea {
@@ -410,7 +413,7 @@ body.drawer-open main { padding-right: min(580px, 45vw); transition: padding-rig
 .xd-info .kv { grid-template-columns: 72px 1fr; gap: 0; }
 .xd-info .kv > * { min-height: 28px; display: flex; align-items: center; border-bottom: 1px solid var(--rule-2); min-width: 0; }
 .xd-info .kv > b { font-size: 12px; }
-.xd-info .kv > span { padding: 0 4px; word-break: break-word; }
+.xd-info .kv > span { padding: 0 4px; word-break: break-word; column-gap: 6px; flex-wrap: wrap; }   /* 값과 보조 글자 사이 6px */
 .xd-info .kv > .multi { white-space: pre-wrap; align-items: flex-start; padding-top: 5px; padding-bottom: 5px; line-height: 1.45; }
 .xd-val { cursor: text; border-radius: var(--radius); }
 .xd-val:hover, .xd-val:focus-visible { text-decoration: underline dotted var(--ink-3); text-underline-offset: 3px; }
@@ -537,11 +540,6 @@ body.request-mode .top { border-bottom-color: var(--margin); }
 .req-role { margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }   /* 역할 표시: 버튼처럼 보이지 않게 글자만 */
 .tabs.request .req-prev-year { margin-left: auto; font-size: 12px; }
 .tabs.request .req-prev-year:not([hidden]) + .tabs-year { margin-left: 12px; }
-/* 소모품 2단 메뉴 (신청 | 주문): 탭 막대 바로 아래 32px 줄. 같은 탭 문법을 한 단계 낮게 (흰 바탕, 12px, 남색 밑줄) */
-.tabs.request-sub ul { padding: 0 6px; }
-.tabs.request-sub button { height: 32px; font-size: 12px; }
-.tabs.request-sub button[aria-selected="true"] { border-bottom-color: var(--margin); }
-body:not(.request-mode) #req-subtabs { display: none !important; }
 /* 담당자 전용 요소 / 연구원 화면 (직접 접속): 회계대장 이동·설정·AI 버튼 숨김 */
 body:not(.req-admin) .req-admin-only { display: none !important; }
 body.req-admin .req-researcher-note { display: none; }
@@ -549,8 +547,9 @@ body.request-mode:not(.req-admin) #btn-mode, body.request-mode:not(.req-admin) #
 body.request-mode:not(.req-admin) #btn-settings, body.request-mode:not(.req-admin) #btn-ai, body.request-mode:not(.req-admin) .top-sep,
 body.request-mode:not(.req-admin) #foot-path { display: none !important; }
 .req-researcher-note { margin: 0 0 8px; }
-/* 선택 바: 선택이 없으면 버튼을 숨기고 안내만. 높이는 26px 버튼 기준으로 고정 */
-.req-selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 34px; padding: 0 0 8px; margin: -2px 0 8px; border-bottom: 1px solid var(--rule-2); }
+/* 선택 바: 선택이 없으면 버튼을 숨기고 안내만. 높이는 26px 버튼 + 아래 8px + 괘선 1px = 35px 로 고정 */
+.req-selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 35px; padding: 0 0 8px; margin: -2px 0 8px; border-bottom: 1px solid var(--rule-2); box-sizing: border-box; }
+.req-selbar > .toolbar-note, .req-selbar > .req-sel-n { line-height: 18px; }   /* 안내 글자와 26px 버튼이 바뀌어도 줄 높이가 같게 */
 .req-selbar .req-sel-n { font-size: 12px; font-weight: 700; min-width: 132px; }
 .req-selbar .req-sel-n:focus { outline: none; }
 .req-selbar .req-sel-n:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
@@ -561,7 +560,7 @@ table.grid th.sel, table.grid td.sel { width: 32px; text-align: center; padding:
 table.grid .rej, .xd-info .rej { color: var(--ink-2); }
 /* 신청 목록: 열 폭 고정 (필터·드로어·빈 결과에도 머리글이 움직이지 않게). 품목만 남는 폭 */
 #request-table { table-layout: fixed; min-width: 1012px; }               /* 고정 열 872 + 품목 140 */
-#request-table[data-rtype="소모품"] { min-width: 1200px; }              /* + 구매처 84 · 주문번호 104 */
+#request-table[data-rtype="소모품"] { min-width: 1224px; }              /* + 구매처 84 · 주문번호 128 */
 #request-table th[data-col="신청번호"] { width: 104px; }
 #request-table th[data-col="상태"] { width: 96px; }
 #request-table th[data-col="신청인"] { width: 64px; }
@@ -572,7 +571,7 @@ table.grid .rej, .xd-info .rej { color: var(--ink-2); }
 #request-table th[data-col="금액"] { width: 104px; }
 #request-table th[data-col="첨부"] { width: 44px; }
 #request-table th[data-col="결재"] { width: 120px; }
-#request-table th[data-col="주문번호"] { width: 104px; }
+#request-table th[data-col="주문번호"] { width: 128px; }                 /* 알파-YYYYMMDD-NN 한 줄 */
 #request-table th[data-col="연결품의번호"] { width: 120px; }
 #request-table td { overflow: hidden; text-overflow: ellipsis; }
 #request-table tbody td { height: 36px; }   /* 품목+규격 두 줄 */
@@ -588,26 +587,35 @@ body.drawer-open #request-table [data-col="주문번호"], body.drawer-open #req
 body.drawer-open #request-table { min-width: 700px; }                   /* 104+96+56+48+104+120+32 + 품목 140 */
 body.drawer-open #request-table[data-rtype="소모품"] { min-width: 784px; }   /* + 구매처 */
 .req-sup-info { margin: 0 0 8px; }
+/* 신청 폼: 구매처 안내는 select 옆 2칸, 입력 칸 아랫선에 맞춤 */
+.fields > .req-sup-note { align-self: end; margin: 0; padding-bottom: 7px; }
+#dlg[data-kind="request"] .fields > label:not(.chk) { justify-content: flex-end; }   /* 레이블이 두 줄이 돼도 같은 줄의 입력 칸 아랫선을 맞춤 */
+.s-sup-checks .s-sup-lab { font-size: 12px; color: var(--ink-2); font-weight: 600; }
 .s-sup-checks { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
 .fields .s-sup-checks label.chk { min-height: 28px; }
 /* 소모품 › 주문 표: 열 폭 고정 (필터·빈 결과에도 머리글이 움직이지 않게). 신청번호만 남는 폭 */
 .req-order-note { margin: 0 0 8px; }
-#order-table { table-layout: fixed; min-width: 920px; }                 /* 고정 열 760 + 신청번호 160 */
+#order-table { table-layout: fixed; min-width: 956px; }                 /* 고정 열 796 + 신청번호 160 */
 #order-table th[data-col="주문번호"] { width: 128px; }                   /* 알파-YYYYMMDD-NN 한 줄 */
 #order-table th[data-col="주문일"], #order-table th[data-col="배송일"] { width: 56px; }
-#order-table th[data-col="거래처"] { width: 84px; }
+#order-table th[data-col="구매처"] { width: 84px; }
 #order-table th[data-col="주문금액"] { width: 104px; }
 #order-table th[data-col="결제금액"] { width: 96px; }
-#order-table th[data-col="적립금"] { width: 48px; }
+#order-table th[data-col="적립금"] { width: 60px; }                     /* '● 사용' 배지 한 줄 */
 #order-table th[data-col="건수"] { width: 44px; }
-#order-table th[data-col="작업"] { width: 144px; }                     /* 발주서 + 취소(배송 전) / 배송 취소(배송 후) */
+#order-table th[data-col="작업"] { width: 168px; }                     /* 발주서 + 주문 취소(배송 전) / 배송일 지우기(배송 후) */
+#order-table td.actions, #order-table th.actions { text-align: left; }
+#order-table td.actions .ord-act2 { width: 96px; justify-content: center; }   /* 두 번째 버튼 고정 폭: 버튼 자리가 행마다 같게 */
+#order-table:has(td.empty) th.actions { box-shadow: none; }               /* 빈 표: 고정 열 그림자 없음 */
 #order-table td { overflow: hidden; text-overflow: ellipsis; }
-#order-table td.pay { font-weight: 600; }
-#order-table td.nos .lnk { font-size: 13px; color: var(--primary-dark); }
-#order-table td.nos .lnk:hover { color: var(--primary); }
 .table-wrap:has(#order-table) { scrollbar-gutter: stable; }
-#order-table td .lnk, .xd-info .lnk { border: 0; background: none; padding: 0 2px; font: inherit; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-#order-table td .lnk:hover, .xd-info .lnk:hover { color: var(--ink); }
+/* 표 안 링크 (주문 표·신청 목록 주문번호): 한 가지 모양, 누를 자리 24px 이상 */
+#order-table td .lnk, #request-table td .lnk { border: 0; background: none; padding: 0 2px; margin: 0; min-height: 24px; font: inherit; font-size: 13px; line-height: 24px; color: var(--primary-dark); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; vertical-align: middle; }
+#order-table td .lnk:hover, #request-table td .lnk:hover { color: var(--primary); }
+#order-table td .lnk[data-ord="deliver"] { padding: 0 6px; }
+#request-table td .lnk { padding: 0; }   /* 128px 열에 주문번호 전체가 들어가게 */
+.xd-info .lnk { border: 0; background: none; padding: 0 2px; font: inherit; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.xd-info .lnk:hover { color: var(--ink); }
 #rd-body .lnk, .tabs.request .lnk { border: 0; background: none; padding: 0 2px; margin: 0; height: auto; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 #rd-body .lnk:hover, .tabs.request .lnk:hover { color: var(--ink); }
 #req-drawer { width: min(560px, 45vw); min-width: min(360px, 100vw); }
@@ -629,17 +637,33 @@ dialog.dlg-sheet { width: min(820px, 95vw); }
 .order-sheet { color: var(--ink); }
 .os-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; margin-bottom: 10px; }
 .os-head h2 { margin: 0; font-size: 15px; letter-spacing: .3em; }
+.os-code { white-space: nowrap; }
+.os-lines .os-int { font-size: 12px; color: var(--ink-3); white-space: nowrap; }   /* 원내 신청번호: 공급처에는 참고용 */
+.os-lines .os-sum-l { text-align: right; }
 .os-no { font-size: 12px; color: var(--ink-2); }
 .os-no b { color: var(--ink); }
 .os-meta, .os-lines { width: 100%; border-collapse: collapse; font-size: 12px; margin: 0 0 10px; }
 .os-meta th, .os-meta td, .os-lines th, .os-lines td { border: 1px solid var(--rule); padding: 4px 8px; text-align: left; vertical-align: middle; }
 .os-meta th, .os-lines thead th { background: var(--bg-head); color: var(--ink-2); font-weight: 600; white-space: nowrap; }
+.os-meta td { height: 22px; }   /* 빈 칸(담당자 등)도 손으로 쓸 높이 */
 .os-meta th { width: 72px; }
 .os-lines .num { text-align: right; white-space: nowrap; }
 .os-lines tfoot td { font-weight: 700; border-top: 1px solid var(--ink); }
 .os-spec { color: var(--ink-2); }
 .os-total { text-align: right; font-size: 13px; margin: 4px 0; }
 .os-foot { text-align: right; font-size: 12px; color: var(--ink-2); margin: 12px 0 0; }
+/* 주문 생성 대화상자 */
+.ord-fields { margin-top: 12px; }
+.ord-fields > .ord-vendor-warn { margin: -2px 0 0; }
+.ord-note { margin: 10px 0 0; }
+#ord-error { margin: 8px 0 0; }
+#order-lines { table-layout: fixed; width: 100%; }
+#order-lines col.ol-no { width: 92px; }
+#order-lines col.ol-code { width: 96px; }
+#order-lines col.ol-qty { width: 48px; }
+#order-lines col.ol-amt { width: 96px; }
+#order-lines col.ol-who { width: 64px; }
+#order-lines td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .print-root { display: none; }
 /* 학회 여비 계산기 (conf.js): 머리·바닥 고정, 본문만 스크롤 */
 dialog.dlg-conf { width: min(1180px, 96vw); max-width: none; max-height: 94vh; }
@@ -767,7 +791,14 @@ table.grid.edit td.num .cell-input { text-align: right; }
   /* 발주서 인쇄: 인쇄 전용 사본만 (화면·대화상자는 숨김) */
   body.printing-sheet > :not(#print-sheet) { display: none !important; }
   body.printing-sheet #print-sheet { display: block; page: order-sheet; }
-  body.printing-sheet .os-meta th, body.printing-sheet .os-meta td, body.printing-sheet .os-lines th, body.printing-sheet .os-lines td { border-color: var(--ink); }
+  body.printing-sheet .os-meta th, body.printing-sheet .os-meta td, body.printing-sheet .os-lines th, body.printing-sheet .os-lines td { border-color: #000; color: #000; }
+  body.printing-sheet .os-head { border-bottom-color: #000; }
+  body.printing-sheet .os-lines tr { break-inside: avoid; }
+  body.printing-sheet .os-lines thead { display: table-header-group; }   /* 쪽마다 열 머리 반복 */
+  body.printing-sheet .os-lines tfoot { display: table-row-group; }      /* 합계는 마지막에 한 번만 */
+  body.printing-sheet .os-lines tfoot tr:first-child td { border-top: 1px solid #000; }
+  body.printing-sheet .os-lines .os-int { color: #444; }
+  body.printing-sheet #print-sheet, body.printing-sheet #print-sheet * { font-feature-settings: normal; font-variant-numeric: normal; }   /* PDF 에서 숫자·코드를 복사할 수 있게 (tnum 대체 글리프는 글자로 추출되지 않음) */
   /* 학회 여비 산출 내역 인쇄: 같은 A4 세로 양식 */
   body.printing-conf > :not(#print-conf) { display: none !important; }
   body.printing-conf #print-conf { display: block; page: order-sheet; }

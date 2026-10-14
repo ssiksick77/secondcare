@@ -60,13 +60,6 @@
   <button type="button" class="lnk req-prev-year" id="req-prev-year" hidden title="이전 연도에 아직 '신청' 상태로 남은 건을 봅니다"></button>
   <label class="tabs-year">연도 <select id="request-year"></select></label>
 </nav>
-<!-- 소모품 2단 메뉴 (담당자): 신청 목록 | 주문 표 -->
-<nav class="tabs request-sub req-admin-only" id="req-subtabs" aria-label="소모품 보기" hidden>
-  <ul role="tablist">
-    <li><button role="tab" id="rsub-list" data-rsub="신청" aria-controls="rview-list" aria-selected="true">신청</button></li>
-    <li><button role="tab" id="rsub-order" data-rsub="주문" aria-controls="rview-order" aria-selected="false">주문</button></li>
-  </ul>
-</nav>
 
 <main id="main" tabindex="-1">
   <div class="print-head" id="print-head" aria-hidden="true"></div>
@@ -140,6 +133,11 @@
   <section id="rpanel" role="tabpanel" aria-labelledby="rtab-장비" hidden>
     <div id="rview-list">
       <div class="toolbar">
+        <!-- 소모품 보기 전환 (담당자): 신청 목록 | 주문 표. 지금 보기의 툴바 맨 왼쪽으로 옮겨 다님 (request.js syncReqSub) -->
+        <div class="subtabs req-seg req-admin-only" id="req-seg" role="tablist" aria-label="소모품 보기" hidden>
+          <button type="button" role="tab" id="rsub-list" data-rsub="신청" aria-controls="rview-list" aria-selected="true">신청</button>
+          <button type="button" role="tab" id="rsub-order" data-rsub="주문" aria-controls="rview-order" aria-selected="false">주문</button>
+        </div>
         <label>상태 <select data-filter="상태" data-kind="request"><option value="">전체</option><option>신청</option><option>승인</option><option>반려</option><option>품의전환</option><option>완료</option></select></label>
         <label>신청인 <select data-filter="신청인" data-kind="request"><option value="">전체</option></select></label>
         <label>관련과제 <select data-filter="관련과제" data-kind="request"><option value="">전체</option></select></label>
@@ -162,19 +160,19 @@
         <span class="toolbar-note warn" id="req-sel-why" aria-live="polite" hidden></span>
         <span class="toolbar-note" id="req-sel-help">신청을 체크하면 승인·반려·품의 전환을 한꺼번에 할 수 있습니다. 행을 누르면 상세 패널이 열립니다.</span>
       </div>
-      <p class="toolbar-note req-researcher-note">① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.</p>
+      <p class="toolbar-note req-researcher-note">① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.<span id="req-researcher-sup" hidden> 소모품은 승인 뒤 담당자가 같은 구매처 신청을 모아 주문하고, 배송되면 완료됩니다.</span></p>
       <p class="toolbar-note req-sup-info" id="req-sup-info" hidden></p>
       <div class="table-wrap"><table class="grid clickable" id="request-table"></table></div>
     </div>
     <!-- 소모품 › 주문 (담당자 전용) -->
     <div id="rview-order" class="req-admin-only" hidden>
       <div class="toolbar">
-        <label>거래처 <select id="ord-f-vendor"><option value="">전체</option></select></label>
-        <label>상태 <select id="ord-f-state"><option value="">전체</option><option value="open">주문 중</option><option value="done">배송 완료</option></select></label>
+        <label>구매처 <select id="ord-f-vendor"><option value="">전체</option></select></label>
+        <label>상태 <select id="ord-f-state"><option value="">전체</option><option value="open">배송 전</option><option value="done">배송 완료</option></select></label>
         <label>검색 <input type="search" id="ord-f-q" placeholder="주문번호, 신청번호"></label>
         <div class="toolbar-end"><span class="toolbar-sum" id="order-sum" aria-live="polite"></span></div>
       </div>
-      <p class="toolbar-note req-order-note">배송일을 등록하면 배송 완료입니다. 배송 전 주문만 취소할 수 있습니다(연결 신청은 주문 해제, 적립금 사용 기록은 삭제). 신청번호를 누르면 신청 보기에서 그 신청의 상세 패널이 열립니다.</p>
+      <p class="toolbar-note req-order-note">배송일을 등록하면 해당 신청은 완료가 됩니다 (품의 전환은 그 뒤에도 가능). 배송 전 주문만 취소할 수 있습니다(신청은 주문에서 빠지고 적립금 사용 기록은 삭제). 신청번호를 누르면 신청 보기에서 그 신청의 상세 패널이 열립니다.</p>
       <div class="table-wrap"><table class="grid" id="order-table"></table></div>
     </div>
   </section>
@@ -470,15 +468,17 @@
   <form id="dlg-order-form" method="dialog" novalidate>
     <h2 id="order-title">주문 생성</h2>
     <div class="table-wrap"><table class="grid compact" id="order-lines"></table></div>
-    <div class="fields" style="margin-top:12px">
-      <label for="ord-date">주문일<input type="date" id="ord-date" required></label>
-      <label for="ord-vendor">거래처 <small>(기본: 신청의 구매처)</small><input type="text" id="ord-vendor" list="dl-거래처" autocomplete="off"></label>
-      <label for="ord-pay">결제금액 <small>(비우면 주문금액)</small><input type="text" id="ord-pay" inputmode="numeric" class="num-input" placeholder="0"></label>
-      <label class="chk wide" for="ord-dep"><input type="checkbox" id="ord-dep" checked> 적립금 사용으로 기록 (적립금 탭에 거래처 '사용' 1건, 증빙번호 = 주문번호)</label>
-      <label for="ord-user">사용자<input type="text" id="ord-user" list="dl-사용자" autocomplete="off"></label>
-      <label class="mid" for="ord-memo">비고<input type="text" id="ord-memo"></label>
+    <div class="fields ord-fields">
+      <label for="ord-date"><span class="lab">주문일</span><input type="date" id="ord-date" required></label>
+      <label for="ord-vendor"><span class="lab">구매처</span><select id="ord-vendor" aria-describedby="ord-vendor-warn"></select></label>
+      <label for="ord-pay"><span class="lab">결제금액 <small>(할인·배송비 반영한 실제 결제액)</small></span><input type="text" id="ord-pay" inputmode="numeric" class="num-input"></label>
+      <p class="wide toolbar-note warn ord-vendor-warn" id="ord-vendor-warn" hidden></p>
+      <label class="chk wide" for="ord-dep"><input type="checkbox" id="ord-dep" checked> 적립금으로 결제 (적립금 탭에 '사용' 1건을 함께 기록)</label>
+      <label for="ord-user"><span class="lab">사용자 <small>(적립금 기록용, 선택)</small></span><input type="text" id="ord-user" list="dl-사용자" autocomplete="off"></label>
+      <label class="mid" for="ord-memo"><span class="lab">비고</span><input type="text" id="ord-memo"></label>
     </div>
-    <p class="toolbar-note" id="ord-note" style="margin:10px 0 0"></p>
+    <p class="toolbar-note ord-note" id="ord-note" aria-live="polite"></p>
+    <p class="field-error" id="ord-error" role="alert" hidden></p>
     <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="ord-cancel">취소</button><button type="submit" class="btn btn-primary" id="ord-save">주문 생성</button></div>
   </form>
 </dialog>
@@ -535,10 +535,10 @@
       <legend>신청 · 발주서 (소모품 구매처 · 발주서 머리글)</legend>
       <div class="fields">
         <label class="wide" for="s-rq-sup">소모품 구매처 목록 <small>(쉼표로 구분 · 비우면 알파몰, 드림디포)</small><input id="s-rq-sup" name="REQUEST_SUPPLIERS" type="text" autocomplete="off" placeholder="알파몰,드림디포"></label>
-        <div class="wide s-sup-checks" id="s-rq-sup-checks" role="group" aria-label="구매처별 현재 신청 가능 여부"></div>
+        <div class="wide s-sup-checks" id="s-rq-sup-checks" role="group" aria-labelledby="s-rq-sup-lab"></div>
         <input type="hidden" id="s-rq-sup-off" name="REQUEST_SUPPLIERS_OFF">
-        <label class="wide" for="s-rq-sup-note">연구원 안내 <small>(소모품 신청 화면에 표시 · 예: 드림디포는 10월 말까지 이용 불가)</small><input id="s-rq-sup-note" name="REQUEST_SUPPLIER_NOTE" type="text" autocomplete="off" maxlength="200"></label>
-        <label for="s-rq-buyer">발주처<input id="s-rq-buyer" name="REQUEST_BUYER" type="text" autocomplete="off" placeholder="예: 의료인공지능센터"></label>
+        <label class="wide" for="s-rq-sup-note">연구원 안내 <small>(소모품 신청 화면에 표시 · 예: 드림디포는 10월 말까지 이용 불가 · 비우면 이용 불가 구매처가 자동으로 표시됩니다)</small><input id="s-rq-sup-note" name="REQUEST_SUPPLIER_NOTE" type="text" autocomplete="off" maxlength="200"></label>
+        <label for="s-rq-buyer">발주 기관 <small>(발주서에 우리 기관으로 표시)</small><input id="s-rq-buyer" name="REQUEST_BUYER" type="text" autocomplete="off" placeholder="예: 의료인공지능센터"></label>
         <label class="mid" for="s-rq-ship">배송지<input id="s-rq-ship" name="REQUEST_SHIP_TO" type="text" autocomplete="off" placeholder="주소 · 호실"></label>
         <label class="wide" for="s-rq-contact">담당자 <small>(이름 · 연락처)</small><input id="s-rq-contact" name="REQUEST_CONTACT" type="text" autocomplete="off"></label>
       </div>

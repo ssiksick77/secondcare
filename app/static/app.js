@@ -379,14 +379,14 @@ function renderDepositSummary() {
 }
 
 function switchSubTab(name) {
-  $$(".subtabs [role=tab]").forEach(b => {
+  $$("#panel-dash .subtabs [role=tab]").forEach(b => {
     const on = b.id === "sub-" + name;
     b.setAttribute("aria-selected", on);
     $("#" + b.getAttribute("aria-controls")).hidden = !on;
   });
   try { localStorage.setItem("ledger-subtab", name); } catch { }
 }
-$$(".subtabs [role=tab]").forEach(b => b.addEventListener("click", () => switchSubTab(b.id.replace("sub-", ""))));
+$$("#panel-dash .subtabs [role=tab]").forEach(b => b.addEventListener("click", () => switchSubTab(b.id.replace("sub-", ""))));
 try { const st = localStorage.getItem("ledger-subtab"); if (st && $("#sub-" + st)) switchSubTab(st); } catch { }
 
 function renderTagDashboard(fund, year) {
@@ -526,7 +526,7 @@ $("#dash-print").addEventListener("click", () => window.print());
 window.addEventListener("beforeprint", () => {
   const labor = document.body.classList.contains("labor-mode");
   const tab = $(`${labor ? "#labor-tabs" : "#main-tabs"} [role=tab][aria-selected="true"]`);
-  const panel = tab ? $("#" + tab.getAttribute("aria-controls")) : null, dash = panel?.id === "panel-dash";
+  const panel = tab ? $("#" + tab.getAttribute("aria-controls")) : null, dash = panel?.id === "panel-dash" && !document.body.classList.contains("request-mode");
   const val = sel => panel?.querySelector(sel)?.value || "";
   const fund = dash ? $("#dash-fund").value : (val('[data-filter="재원"]') || val('[data-filter="지급처"]'));
   const year = dash ? $("#dash-year").value : (val('[data-filter="year"]') || (labor && panel?.id === "lpanel-plan" ? $("#labor-year").value : ""));
@@ -534,9 +534,11 @@ window.addEventListener("beforeprint", () => {
   const period = year ? `${year}년${month ? " " + parseInt(month) + "월" : ""}` : month ? `${parseInt(month)}월` : "전체 기간";
   let name = (labor ? "인건비 " : "") + (tab?.textContent.trim() || "");
   if (document.body.classList.contains("request-mode")) name = "지출 신청 " + ($("#request-tabs [aria-selected=true]")?.dataset.rtype || "") + (typeof reqSub === "function" && reqSub() === "주문" ? " · 주문" : "");
-  if (dash) name += ` (${$(".subtabs [aria-selected=true]")?.textContent.trim() || ""})`;
+  if (dash) name += ` (${$("#panel-dash .subtabs [aria-selected=true]")?.textContent.trim() || ""})`;
   const note = dash ? $("#dash-note").textContent.trim() : "";
-  $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
+  // 신청 화면: 숨은 회계대장 탭의 재원·예산 값 대신 연도·구매처·상태 (request.js reqPrintHead)
+  if (document.body.classList.contains("request-mode") && typeof reqPrintHead === "function") $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(reqPrintHead())} · 출력일 ${today()}`;
+  else $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
   $$("details.defs-box").forEach(d => { if (!d.open) { d.open = true; d.dataset.printOpened = "1"; } });
 });
 window.addEventListener("afterprint", () => {
@@ -651,6 +653,7 @@ function openForm(kind, row, preset, opts = {}) {
   const dlg = $("#dlg");
   dlg.dataset.kind = kind; dlg.dataset.row = row ?? ""; dlg.dataset.convert = opts.convertRow ?? "";
   dlg.dataset.convertReq = opts.convertRequests ? JSON.stringify(opts.convertRequests) : "";  // 신청 → 품의 전환 (request.js)
+  dlg.dataset.convertPay = opts.convertPay ?? "";  // 주문 묶음 전환: 기본 금액 = 주문 결제금액 (바꾸면 amount_override)
   if (kind === "budget" && !rec && !preset?.["변경회차"]) {  // 다음 회차 자동 제안
     const sel = F("재원"); const fill = async () => { if (!sel.value) return; try { const r = await api("GET", `/api/budget/next-round?fund=${encodeURIComponent(sel.value)}`); if (!F("변경회차").value) F("변경회차").value = r.round; } catch { } };
     sel.addEventListener("change", () => { F("변경회차").value = ""; fill(); }); fill();
@@ -760,7 +763,7 @@ $("#dlg-form").addEventListener("submit", async e => {
     saveBtn.disabled = true; moreBtn.disabled = true; saveBtn.textContent = "저장 중…";
     let saved;
     if (convertReq) {  // 신청 여러 건 → 품의 1건 (서버가 품의 생성 + 신청 품의전환을 한 번에)
-      const res = await api("POST", "/api/request/convert", { rows: convertReq, expects: convertReq.map(n => expectOf("request", DATA.request.find(x => x._row === n))), extra: rec });
+      const res = await api("POST", "/api/request/convert", { rows: convertReq, expects: convertReq.map(n => expectOf("request", DATA.request.find(x => x._row === n))), extra: { ...rec, ...(dlg.dataset.convertPay !== "" && Number(rec["금액"]) !== Number(dlg.dataset.convertPay) ? { amount_override: true } : {}) } });
       saved = { ...res.req }; doneMsg = `품의 ${res["품의번호"]} 를 만들고 신청 ${res.numbers.join(", ")} 을(를) 품의전환으로 바꿨습니다.`;
     } else if (convertRow != null) {
       const req = DATA.req.find(x => x._row === convertRow);
@@ -780,7 +783,9 @@ $("#dlg-form").addEventListener("submit", async e => {
     if (cb) cb(saved);
     if (more) { const carry = {}; ["원인발생일", "일자", "귀속월", "지급월", "이름"].forEach(k => { if (rec[k]) carry[k] = rec[k]; }); openForm(kind, null, { ...carry, 거래처: "", 금액: "", 적요: "", 세목: "", 세세목: "", 관리번호: "", 비고: "", 증빙번호: "", 결의일: "", 지출완료일: "", 지급청구일: "" }); }
   } catch (err) {
-    showFormError(err.message); showAlert("저장 실패: " + err.message, "error");
+    showFormError(err.message);
+    if (kind === "request") { if (typeof requestSaveFailed === "function") requestSaveFailed(err); }  // 신청 폼: 오류는 폼 안에만 (토스트 중복 없음)
+    else showAlert("저장 실패: " + err.message, "error");
   } finally { delete dlg.dataset.busy; saveBtn.disabled = false; moreBtn.disabled = false; saveBtn.textContent = "저장"; }
 });
 $("#dlg-save-more").addEventListener("click", () => { $("#dlg").dataset.saveMore = "1"; $("#dlg-form").requestSubmit(); });
