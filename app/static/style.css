@@ -426,3 +426,6 @@ table.grid td.st-cell .s { font-size: 12px; color: var(--ink-2); margin-top: 1px
 table.grid td.st-cell .lnk { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 table.grid td.st-cell .lnk:hover { color: var(--ink); }
 table.grid td.st-cell .lnk.fix, table.grid td.st-cell.fix .s { color: var(--alert); }
+
+/* 금액 열 강조 */
+table.grid td.amt { font-weight: 600; }
