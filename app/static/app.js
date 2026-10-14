@@ -884,11 +884,17 @@ function switchTab(name) {
 }
 $$("#main-tabs [role=tab]").forEach(b => b.addEventListener("click", () => switchTab(b.id.replace("tab-", ""))));
 
+let EXEC_CLICK_T = null;
 document.addEventListener("click", e => {
   const b = e.target.closest("button[data-act], button[data-add]");
   if (!b) {
     const tr = e.target.closest("#exec-table tbody tr[data-row]");
-    if (tr && !e.target.closest("a, input, select")) openExecDrawer(Number(tr.dataset.row));
+    // 한 번 클릭 = 상세 패널(잠깐 기다렸다가 열어 두 번째 클릭이 밀린 버튼 위에 떨어지지 않게), 두 번 클릭 = 수정 창
+    if (tr && !e.target.closest("a, input, select")) {
+      const row = Number(tr.dataset.row);
+      if (e.detail >= 2) { clearTimeout(EXEC_CLICK_T); EXEC_CLICK_T = null; window.getSelection()?.removeAllRanges(); openForm("exec", row); }
+      else { clearTimeout(EXEC_CLICK_T); EXEC_CLICK_T = setTimeout(() => { EXEC_CLICK_T = null; openExecDrawer(row); }, 220); }
+    }
     return;
   }
   if (b.dataset.act === "xact") return execAction(Number(b.dataset.row), b.dataset.action, b);
@@ -909,6 +915,7 @@ document.addEventListener("dblclick", e => {
   if (e.target.closest("button, a, input, select, label")) return;
   const tr = e.target.closest("table.grid tbody tr[data-kind][data-row]"); if (!tr) return;
   const kind = tr.dataset.kind, row = Number(tr.dataset.row);
+  if (kind === "exec") return;  // 집행내역은 click 핸들러에서 처리
   if (!COLS[kind]) return;
   if (kind === "labor") { const r = DATA.labor.find(x => x._row === row); if (r && r["상태"] === "확정") { showAlert("확정된 지급 건은 '확정 취소' 뒤에 수정할 수 있습니다.", "warn"); return; } }
   window.getSelection()?.removeAllRanges();
