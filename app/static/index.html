@@ -74,7 +74,7 @@
       <label>상태 <select data-filter="상태" data-kind="labor"><option value="">전체</option><option>예정</option><option>확정</option></select></label>
       <label>검색 <input type="search" data-filter="q" data-kind="labor" placeholder="이름, 지급처, 비고"></label>
       <span class="toolbar-sum" id="labor-sum"></span>
-      <button type="button" class="btn" data-csv="labor" title="현재 필터의 목록을 CSV로 저장">CSV</button>
+      <button type="button" class="btn" data-csv="labor" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
     </div>
     <p class="toolbar-note" style="margin:0 0 8px">확정하면 집행내역에 건별 1행(재원 = 지급처, 예산목 = 인원의 내부/외부 구분)이 생기고 지급 건은 잠깁니다. 수정은 확정 취소 후, 취소·삭제 시 연결 집행도 함께 지워집니다.</p>
@@ -118,7 +118,7 @@
   <section id="panel-dash" role="tabpanel" aria-labelledby="tab-dash">
     <div class="toolbar">
       <div class="subtabs" role="tablist" aria-label="대시보드 보기">
-        <button type="button" role="tab" id="sub-budget" aria-selected="true" aria-controls="dash-budget">결의</button>
+        <button type="button" role="tab" id="sub-budget" aria-selected="true" aria-controls="dash-budget">예산</button>
         <button type="button" role="tab" id="sub-tags" aria-selected="false" aria-controls="dash-tags">태그</button>
       </div>
       <label>재원 <select id="dash-fund"><option value="">전체</option></select></label>
@@ -168,11 +168,11 @@
       <label class="chk"><input type="checkbox" data-filter="unpaid" data-kind="exec"> 미승인만</label>
       <label class="chk" title="관리번호·세세목·사용자·비고 열 표시"><input type="checkbox" id="exec-cols-all"> 상세 열</label>
       <span class="toolbar-sum" id="exec-sum"></span>
-      <button type="button" class="btn" data-csv="exec" title="현재 필터의 목록을 CSV로 저장">CSV</button>
+      <button type="button" class="btn" data-csv="exec" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn" id="btn-edit-mode" title="현재 필터의 집행을 팝업 격자에서 엑셀처럼 한꺼번에 편집">편집 모드</button>
       <button type="button" class="btn btn-primary" data-add="exec">집행 추가</button>
     </div>
-    <p class="toolbar-note" style="margin:0 0 6px">행을 클릭하면 오른쪽에 상세·증빙 패널이 열립니다.</p>
+    <p class="toolbar-note" style="margin:0 0 6px">행을 클릭하면 상세·증빙 패널, 두 번 클릭하면 수정 창이 열립니다.</p>
     <div class="table-wrap"><table class="grid clickable" id="exec-table"></table></div>
   </section>
 
@@ -185,7 +185,7 @@
       <label>월 <select data-filter="month" data-kind="req"><option value="">전체</option></select></label>
       <label>검색 <input type="search" data-filter="q" data-kind="req" placeholder="거래처, 적요, 번호, 태그"></label>
       <span class="toolbar-sum" id="req-sum"></span>
-      <button type="button" class="btn" data-csv="req" title="현재 필터의 목록을 CSV로 저장">CSV</button>
+      <button type="button" class="btn" data-csv="req" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn btn-primary" data-add="req">품의 추가</button>
     </div>
     <div class="table-wrap"><table class="grid" id="req-table"></table></div>
@@ -299,9 +299,10 @@
   </details>
   <div class="drawer-body" id="ai-log" aria-live="polite">
     <div class="ai-hint">
-      <p style="margin:0 0 6px"><b>조회</b> 예: <button type="button" class="chip-ex">3월 연구활동비 얼마 썼어?</button> <button type="button" class="chip-ex">미완료 건 정리해줘</button> <button type="button" class="chip-ex">ABC식당 적립금 잔액은?</button></p>
+      <p style="margin:0 0 6px"><b>조회</b> 예: <button type="button" class="chip-ex">3월 연구활동비 얼마 썼어?</button> <button type="button" class="chip-ex">미승인 건 정리해줘</button> <button type="button" class="chip-ex">ABC식당 적립금 잔액은?</button></p>
       <p style="margin:0 0 6px"><b>입력 제안</b> 예: <button type="button" class="chip-ex">5/20 ABC식당 회의 식대 85,000원 집행 기록해줘</button> <button type="button" class="chip-ex">품의 2026-AI01-001 집행으로 전환해줘</button></p>
-      <p style="margin:0">제안은 카드로 표시되고 "검토 후 저장"을 눌러야 장부에 반영됩니다. 금액·날짜는 꼭 확인하세요. 질문마다 장부 전체가 AI 서버로 전송되어 사용량(비용)이 발생하고 첫 응답은 느릴 수 있습니다. 긴 대화는 "대화 지우기" 후 새로 시작하세요.</p>
+      <p style="margin:0 0 6px">제안은 카드로 표시되고 "검토 후 저장"을 눌러야 장부에 반영됩니다. 금액·날짜는 꼭 확인하세요.</p>
+      <p style="margin:0">질문마다 장부 전체가 AI 서버로 전송되어 사용량(비용)이 발생하고 첫 응답은 느릴 수 있습니다. 긴 대화는 "대화 지우기" 후 새로 시작하세요.</p>
     </div>
   </div>
   <form class="drawer-foot" id="ai-form">
@@ -370,7 +371,7 @@
     <div id="bulk-rows" class="bulk-rows"></div>
     <button type="button" class="btn btn-sm" data-bulk="add">배분 행 추가</button>
     <p class="toolbar-note" id="bulk-preview" style="margin:10px 0 0"></p>
-    <div class="dlg-actions"><span class="toolbar-note">각 달마다 지급처별 예정 건이 만들어집니다. 이미 같은 건이 있으면 전체가 취소됩니다.</span><span style="flex:1"></span><button type="button" class="btn" data-bulk="cancel">취소</button><button type="submit" class="btn btn-primary" id="bulk-save">생성</button></div>
+    <div class="dlg-actions"><span class="toolbar-note">달마다 지급처별 '예정' 건을 만듭니다. 이미 있는 건은 건너뜁니다.</span><span style="flex:1"></span><button type="button" class="btn" data-bulk="cancel">취소</button><button type="submit" class="btn btn-primary" id="bulk-save">생성</button></div>
   </form>
 </dialog>
 

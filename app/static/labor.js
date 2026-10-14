@@ -13,7 +13,7 @@ Object.assign(COLS, {
   payee: [{ k: "지급처코드" }, { k: "지급처명", wrap: true }, { k: "인건비예산", t: "num", amt: true }, { k: "사용건수", t: "num", calc: r => DATA.labor.filter(x => x["지급처"] === r["지급처코드"]).length }, { k: "비고", wrap: true }],
   ladj: [{ k: "월" }, { k: "이름" }, { k: "금액", t: "num", amt: true }, { k: "사유", wrap: true }],
 });
-const LABOR_TITLES = { people: "인원", salary: "기준급여", payee: "외부 지급처", labor: "인건비 지급", ladj: "선급·미지급 조정" };
+const LABOR_TITLES = { people: "인원", salary: "기준급여", payee: "지급처", labor: "인건비 지급", ladj: "조정" };
 const LABOR_FORMS = {
   people: () => [
     { k: "이름", type: "text", req: true, focus: true }, { k: "인건비구분", type: "select", opts: DATA.meta.labor_kinds, req: true, hint: "확정 시 예산목 결정" },
@@ -26,7 +26,7 @@ const LABOR_FORMS = {
   ],
   payee: () => [
     { k: "지급처코드", type: "text", req: true, focus: true, hint: "'-' 없이. 집행내역 재원 열과 거래번호에 사용" }, { k: "지급처명", type: "text", cls: "mid" },
-    { k: "인건비예산", type: "num", hint: "비우면 '관리 안 함'" }, { k: "비고", type: "text", cls: "mid" },
+    { k: "인건비예산", type: "num", hint: "비우면 예산 미입력 (잔액 계산 제외)" }, { k: "비고", type: "text", cls: "mid" },
   ],
   labor: () => [
     { k: "이름", type: "select", opts: peopleNames(), req: true },
@@ -46,6 +46,13 @@ function laborDefaults(kind) {
   if (kind === "salary") return { 시작월: `${laborYear()}-01`, 종료월: `${laborYear()}-12` };
   if (kind === "people") return { 인건비구분: "내부" };
   return {};
+}
+function laborIdent(kind, r) {
+  if (kind === "labor") return `${r["지급월"]} ${r["이름"]}`;
+  if (kind === "people" || kind === "salary") return r["이름"] || "";
+  if (kind === "payee") return r["지급처코드"] || "";
+  if (kind === "ladj") return `${r["월"]} ${r["이름"]}`;
+  return "";
 }
 function laborLabel(kind, r) {
   if (kind === "labor") return `${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원 (${r["상태"]})`;
@@ -141,8 +148,8 @@ function renderLaborFunds() {
   const t = rows.filter(r => r.b != null).reduce((a, r) => ({ b: a.b + r.b, done: a.done + r.done, plan: a.plan + r.plan }), { b: 0, done: 0, plan: 0 });
   const u = rows.filter(r => r.b == null).reduce((a, r) => ({ n: a.n + 1, done: a.done + r.done, plan: a.plan + r.plan }), { n: 0, done: 0, plan: 0 });
   const cell = (v, neg) => `<td class="num${neg ? " neg" : ""}">${v == null ? '<span class="muted" title="인건비예산 미입력">-</span>' : fmt(v)}</td>`;
-  const line = r => `<tr><td>${esc(r.c)}${r.external ? ' <span class="muted">(외부)</span>' : ""}</td><td class="wrap">${esc(r.name)}</td><td class="num amt">${r.b == null ? '<span class="muted">관리 안 함</span>' : fmt(r.b)}</td>${cell(r.done)}${cell(r.plan)}${cell(r.b == null ? null : r.b - r.done, r.b != null && r.b - r.done < 0)}${cell(r.b == null ? null : r.b - r.done - r.plan, r.b != null && r.b - r.done - r.plan < 0)}</tr>`;
-  $("#labor-funds").innerHTML = `<thead><tr><th>지급처</th><th>과제명 · 지급처명</th><th class="num amt">인건비 예산</th><th class="num">확정 지급</th><th class="num">예정</th><th class="num">확정잔액</th><th class="num">예정잔액</th></tr></thead><tbody>${rows.map(line).join("") || `<tr><td class="empty" colspan="7">${y}년 인건비 지급 건과 인건비 예산이 없습니다. 재원 탭의 예산변동(내부·외부인건비) 또는 재원의 인건비예산 열, 지급처 탭의 인건비예산을 확인하세요.</td></tr>`}</tbody>${rows.length ? `<tfoot><tr class="total"><td>합계 (예산 관리 지급처)</td><td></td><td class="num amt">${fmt(t.b)}</td><td class="num">${fmt(t.done)}</td><td class="num">${fmt(t.plan)}</td><td class="num${t.b - t.done < 0 ? " neg" : ""}">${fmt(t.b - t.done)}</td><td class="num${t.b - t.done - t.plan < 0 ? " neg" : ""}">${fmt(t.b - t.done - t.plan)}</td></tr>${u.n ? `<tr class="sub"><td>관리 안 함 지급처 ${u.n}곳</td><td class="muted">예산 없음 · 잔액 계산 제외</td><td class="num amt"></td><td class="num">${fmt(u.done)}</td><td class="num">${fmt(u.plan)}</td><td></td><td></td></tr>` : ""}</tfoot>` : ""}`;
+  const line = r => `<tr><td>${esc(r.c)}${r.external ? ' <span class="muted">(외부)</span>' : ""}</td><td class="wrap">${esc(r.name)}</td><td class="num amt">${r.b == null ? '<span class="muted">예산 미입력</span>' : fmt(r.b)}</td>${cell(r.done)}${cell(r.plan)}${cell(r.b == null ? null : r.b - r.done, r.b != null && r.b - r.done < 0)}${cell(r.b == null ? null : r.b - r.done - r.plan, r.b != null && r.b - r.done - r.plan < 0)}</tr>`;
+  $("#labor-funds").innerHTML = `<thead><tr><th>지급처</th><th>과제명 · 지급처명</th><th class="num amt">인건비 예산</th><th class="num">확정 지급</th><th class="num">예정</th><th class="num" title="잔액 = 인건비 예산 − 확정 지급">잔액</th><th class="num" title="가용잔액 = 잔액 − 예정">가용잔액</th></tr></thead><tbody>${rows.map(line).join("") || `<tr><td class="empty" colspan="7">${y}년 인건비 예산과 지급 건이 없습니다. 예산은 회계대장 [예산변동]의 내부·외부인건비, 또는 [재원]·[지급처]의 인건비예산 열에서 입력합니다.</td></tr>`}</tbody>${rows.length ? `<tfoot><tr class="total"><td>합계 (예산 관리 지급처)</td><td></td><td class="num amt">${fmt(t.b)}</td><td class="num">${fmt(t.done)}</td><td class="num">${fmt(t.plan)}</td><td class="num${t.b - t.done < 0 ? " neg" : ""}">${fmt(t.b - t.done)}</td><td class="num${t.b - t.done - t.plan < 0 ? " neg" : ""}">${fmt(t.b - t.done - t.plan)}</td></tr>${u.n ? `<tr class="sub"><td>예산 미입력 지급처 ${u.n}곳</td><td class="muted">잔액 계산 제외</td><td class="num amt"></td><td class="num">${fmt(u.done)}</td><td class="num">${fmt(u.plan)}</td><td></td><td></td></tr>` : ""}</tfoot>` : ""}`;
   $("#labor-funds").closest(".table-wrap").classList.toggle("empty", !rows.length);
 }
 function renderLaborPlan() {
@@ -213,7 +220,7 @@ async function laborUnconfirm(row) {
   if (ev) return showAlert(`집행 ${r["연결거래번호"]} 에 증빙 ${ev}개가 등록되어 있어 확정을 취소할 수 없습니다. 집행내역 상세에서 증빙을 먼저 지우세요.`, "warn");
   if (!await confirmDlg({ title: "확정 취소", body: `${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원\n\n연결 집행 ${r["연결거래번호"] || ""} 이 집행내역에서 삭제되고 이 건은 '예정'으로 돌아갑니다.`, verb: "확정 취소", danger: true })) return;
   try { await api("POST", `/api/labor/${row}/action`, { action: "unconfirm", expect: expectOf("labor", r) }); showAlert("확정을 취소했습니다 (예정으로 되돌림).", "ok", { undo: true }); await load(); refreshCellDialog(); }
-  catch (err) { showAlert("취소 실패: " + err.message, "error"); }
+  catch (err) { showAlert("확정 취소 실패: " + err.message, "error"); }
 }
 
 // ---------- 계획표 셀 편집 ----------

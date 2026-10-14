@@ -27,7 +27,7 @@ const FILTERS = { exec: {}, req: {}, budget: {}, deposit: {} };
 // ---------- 열 정의 ----------
 const COLS = {
   exec: [
-    { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "원인발생일", t: "date", label: "날짜" }, { k: "지급청구일", t: "date", hide: true },
+    { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "원인발생일", t: "date", label: "발생일" }, { k: "지급청구일", t: "date", hide: true },
     { k: "지출완료일", t: "date", hide: true }, { k: "결의일", t: "date", hide: true }, { k: "재원" }, { k: "예산목" }, { k: "세목" }, { k: "세세목", minor: true },
     { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (예산현액 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 파일 수" }, { k: "비고", wrap: true, minor: true },
   ],
@@ -60,7 +60,7 @@ function formFields(kind) {
   const items = DATA.meta.budget_items;
   // 실무 입력 순서: 날짜 → 재원 → 예산목 → 거래처 → 금액 → 적요 → 세목 → 태그 → (부가 정보)
   const common = [
-    { k: "원인발생일", type: "date", req: true, hint: "발생 단계 (표의 '날짜')" },
+    { k: "원인발생일", type: "date", req: true, hint: "발생 단계" },
     { k: "재원", type: "select", opts: funds, req: true },
     { k: "예산목", type: "select", opts: items, req: true },
     { k: "거래처", type: "datalist", focus: true },
@@ -280,7 +280,7 @@ function renderList(kind) {
     return rowHtml(r, tds);
   }).join("") : `<tr><td class="empty" colspan="${cols.length + 1}">표시할 항목이 없습니다.</td></tr>`;
   function cellHtml(c, r, v) {
-      if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미등록 재원">-</span>' : fmt(v)}</td>`;
+      if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미입력">-</span>' : fmt(v)}</td>`;
       if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit")) {
         return `<td title="${esc(v)}">${esc(mmdd(v))}</td>`;  // 내역 탭은 MM/DD, 전체 날짜는 툴팁
       }
@@ -289,7 +289,7 @@ function renderList(kind) {
         // 두 줄: 윗줄 상태 + 다음 단계 체크, 아랫줄 그 단계의 날짜(+ 청구 단계에서는 보완 표시/해제 링크)
         const stDate = kind === "exec" ? { 청구: r["지급청구일"], 보완: r["지급청구일"], 완료: r["지출완료일"], 결의: r["결의일"] }[v] : null;
         const fixLink = kind === "exec" && v === "청구" ? `<button type="button" class="lnk" data-act="xact" data-action="fix" data-row="${r._row}" title="서류·증빙 보완 필요로 표시">보완</button>`
-          : kind === "exec" && v === "보완" ? `<button type="button" class="lnk fix" data-act="xact" data-action="unfix" data-row="${r._row}" title="보완 표시 해제">해제</button>` : "";
+          : kind === "exec" && v === "보완" ? `<button type="button" class="lnk fix" data-act="xact" data-action="unfix" data-row="${r._row}" title="보완 표시 해제" aria-label="보완 해제">해제</button>` : "";
         const sub = kind === "exec" && (stDate || fixLink) ? `<div class="s">${stDate ? `<span title="${esc(stDate)}">${esc(mmdd(stDate))}</span>` : ""}${stDate && fixLink ? " · " : ""}${fixLink}</div>` : "";
         return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : (kind === "exec" ? '<span class="next ph" aria-hidden="true"></span>' : "")}</div>${sub || (kind === "exec" ? '<div class="s">&nbsp;</div>' : "")}</td>`;
       }
@@ -376,7 +376,7 @@ function renderTagDashboard(fund, year) {
     const execAll = DATA.exec.filter(r => (!fund || r["재원"] === fund) && inYear(r["원인발생일"])).reduce((a, r) => a + (r["금액"] || 0), 0);
     const linkedAmt = DATA.exec.filter(r => linked.has(r["거래번호"]) && (!fund || r["재원"] === fund) && inYear(r["원인발생일"])).reduce((a, r) => a + (r["금액"] || 0), 0);
     const depUse = fund ? 0 : DATA.deposit.filter(r => r["구분"] === "사용" && inYear(r["일자"])).reduce((a, r) => a + (r["금액"] || 0), 0);
-    $("#tag-recon").textContent = `조정: 결의 집행액 ${fmt(execAll)} − 적립 선결제 ${fmt(linkedAmt)} + 적립금 사용 ${fmt(depUse)} = 태그 집계 ${fmt(execAll - linkedAmt + depUse)}원`;
+    $("#tag-recon").textContent = `조정: 예산 집계 집행액 ${fmt(execAll)} − 적립 선결제 ${fmt(linkedAmt)} + 적립금 사용 ${fmt(depUse)} = 태그 집계 ${fmt(execAll - linkedAmt + depUse)}원`;
   }
 
   const cat = Object.fromEntries(DATA.tags.map(t => [t["태그명"], t["분류"] || "기타"]));
@@ -452,12 +452,12 @@ function renderDashboard() {
   $("#dash-cards").innerHTML = itemCards.length ? itemCards.map(([i, c]) => {
     const avail = c.b - c.sa - c.p, rate = c.b ? c.sa / c.b : null, used = c.b ? Math.min(1, (c.sa + c.p) / c.b) : 1;
     const bar = c.b ? `<div class="bar" aria-hidden="true"><i class="${c.sa > c.b ? "over" : ""}" style="width:${Math.min(100, c.sa / c.b * 100).toFixed(1)}%"></i>${c.p ? `<i class="p" style="left:${Math.min(100, c.sa / c.b * 100).toFixed(1)}%;width:${Math.max(0, (used - Math.min(1, c.sa / c.b)) * 100).toFixed(1)}%"></i>` : ""}</div>` : "";
-    return `<div class="card" role="listitem" title="${esc(i)}: 예산현액 ${fmt(c.b)} · 집행 ${fmt(c.sa)}${c.p ? ` · 품의대기 ${fmt(c.p)}` : ""} · 가용잔액 ${fmt(avail)}"><div class="k">${esc(i)}</div>${c.b ? `<div class="v${avail < 0 ? " neg" : ""}">${fmt(avail)}</div>` : `<div class="v nobudget" title="예산변동에 이 예산목의 예산을 입력하면 가용잔액이 계산됩니다">예산 미입력</div>`}<div class="sub"><span>집행 ${fmt(c.sa)}${c.p ? ` <span class="muted">+대기 ${fmt(c.p)}</span>` : ""}</span><span>${rate == null ? "예산 없음" : pct(rate)}</span></div>${bar}</div>`;
+    return `<div class="card" role="listitem" title="${esc(i)}: 예산현액 ${fmt(c.b)} · 집행 ${fmt(c.sa)}${c.p ? ` · 품의대기 ${fmt(c.p)}` : ""} · 가용잔액 ${fmt(avail)}"><div class="k">${esc(i)}</div>${c.b ? `<div class="v${avail < 0 ? " neg" : ""}">${fmt(avail)}</div>` : `<div class="v nobudget" title="예산변동에 이 예산목의 예산을 입력하면 가용잔액이 계산됩니다">예산 미입력</div>`}<div class="sub"><span>집행 ${fmt(c.sa)}${c.p ? ` <span class="muted">+대기 ${fmt(c.p)}</span>` : ""}</span><span>${rate == null ? "" : pct(rate)}</span></div>${bar}</div>`;
   }).join("") : `<div class="card empty-card"><div class="k">예산목별 가용잔액</div><div class="v">-</div><div class="sub"><span>${DATA.funds.length ? "예산·집행 데이터가 없습니다" : "재원을 먼저 등록하세요"}</span></div></div>`;
   const exAmt = excluded.reduce((a, r) => a + (r["금액"] || 0), 0);
-  $("#dash-note").innerHTML = esc((year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.sa / tot.b) : "-"} · 품의대기 ${fmt(tot.p)} (${reqs.length}건) · 가용잔액 ${tot.b ? fmt(tot.b - tot.sa - tot.p) : "예산 미입력"} · 미완료 ${unpaid}건`)
+  $("#dash-note").innerHTML = esc((year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.sa / tot.b) : "-"} · ${tot.p || reqs.length ? `품의대기 ${fmt(tot.p)} (${reqs.length}건) · ` : ""}가용잔액 ${tot.b ? fmt(tot.b - tot.sa - tot.p) : "예산 미입력"} · 미승인 ${unpaid}건`)
     + (excluded.length ? ` · <button type="button" class="link" data-act="show-excluded" title="재원 목록에 없는 지급처(외부 인건비 등)나 예산목 목록 밖의 집행. 집행내역·태그 집계에는 포함되지만 예산 집계에서는 제외">집계 제외 ${excluded.length}건 ${fmt(exAmt)}원</button>` : "");
-  $("#dash-defs").innerHTML = `칸의 큰 숫자 = 가용잔액 = 예산현액 − 집행(파일 전체) − 품의대기(날짜 무관, 선택한 재원 합산) · 막대 = 집행률(회색은 품의대기) · 예산현액 = 재원별 이월+당초+변경 합계 · 집행액 열만 연·월 필터(원인발생일) 적용 · 잔액 = 예산현액 − 집행(전체) · 미완료 = 지출완료일 없는 집행 건`;
+  $("#dash-defs").innerHTML = `칸의 큰 숫자 = 가용잔액 = 예산현액 − 집행(파일 전체) − 품의대기(날짜 무관, 선택한 재원 합산) · 막대 = 집행률(회색은 품의대기) · 예산현액 = 재원별 이월+당초+변경 합계 · 집행액 열만 연·월 필터(원인발생일) 적용 · 잔액 = 예산현액 − 집행(전체) · 미승인 = 지출완료일 없는 집행 건`;
 
   // 표
   const cols = month ? ["예산현액", `${parseInt(month)}월 집행`, "누계 집행", "잔액", "집행률", "품의대기", "가용잔액"] : ["예산현액", "집행액", "잔액", "집행률", "품의대기", "가용잔액"];
@@ -572,7 +572,7 @@ function openForm(kind, row, preset, opts = {}) {
   const rec = row != null ? DATA[kind].find(r => r._row === row) : null;
   const fields = formFields(kind).filter(f => !(f.onlyNew && rec));
   const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
-  $("#dlg-title").textContent = opts.title || ((rec ? "수정 - " : "추가 - ") + titles[kind]);
+  $("#dlg-title").textContent = opts.title || (titles[kind] + (rec ? " 수정" + (IDENT_LABEL(kind, rec) ? " · " + IDENT_LABEL(kind, rec) : "") : " 추가"));
   $("#dlg-error").hidden = true; $("#dlg-error").classList.remove("info");
   $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !["exec", "req", "deposit", "budget", "tags", "labor", "salary", "people"].includes(kind);
   const tagDefault = DATA.tags.some(t => t["태그명"] === "적립금") ? "적립금" : "";
@@ -598,7 +598,7 @@ function openForm(kind, row, preset, opts = {}) {
     return `<label class="${f.cls || ""}" for="${id}" data-dep="${esc(f.dep || "")}"><span class="lab">${lab}${f.hint ? ` <small>(${esc(f.hint)})</small>` : ""}</span>${input}</label>`;
   }).join("");
   syncDepFields();
-  if (kind === "exec" && rec) { const o = execOrigin(rec); if (o?.locked) { LOCKED_COLS.forEach(k => { const el = F(k); if (el) { el.readOnly = true; el.setAttribute("aria-readonly", "true"); if (el.tagName === "SELECT") el.dataset.lock = el.value; el.classList.add("locked"); el.title = `${o.kind} 연결 행: 원본에서만 변경`; } }); $("#dlg-error").textContent = `${o.label} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리하고, 여기서는 세목·태그·관리번호·날짜·비고만 바꿀 수 있습니다.`; $("#dlg-error").hidden = false; $("#dlg-error").classList.add("info"); } }
+  if (kind === "exec" && rec) { const o = execOrigin(rec); if (o?.locked) { LOCKED_COLS.forEach(k => { const el = F(k); if (el) { el.readOnly = true; el.setAttribute("aria-readonly", "true"); if (el.tagName === "SELECT") el.dataset.lock = el.value; el.classList.add("locked"); el.title = `${o.kind} 연결 행: 원본에서만 변경`; } }); $("#dlg-error").textContent = `${o.label} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리하고, 여기서는 세목·태그·관리번호·청구·승인·결의일·비고만 바꿀 수 있습니다.`; $("#dlg-error").hidden = false; $("#dlg-error").classList.add("info"); } }
   const dlg = $("#dlg");
   dlg.dataset.kind = kind; dlg.dataset.row = row ?? ""; dlg.dataset.convert = opts.convertRow ?? "";
   if (kind === "budget" && !rec && !preset?.["변경회차"]) {  // 다음 회차 자동 제안
@@ -625,8 +625,11 @@ $("#dlg-fields").addEventListener("keydown", e => {
   const next = list[i + 1];
   if (next) { next.focus(); if (next.select) next.select(); } else $("#dlg-save").focus();
 });
-$("#dlg").addEventListener("cancel", e => {  // Esc
-  if (formDirty() && !confirm("입력한 내용을 버리고 닫을까요?")) e.preventDefault();
+const confirmDiscard = () => confirmDlg({ title: "입력 취소", body: "입력한 내용은 저장되지 않습니다.", verb: "버리고 닫기", danger: true });
+$("#dlg").addEventListener("cancel", async e => {  // Esc: confirmDlg 가 비동기라 항상 막고, 확인되면 직접 닫는다
+  if (!formDirty()) return;
+  e.preventDefault();
+  if (await confirmDiscard()) { DLG_ON_SAVED = null; $("#dlg").dataset.initial = ""; $("#dlg").close(); }
 });
 
 // 구분 값에 따라 종속 필드 표시 (적립금 폼)
@@ -748,7 +751,7 @@ function availableBudget(fund, item, opts = {}) {
   return b - s - p;
 }
 let DLG_ON_SAVED = null;
-$("#dlg-cancel").addEventListener("click", () => { if (formDirty() && !confirm("입력한 내용을 버리고 닫을까요?")) return; DLG_ON_SAVED = null; $("#dlg").dataset.initial = ""; $("#dlg").close(); });
+$("#dlg-cancel").addEventListener("click", async () => { if (formDirty() && !await confirmDiscard()) return; DLG_ON_SAVED = null; $("#dlg").dataset.initial = ""; $("#dlg").close(); });
 $("#dlg").addEventListener("close", () => { DLG_ON_SAVED = null; });
 function showFormError(msg) { const p = $("#dlg-error"); p.textContent = msg; p.hidden = false; }
 
@@ -802,6 +805,8 @@ async function setDateToday(row, col, btn) {
 }
 
 // ---------- 삭제 ----------
+const DEL_KIND = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
+function IDENT_LABEL(kind, r) { return r?.["거래번호"] || r?.["품의번호"] || r?.["재원코드"] || r?.["태그명"] || (typeof laborIdent === "function" ? laborIdent(kind, r) : ""); }
 async function del(kind, row) {
   const r = DATA[kind].find(x => x._row === row);
   if (kind === "exec" && r) { const o = execOrigin(r); if (o?.locked) { showAlert(`${o.label} 에서 생긴 집행이라 여기서 지울 수 없습니다. ${o.kind === "인건비" ? "인건비 원장에서 '확정 취소' 또는 삭제" : "적립금 탭에서 해당 적립 행 삭제"}로 처리하세요.`, "warn"); return; } }
@@ -818,7 +823,7 @@ async function del(kind, row) {
   const laborLbl = typeof laborLabel === "function" ? laborLabel(kind, r) : null;
   const label = laborLbl ? laborLbl + (kind === "labor" && r["연결거래번호"] ? `\n연결 집행 ${r["연결거래번호"]} 도 함께 삭제됩니다.` : "") : no ? [no, r["거래처"] || r["과제명"] || r["분류"], r["금액"] != null && kind !== "funds" && kind !== "tags" ? fmt(r["금액"]) + "원" : "", r["원인발생일"] ? mmdd(r["원인발생일"]) : "", (r["적요"] || r["설명"] || "").slice(0, 30)].filter(Boolean).join(" · ")
     : (kind === "deposit" ? `${r?.["일자"]} ${r?.["거래처"]} ${r?.["구분"]} ${fmt(r?.["금액"])}원` : `${r?.["재원"]} ${r?.["변경회차"]}회차`);
-  if (!await confirmDlg({ title: "삭제", body: `${label}\n\n삭제 직후 토스트의 '되돌리기'로 복구할 수 있습니다. 그 뒤에는 app/backup 폴더의 백업 파일로만 복원됩니다.`, verb: "삭제", danger: true })) return;
+  if (!await confirmDlg({ title: `${DEL_KIND[kind] || "항목"} 삭제`, body: `${label}\n\n삭제 직후 토스트의 '되돌리기'로 복구할 수 있습니다. 그 뒤에는 app/backup 폴더의 백업 파일로만 복원됩니다.`, verb: "삭제", danger: true })) return;
   try { await api("DELETE", `/api/${kind}/${row}`, { expect: expectOf(kind, r) }); showAlert(`${no || label} 삭제했습니다.`, "ok", { undo: true }); await load(); }
   catch (e) { showAlert(e.message, "error"); }
 }
@@ -996,7 +1001,7 @@ async function aiInit() {
 function applyAIState() {
   const b = $("#btn-ai");
   b.hidden = false; b.disabled = !AI.enabled;
-  b.title = AI.enabled ? `AI 도우미 (${AI.provider} · ${AI.model})` : "AI 도우미를 쓰려면 우하단 설정에서 API 키를 입력하세요";
+  b.title = AI.enabled ? `AI 도우미 (${AI.provider} · ${AI.model})` : "AI 도우미를 쓰려면 오른쪽 위 설정(톱니)에서 API 키를 입력하세요";
   $("#report-box").hidden = !AI.enabled;
   $("#ai-model").textContent = AI.enabled ? `${AI.provider} · ${AI.model}` : "";
 }
@@ -1042,7 +1047,7 @@ $("#ai-form").addEventListener("submit", async e => {
     (r.proposals || []).forEach(renderProposal);
     if (r.usage) { const u = document.createElement("div"); u.className = "toolbar-note"; u.style.alignSelf = "flex-start"; u.textContent = `이번 질문 입력 약 ${(r.usage.input || 0).toLocaleString()} 토큰${r.usage.cached ? ` (캐시 ${(r.usage.cached).toLocaleString()})` : ""}`; $("#ai-log").appendChild(u); }
   } catch (err) {
-    pending.textContent = "오류: " + err.message; pending.className = "msg error";
+    pending.textContent = "답변을 받지 못했습니다: " + err.message; pending.className = "msg error";
     const rb = document.createElement("button"); rb.type = "button"; rb.className = "btn btn-sm retry"; rb.textContent = "다시 보내기";
     rb.addEventListener("click", () => { $("#ai-input").value = q; pending.remove(); $("#ai-form").requestSubmit(); });
     pending.appendChild(rb);
@@ -1198,7 +1203,7 @@ $("#rep-run").addEventListener("click", async () => {
   try {
     const r = await api("POST", "/api/ai/report", { fund: $("#rep-fund").value, year: $("#rep-year").value, month: $("#rep-month").value, style: $("#rep-style").value });
     out.innerHTML = mdToHtml(r.report); out.dataset.raw = r.report; $("#rep-copy").hidden = false; $("#rep-caveat").hidden = false;
-  } catch (err) { out.textContent = "오류: " + err.message; }
+  } catch (err) { out.textContent = "보고서를 만들지 못했습니다: " + err.message + ". 잠시 후 다시 생성하세요."; }
   finally { $("#rep-run").disabled = false; }
 });
 $("#rep-copy").addEventListener("click", async () => {
@@ -1314,12 +1319,13 @@ $$("[data-filter][data-kind=exec]").forEach(el => el.addEventListener("input", r
 
 async function execAction(row, action, btn) {
   const r = DATA.exec.find(x => x._row === row); if (!r) return;
-  const label = { claim: "청구 (지급청구일 등록)", resolve: "결의 (결의일 등록)", unresolve: "결의 취소", complete: "승인 (지출완료일 등록)", fix: "보완 표시", unfix: "보완 해제", uncomplete: "승인 취소 (지출완료일 삭제)" }[action];
+  const md = (() => { const [, m, d] = today().split("-"); return `${parseInt(m)}/${parseInt(d)}`; })();
+  const label = { claim: `청구 처리 · 지급청구일 ${md}`, resolve: `결의 처리 · 결의일 ${md} (완료)`, unresolve: "결의 취소", complete: `승인 처리 · 지출완료일 ${md}`, fix: "보완 표시", unfix: "보완 해제", uncomplete: "승인 취소 · 지출완료일 삭제" }[action];
   if (action === "uncomplete" && !await confirmDlg({ title: "승인 취소", body: `${r["거래번호"]} 의 지출완료일(${r["지출완료일"]})을 지우고 청구 상태로 되돌립니다.`, verb: "승인 취소", danger: true })) return;
   if (btn) btn.disabled = true;
   try {
     await api("POST", `/api/exec/${row}/action`, { action, expect: expectOf("exec", r) });
-    showAlert(`${r["거래번호"]} ${label} (${today()})`, "ok", { undo: true });
+    showAlert(`${r["거래번호"]} ${label}`, "ok", { undo: true });
     await load();
   } catch (e) { showAlert(e.message, "error"); if (btn) btn.disabled = false; }
 }
@@ -1381,7 +1387,7 @@ async function renderExecDrawer(fetchEvid) {
     </section>
     <section class="xd-sec">
       <h3>증빙 <span class="toolbar-note">${evid.length}개</span><span class="sp"></span>${r["증빙폴더"] ? `<a class="btn btn-sm" href="${esc(r["증빙폴더"])}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
-      ${!drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않았습니다. 우하단 설정에서 연결하면 업로드할 수 있습니다.${drive.error ? " (" + esc(drive.error) + ")" : ""}</p>` : ""}
+      ${!drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않았습니다. 오른쪽 위 설정(톱니)에서 연결하면 업로드할 수 있습니다.${drive.error ? " (" + esc(drive.error) + ")" : ""}</p>` : ""}
       ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th>종류</th><th>파일명</th><th class="num">크기</th><th>업로드</th><th></th></tr></thead><tbody>
         ${evid.map(e => `<tr><td>${esc(e["증빙종류"])}</td><td class="evid-name">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e["파일명"])}</a>` : esc(e["파일명"])}${e["원본파일명"] && e["원본파일명"] !== e["파일명"] ? `<div class="toolbar-note">${esc(e["원본파일명"])}</div>` : ""}</td><td class="num">${e["크기"] ? Math.round(e["크기"] / 1024).toLocaleString() + " KB" : ""}</td><td>${esc(mmdd(e["업로드일"]))}</td><td><button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(e["파일명"])}" title="장부에서 삭제하고 드라이브 휴지통으로 이동">삭제</button></td></tr>`).join("")}
       </tbody></table></div>` : '<p class="toolbar-note">등록된 증빙이 없습니다.</p>'}
