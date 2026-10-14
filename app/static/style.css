@@ -574,6 +574,75 @@ dialog.dlg-sheet { width: min(820px, 95vw); }
 .os-total { text-align: right; font-size: 13px; margin: 4px 0; }
 .os-foot { text-align: right; font-size: 12px; color: var(--ink-2); margin: 12px 0 0; }
 .print-root { display: none; }
+/* 학회 여비 계산기 (conf.js): 머리·바닥 고정, 본문만 스크롤 */
+dialog.dlg-conf { width: min(1180px, 96vw); max-width: none; max-height: 94vh; }
+dialog.dlg-conf form { padding: 16px 22px 14px; display: flex; flex-direction: column; max-height: 94vh; }
+.cf-head { padding: 0 0 8px; border-bottom: 1px solid var(--rule-2); }
+.cf-head h2 { margin: 0 0 2px; }
+.cf-head .toolbar-note { display: block; }
+.cf-body { flex: 1; min-height: 0; overflow: auto; padding: 0 0 12px; }
+.cf-foot { margin: 0; padding: 10px 0 0; border-top: 1px solid var(--rule); }
+.cf-sum { position: sticky; top: 0; z-index: 4; margin: 0 0 4px; }
+.cf-sum .card .v.neg { color: var(--alert); }
+.cf-sum .cf-blocked .v { color: var(--ink-2); }
+.cf-fs { border: 0; margin: 0; padding: 0; min-width: 0; }
+.cf-sec h3 { font-size: 13px; margin: 14px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--ink); display: flex; align-items: baseline; gap: 8px; }
+.cf-sec h3 small { font-weight: 400; }
+.cf-sec h4 { font-size: 12px; margin: 8px 0 2px; color: var(--ink-2); }
+.cf-sec .fields > .toolbar-note { margin: 0; align-self: end; padding-bottom: 7px; }
+.cf-money { display: flex; gap: 4px; }
+.cf-money input { flex: 1; min-width: 0; }
+.cf-money select { width: 52px; flex: none; padding: 5px 4px; }
+.cf-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.cf-legwrap { max-height: none; }
+table.grid.cf-legs th { position: static; }
+table.grid.cf-legs td, table.grid.cf-legs th { padding: 0 4px; }
+table.grid.cf-legs tr.cf-dep td { border-bottom-color: var(--rule-2); }
+table.grid.cf-legs tr.cf-dep td[rowspan], table.grid.cf-legs tr.cf-dep th[rowspan] { border-bottom-color: var(--rule); }
+table.grid.cf-legs tbody tr:hover td { background: transparent; }
+table.grid.cf-legs input, table.grid.cf-legs select { min-height: 0; height: 24px; padding: 0 4px; font-size: 12px; }
+table.grid.cf-legs input[type="datetime-local"] { font: inherit; font-size: 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg); color: var(--ink); width: 168px; }
+table.grid.cf-legs input[type="datetime-local"]:disabled { background: var(--bg-head); color: var(--ink-3); }
+table.grid.cf-legs .lg-place { width: 116px; }
+table.grid.cf-legs .lg-tz { width: 260px; }
+table.grid.cf-legs .lg-tzo { width: 260px; margin: 2px 0; display: block; }
+table.grid.cf-legs .lg-mode { width: 64px; }
+table.grid.cf-legs .lg-meal { width: 44px; }
+table.grid.cf-legs .cf-end, table.grid.cf-legs .cf-kst { color: var(--ink-2); }
+table.grid.cf-legs .cf-kst.cf-bad { color: var(--alert); font-weight: 600; }
+.cf-cols { display: grid; grid-template-columns: 3fr 2fr; gap: 20px; align-items: start; }
+@media (max-width: 1000px) { .cf-cols { grid-template-columns: 1fr; } }
+table.grid.cf-lines th { position: static; }
+table.grid.cf-lines td { white-space: normal; height: auto; min-height: var(--row); padding: 4px 6px; line-height: 1.4; }
+table.grid.cf-lines td.amt { white-space: nowrap; vertical-align: top; }
+table.grid.cf-lines .cf-f { color: var(--ink-2); }
+table.grid.cf-lines .cf-law { color: var(--ink-3); font-size: 12px; }
+table.grid.cf-lines tr.cf-subtot td { font-weight: 700; border-top: 1px solid var(--ink); }
+table.grid.cf-lines tbody tr:hover td { background: transparent; }
+.cf-basisnote, .cf-disc { margin: 8px 0 0; }
+.cf-notes, .cf-todo, .cf-docs { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.cf-notes li { padding: 5px 0; border-bottom: 1px solid var(--rule-2); line-height: 1.5; }
+.cf-notes li b { margin-right: 6px; font-weight: 700; color: var(--ink-2); }
+.cf-notes li.warn b { color: var(--warn); }
+.cf-notes li.ok b { color: var(--ok); }
+.cf-notes li.danger b { color: var(--alert); }
+.cf-todo li { padding: 4px 0; border-bottom: 1px solid var(--rule-2); }
+.cf-todo li.cf-err { color: var(--alert); }
+.cf-docs label.chk { display: flex; align-items: center; gap: 8px; min-height: 26px; color: var(--ink); cursor: pointer; }
+.cf-docs input:checked + span { color: var(--ink-2); text-decoration: line-through; }
+dialog.cf-ro .cf-row button { display: none; }
+dialog.cf-ro [data-legdel] { display: none; }
+/* 학회 여비 산출 내역 인쇄 사본 (발주서 표 양식 재사용) */
+.pc-basis { font-size: 12px; color: var(--ink-2); margin: 0 0 6px; }
+.pc-h { font-size: 13px; margin: 12px 0 4px; border-bottom: 1px solid var(--ink); padding-bottom: 2px; break-after: avoid; }
+.pc-h4 { font-size: 12px; margin: 6px 0 2px; break-after: avoid; }
+.pc-sub { font-size: 12px; color: var(--ink-2); }
+.pc-lines tr.pc-b td { font-weight: 700; }
+.pc-notes, .pc-docs { margin: 2px 0; padding-left: 18px; font-size: 12px; }
+.pc-docs { list-style: none; padding-left: 4px; }
+.pc-notes li, .pc-docs li { margin: 2px 0; break-inside: avoid; }
+.pc-disc { margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.pc-sign { margin-top: 20px; text-align: right; font-size: 12px; break-inside: avoid; }
 
 /* ---------- 편집 모드 팝업 격자 ---------- */
 dialog.dlg-edit { width: min(96vw, 1800px); max-width: none; padding: 0; height: 92vh; display: none; flex-direction: column; }
@@ -632,5 +701,11 @@ table.grid.edit td.num .cell-input { text-align: right; }
   body.printing-sheet > :not(#print-sheet) { display: none !important; }
   body.printing-sheet #print-sheet { display: block; page: order-sheet; }
   body.printing-sheet .os-meta th, body.printing-sheet .os-meta td, body.printing-sheet .os-lines th, body.printing-sheet .os-lines td { border-color: var(--ink); }
+  /* 학회 여비 산출 내역 인쇄: 같은 A4 세로 양식 */
+  body.printing-conf > :not(#print-conf) { display: none !important; }
+  body.printing-conf #print-conf { display: block; page: order-sheet; }
+  body.printing-conf .os-meta th, body.printing-conf .os-meta td, body.printing-conf .os-lines th, body.printing-conf .os-lines td { border-color: var(--ink); }
+  body.printing-conf .os-meta th { width: 150px; }
+  body.printing-conf .os-lines tr { break-inside: avoid; }
   .req-selbar, .req-role, table.grid th.sel, table.grid td.sel { display: none !important; }
 }

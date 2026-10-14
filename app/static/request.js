@@ -238,7 +238,7 @@ openForm = function (kind, row, preset, opts) {
 function requestFormAfterOpen(row) {
   const rec = row != null ? reqFind(row) : null;
   const amt = F("금액")?.closest("label");
-  if (amt) {  // 학회: 여비 계산기 자리 (계산기는 다음 단계)
+  if (amt) {  // 학회: 여비 계산기 (conf.js)
     const calc = document.createElement("div"); calc.className = "wide req-calc"; calc.id = "req-calc-row";
     calc.innerHTML = `<button type="button" class="btn btn-sm" id="req-calc-btn" aria-haspopup="dialog">여비 계산기</button><span class="toolbar-note">항공·숙박·일비를 계산해 금액과 상세에 채웁니다</span>`;
     amt.after(calc);
@@ -264,6 +264,7 @@ function requestFormAfterOpen(row) {
   if (rec && reqLocked(rec)) { lock(k => k !== "비고", `'${rec["상태"]}' 상태(연결 품의 ${rec["연결품의번호"] || "-"})라 비고만 바꿀 수 있습니다.`); $("#req-calc-btn")?.setAttribute("disabled", ""); F("비고")?.focus(); }
   else if (rec && rec["주문번호"]) lock(k => REQ_ORDER_LOCK.includes(k), `주문 ${rec["주문번호"]} 에 묶여 구분·단가·수량·금액·구매처는 바꿀 수 없습니다. 주문을 취소하면 바꿀 수 있습니다.`);
   if (det["합계"] != null && F("금액") && !F("금액").readOnly) { F("금액").readOnly = true; F("금액").classList.add("locked"); F("금액").title = "여비 계산기 합계 (계산기에서 바꾸세요)"; }
+  if (typeof confFormInit === "function") confFormInit(det, { locked: !!(rec && reqLocked(rec)) });  // 숨은 칸 #f-_calc 에 기존 계산
   requestFormSync();
   $("#dlg").dataset.initial = formSnapshot();
 }
@@ -282,9 +283,8 @@ function updateAmtPreview() {
   p.value = u != null && q != null && String(F("단가").value).trim() !== "" ? `${fmt(u * q)}원` : "(자동)";
 }
 $("#dlg-fields").addEventListener("input", e => { if ($("#dlg").dataset.kind === "request" && (e.target.id === "f-단가" || e.target.id === "f-수량")) updateAmtPreview(); });
-document.addEventListener("click", e => { if (e.target.closest("#req-calc-btn")) openConfCalc(); });
-// 학회 여비 계산기 훅: 다음 단계에서 계산 결과를 상세 JSON({..., 합계})과 금액 칸에 채운다
-function openConfCalc() { $("#dlg-conf").showModal(); }
+// 학회 여비 계산기: openConfCalc 는 conf.js (계산 결과를 #f-_calc 에 담고 금액 칸을 합계로 잠금)
+document.addEventListener("click", e => { if (e.target.closest("#req-calc-btn") && typeof openConfCalc === "function") openConfCalc(); });
 
 // 저장 직전 (app.js 제출 처리에서 호출): 기존 행과 합치고, 구분별로 쓰지 않는 칸 정리, 학회 입력은 상세 JSON 으로. 오류 문구를 반환하면 저장 중단
 function requestPrepare(rec, row) {
@@ -297,6 +297,11 @@ function requestPrepare(rec, row) {
   if (t === "학회") {
     const det = { ...reqDetail(cur), 학회명: out["품목"] };
     REQ_CONF_KEYS.forEach(([k, dk]) => { det[dk] = rec[k] ?? ""; });
+    const calc = typeof confCalcValue === "function" ? confCalcValue() : undefined;  // undefined: 계산기 칸 없음(기존 값 유지)
+    if (calc !== undefined) {
+      ["v", "in", "out", "합계"].forEach(k => delete det[k]);
+      if (calc) Object.assign(det, { v: calc.v, in: calc.in, out: calc.out, 합계: calc.out["합계"] });
+    }
     if (det["시작일"] && det["종료일"] && det["종료일"] < det["시작일"]) return "학회 종료일이 시작일보다 빠릅니다.";
     out["상세"] = JSON.stringify(det); out["단가"] = ""; out["수량"] = 1; out["규격"] = "";
     if (det["합계"] != null && det["합계"] !== "") out["금액"] = det["합계"];
@@ -446,6 +451,7 @@ async function renderReqDrawer(fetchItems) {
     ...(conf ? [
       kv("기간", det["시작일"] || det["종료일"] ? `${t(det["시작일"] || "?")} ~ ${t(det["종료일"] || "?")}` : ""), kv("국내/국외", t(det["국내외"])), kv("장소", t(det["장소"])),
       kv("참가자", t(det["참가자"])), kv("등록비", det["등록비"] !== "" && det["등록비"] != null ? fmt(det["등록비"]) + "원" : ""), kv("금액", `<b>${fmt(r["금액"])}원</b>`),
+      typeof confDrawerKv === "function" ? confDrawerKv(det, kv) : "",
     ] : [kv("규격", t(r["규격"])), kv("단가", r["단가"] != null && r["단가"] !== "" ? fmt(r["단가"]) + "원" : ""), kv("수량", fmt(r["수량"])), kv("금액", `<b>${fmt(r["금액"])}원</b>`)]),
     kv("사유", t(r["사유"]), " multi"), kv("희망일", t(r["희망일"])),
     ...(r["구분"] === "소모품" ? [kv("구매처", r["구매처"] ? `${t(r["구매처"])}${supOff(r["구매처"]) ? ' <span class="muted">(현재 이용 불가)</span>' : ""}` : ""), kv("온라인코드", t(r["온라인코드"])), kv("상품코드", t(r["상품코드"])),
@@ -543,6 +549,7 @@ $("#rd-body").addEventListener("click", async e => {
   if (act === "reject") return rejectRequests([r]);
   if (act === "convert") return convertRequests(r["주문번호"] ? DATA.request.filter(q => q["주문번호"] === r["주문번호"] && canConvert(q)) : [r]);
   if (act === "order") return openOrderDialog([r]);
+  if (act === "confview") { const d = reqDetail(r); return openConfCalc({ readonly: true, rec: r, calc: { v: d.v, in: d.in, out: d.out } }); }
   if (act === "gotoreq") {
     const no = r["연결품의번호"]; setMode("main"); switchTab("req");
     FILTERS.req = { q: no }; $$("[data-filter][data-kind=req]").forEach(el => { el.value = el.dataset.filter === "q" ? no : ""; }); renderList("req");
