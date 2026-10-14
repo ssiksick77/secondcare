@@ -113,7 +113,10 @@ function setMode(mode, push = true) {
   $("#btn-mode").title = labor ? "회계대장 화면으로 돌아가기" : "인건비 관리 화면으로 전환";
   const br = $("#btn-request");
   if (br) { br.textContent = req ? "회계대장으로" : "신청"; br.title = req ? "회계대장 화면으로 돌아가기" : "지출 신청 화면으로 전환 (담당자)"; }
-  document.title = labor ? "센터 회계대장 · 인건비" : req ? "센터 회계대장 · 지출 신청" : "센터 회계대장";
+  // 연구원 화면(/request 직접 접속, 담당자 표시 없음)은 회계대장이 아니라 '지출 신청' 화면으로 부른다
+  const researcher = req && !document.body.classList.contains("req-admin");
+  document.title = labor ? "센터 회계대장 · 인건비" : researcher ? "의료인공지능센터 지출 신청" : req ? "센터 회계대장 · 지출 신청" : "센터 회계대장";
+  const h1 = $(".top h1"); if (h1) h1.textContent = researcher ? "의료인공지능센터 지출 신청" : "의료인공지능센터 회계대장";
   if (labor || req) closeExecDrawer();
   if (!req && typeof closeReqDrawer === "function") closeReqDrawer();
   if (req && $("#ai-drawer") && !$("#ai-drawer").hidden && typeof toggleDrawer === "function") toggleDrawer(false);

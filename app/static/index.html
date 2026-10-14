@@ -57,6 +57,7 @@
     <li><button role="tab" id="rtab-기타" data-rtype="기타" aria-controls="rpanel" aria-selected="false">기타</button></li>
   </ul>
   <span class="req-role req-admin-only" title="회계대장에서 들어와 승인·반려·품의 전환·주문을 처리할 수 있습니다">담당자</span>
+  <button type="button" class="lnk req-prev-year" id="req-prev-year" hidden title="이전 연도에 아직 '신청' 상태로 남은 건을 봅니다"></button>
   <label class="tabs-year">연도 <select id="request-year"></select></label>
 </nav>
 
@@ -136,22 +137,24 @@
       <label>관련과제 <select data-filter="관련과제" data-kind="request"><option value="">전체</option></select></label>
       <label id="rq-sup-filter" hidden>구매처 <select data-filter="구매처" data-kind="request"><option value="">전체</option></select></label>
       <label>검색 <input type="search" data-filter="q" data-kind="request" placeholder="품목, 규격, 사유, 번호"></label>
-      <span class="toolbar-sum" id="request-sum"></span>
-      <button type="button" class="btn req-admin-only" data-csv="request" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
-      <button type="button" class="btn btn-primary" data-add="request">신청 추가</button>
+      <div class="toolbar-end">
+        <span class="toolbar-sum" id="request-sum"></span>
+        <button type="button" class="btn req-admin-only" data-csv="request" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
+        <button type="button" class="btn btn-primary" data-add="request">신청 추가</button>
+      </div>
     </div>
     <div class="req-selbar req-admin-only" id="req-selbar" role="group" aria-label="선택한 신청 처리">
-      <span class="req-sel-n" id="req-sel-n" aria-live="polite">선택 없음</span>
-      <button type="button" class="btn btn-sm" data-rq="approve" disabled>승인</button>
-      <button type="button" class="btn btn-sm" data-rq="reject" disabled>반려</button>
-      <button type="button" class="btn btn-sm" data-rq="convert" disabled title="승인된 신청을 품의 1건으로">품의 전환</button>
-      <button type="button" class="btn btn-sm" data-rq="order" id="rq-order-btn" disabled title="승인된 소모품 신청을 주문 1건으로 묶음">주문 생성</button>
-      <button type="button" class="btn btn-sm btn-danger" data-rq="delete" disabled>삭제</button>
-      <button type="button" class="btn btn-sm btn-ghost" data-rq="clear" disabled>선택 해제</button>
+      <span class="req-sel-n" id="req-sel-n" aria-live="polite" tabindex="-1">선택 없음</span>
+      <button type="button" class="btn btn-sm" data-rq="approve" disabled hidden>승인</button>
+      <button type="button" class="btn btn-sm" data-rq="reject" disabled hidden>반려</button>
+      <button type="button" class="btn btn-sm" data-rq="convert" disabled hidden title="승인된 신청을 품의 1건으로">품의 전환</button>
+      <button type="button" class="btn btn-sm" data-rq="order" id="rq-order-btn" disabled hidden title="승인된 소모품 신청을 주문 1건으로 묶음">주문 생성</button>
+      <button type="button" class="btn btn-sm btn-danger" data-rq="delete" disabled hidden>삭제</button>
+      <button type="button" class="btn btn-sm btn-ghost" data-rq="clear" disabled hidden>선택 해제</button>
       <span class="toolbar-note warn" id="req-sel-why" aria-live="polite" hidden></span>
-      <span class="toolbar-note" id="req-sel-help">체크한 신청에 한꺼번에 적용합니다. 행을 누르면 상세 패널이 열립니다.</span>
+      <span class="toolbar-note" id="req-sel-help">신청을 체크하면 승인·반려·품의 전환을 한꺼번에 할 수 있습니다. 행을 누르면 상세 패널이 열립니다.</span>
     </div>
-    <p class="toolbar-note req-researcher-note">신청을 추가하면 담당자가 승인 또는 반려합니다. 신청 상태일 때만 수정·삭제할 수 있습니다. 행을 누르면 상세 패널(첨부 업로드)이, 두 번 누르면 수정 창이 열립니다.</p>
+    <p class="toolbar-note req-researcher-note">① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.</p>
     <p class="toolbar-note req-sup-info" id="req-sup-info" hidden></p>
     <div class="table-wrap"><table class="grid clickable" id="request-table"></table></div>
     <section id="order-section" class="req-admin-only" aria-labelledby="order-h" hidden>
@@ -330,7 +333,7 @@
 <aside id="req-drawer" class="drawer" role="dialog" aria-labelledby="rd-title" aria-modal="false" tabindex="-1" hidden>
   <div class="drawer-head xd-head">
     <div class="xd-headtxt">
-      <strong id="rd-title">신청 상세</strong>
+      <h2 id="rd-title" class="rd-title">신청 상세</h2>
       <span class="drawer-model" id="rd-sub"></span>
     </div>
     <div class="xd-nav" role="group" aria-label="신청 건 이동 (↑↓ 키)">
@@ -394,7 +397,7 @@
     <button type="button" class="btn btn-sm btn-x" id="edit-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
   </div>
   <div class="edit-wrap"><table class="grid edit" id="edit-grid" role="grid" aria-labelledby="edit-title"></table></div>
-  <p class="toolbar-note edit-legend"><span class="lg chg">수정됨</span> <span class="lg new">새 행</span> <span class="lg del">삭제 표시</span> <span class="lg ro">편집 불가(자동·연결 행 잠금)</span> <span class="lg err">오류</span> · 저장은 전부 성공 또는 전부 취소이며, 저장 직후 토스트의 '되돌리기'로 복구할 수 있습니다.</p>
+  <p class="toolbar-note edit-legend"><span class="lg chg">수정됨</span> <span class="lg new">새 행</span> <span class="lg del">삭제 표시</span> <span class="lg ro">편집 불가(자동·연결 행 잠금)</span> <span class="lg err">오류</span> · 저장은 전부 성공 또는 전부 취소이며, 저장 직후 알림의 [되돌리기]로 복구할 수 있습니다.</p>
 </dialog>
 
 <!-- 공용 확인 대화상자 (네이티브 confirm 대체) -->
@@ -402,8 +405,8 @@
   <form id="dlg-confirm-form" method="dialog" novalidate>
     <h2 id="confirm-title"></h2>
     <div id="confirm-body" class="confirm-body"></div>
-    <label class="fld" id="confirm-input-wrap" hidden><span id="confirm-input-label"></span><input id="confirm-input" type="text"></label>
-    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="confirm-cancel">취소</button><button type="submit" class="btn btn-primary" id="confirm-ok">확인</button></div>
+    <label class="fld" id="confirm-input-wrap" hidden><span id="confirm-input-label"></span><input id="confirm-input" type="text" aria-describedby="confirm-input-err"><span class="field-error" id="confirm-input-err" hidden></span></label>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="confirm-cancel">취소</button><button type="button" class="btn" id="confirm-alt" hidden></button><button type="submit" class="btn btn-primary" id="confirm-ok">확인</button></div>
   </form>
 </dialog>
 

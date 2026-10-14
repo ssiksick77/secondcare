@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import math
 import uuid
 import datetime as dt
 import os
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import openpyxl
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.datetime import from_excel
@@ -40,6 +42,7 @@ SHEET_LADJ = "인건비조정"
 SHEET_RQ = "신청"
 SHEET_ORDER = "주문"
 SHEET_RATT = "신청첨부"
+SHEET_META = "메타"  # 숨김 시트: 키/값 (연도별 신청번호 최고값 등)
 
 BUDGET_ITEMS = [
     "내부인건비(공통)", "외부인건비(공통)", "연구시설.장비비", "연구활동비",
@@ -71,7 +74,7 @@ TAG_COLS = ["태그명", "분류", "설명"]
 EVID_COLS = ["거래번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
 DEP_TYPES = ["적립", "사용"]
 # 신청 (신청_설계_2026-10-14.md)
-REQUEST_COLS = ["신청번호", "구분", "상태", "신청인", "신청일", "관련과제", "품목", "규격", "단가", "수량", "금액", "사유",
+REQUEST_COLS = ["신청번호", "구분", "상태", "신청인", "신청일", "관련과제", "품목", "규격", "단가", "수량", "금액", "부가세구분", "부가세액", "사유",
                 "희망일", "온라인코드", "상품코드", "상품링크", "구매처", "결재인", "결재일", "반려사유", "주문번호", "연결품의번호",
                 "첨부폴더", "첨부목록", "상세", "비고"]
 ORDER_COLS = ["주문번호", "주문일", "배송일", "거래처", "주문금액", "결제금액", "적립금사용", "신청번호목록", "비고"]
@@ -81,6 +84,18 @@ REQUEST_STATUS = ["신청", "승인", "반려", "품의전환", "완료"]
 REQUEST_LOCKED = ("품의전환", "완료")  # 비고만 수정 가능
 # 신청 행에서 화면 수정으로 바꿀 수 없는 열 (동작·주문·첨부로만 바뀜)
 REQUEST_SYSTEM = ["신청번호", "상태", "결재인", "결재일", "반려사유", "주문번호", "연결품의번호", "첨부폴더", "첨부목록"]
+# 승인된 신청에서 이 열이 바뀌면 다시 '신청'으로 (결재인·결재일 비움). extra.keep_approval=true 면 유지
+REAPPROVE_COLS = ["품목", "규격", "단가", "수량", "금액", "관련과제", "부가세구분", "부가세액"]
+VAT_RATE = 0.1
+UNIT_MAX = 1e12      # 단가 상한 (1조 원)
+AMOUNT_MAX = 1e15    # 금액·부가세액 상한
+QTY_MAX = 1_000_000
+TEXT_MAX = 32767     # 엑셀 셀 글자 수 한도 (넘으면 오류, 잘라 저장하지 않음)
+RATT_MAX_FILES = 20                 # 신청 1건 첨부 개수 상한
+RATT_MAX_BYTES = 100 * 1024 * 1024  # 신청 1건 첨부 합계 용량 상한
+RATT_UPLOAD_STATES = ("신청", "반려", "승인")
+RATT_DELETE_STATES = ("신청", "반려")  # 승인은 담당자(extra.admin, 화면 구분일 뿐 보안 장치 아님)
+STALE_MSG = "{no} 는 그사이 다른 곳에서 결재 정보가 바뀌어 처리하지 못했습니다. 목록을 새로 불러왔으니 확인 후 다시 시도하세요."
 ORDER_VENDOR = "알파몰"
 ORDER_PREFIX = "알파"
 # 소모품 구매처: 목록·이용 불가는 설정(.env)의 REQUEST_SUPPLIERS / REQUEST_SUPPLIERS_OFF (settings.FIELDS 기본값과 같게 유지)
@@ -91,7 +106,7 @@ BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGE
 
 DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일",
              "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일"}
-NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기"} | set(BUDGET_ITEMS)
+NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기", "부가세액"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
 IDENT_COLS = {
     "funds": ["재원코드"], "exec": ["거래번호"], "req": ["품의번호"], "tags": ["태그명"],
@@ -111,6 +126,10 @@ class LedgerLocked(Exception):
 
 class NotFound(Exception):
     pass
+
+
+class TooLarge(ValueError):
+    """첨부 개수·용량 상한 초과 (HTTP 413)."""
 
 
 # ---------- 값 변환 ----------
@@ -183,23 +202,34 @@ def _is_formula(v: Any) -> bool:
     return isinstance(v, str) and v.startswith("=")
 
 
-def _to_num(v: Any, strict: bool = False) -> float:
-    """셀/입력값 -> 숫자. strict=True 면 해석 불가 시 ValueError, 아니면 0."""
+def _to_num(v: Any, strict: bool = False, label: str = "금액") -> float:
+    """셀/입력값 -> 숫자. strict=True 면 해석 불가·무한대·NaN 이면 ValueError(label 열 이름 표기), 아니면 0."""
     if v is None or v == "":
         return 0
     if isinstance(v, bool):
         if strict:
-            raise ValueError("금액이 올바르지 않습니다.")
+            raise ValueError(f"{label}이(가) 올바르지 않습니다.")
         return 0
     if isinstance(v, (int, float)):
-        return v
-    s = re.sub(r"[,\s원]", "", str(v))
-    try:
-        return float(s)
-    except ValueError:
+        n = v
+    else:
+        s = re.sub(r"[,\s원]", "", str(v))
+        try:
+            n = float(s)
+        except ValueError:
+            if strict:
+                raise ValueError(f"{label} '{v}' 을(를) 숫자로 해석할 수 없습니다.")
+            return 0
+    if not math.isfinite(n):
         if strict:
-            raise ValueError(f"금액 '{v}' 을(를) 숫자로 해석할 수 없습니다.")
+            raise ValueError(f"{label} '{v}' 은(는) 너무 크거나 숫자가 아닙니다.")
         return 0
+    return n
+
+
+def _round_won(x: float) -> int:
+    """원 단위 반올림 (사사오입)."""
+    return int(math.floor(x + 0.5))
 
 
 def _cell_in(col: str, v: Any) -> Any:
@@ -214,15 +244,18 @@ def _cell_in(col: str, v: Any) -> Any:
             return dt.date.fromisoformat(d)
         return d
     if col in NUM_COLS:
-        n = _to_num(v, strict=True)
+        n = _to_num(v, strict=True, label=col)
         return int(n) if float(n).is_integer() else n
     if col == "변경회차":
         s = str(v).strip()
         return int(s) if s.isdigit() else s
-    return str(v) if not isinstance(v, str) else v
+    # 텍스트: 엑셀이 받지 않는 제어문자(\v, \x01 등) 제거. \t \n \r 은 유지
+    return ILLEGAL_CHARACTERS_RE.sub("", v if isinstance(v, str) else str(v))
 
 
 def _cell_out(col: str, v: Any) -> Any:
+    if col == "부가세구분":  # 빈 값(이전 장부)은 N
+        return "Y" if _yes(v) else "N"
     if col in MONTH_COLS:
         return _to_month(v) or ""
     if col in DATE_COLS:
@@ -347,7 +380,7 @@ def _ensure_structure(wb) -> bool:
                                (SHEET_PAYEE, PAYEE_COLS, (14, 30, 16, 30)),
                                (SHEET_LABOR, LABOR_COLS, (10, 10, 14, 16, 14, 8, 12, 18, 30)),
                                (SHEET_LADJ, LADJ_COLS, (10, 14, 14, 30)),
-                               (SHEET_RQ, REQUEST_COLS, (14, 8, 10, 10, 12, 16, 30, 20, 12, 8, 14, 30,
+                               (SHEET_RQ, REQUEST_COLS, (14, 8, 10, 10, 12, 16, 30, 20, 12, 8, 14, 8, 12, 30,
                                                          12, 14, 14, 30, 12, 10, 12, 24, 18, 18, 30, 30, 20, 24)),
                                (SHEET_ORDER, ORDER_COLS, (18, 12, 12, 14, 14, 14, 10, 40, 24)),
                                (SHEET_RATT, RATT_COLS, (14, 44, 30, 36, 10, 12, 20))):
@@ -506,6 +539,13 @@ def _write_row(ws, cols: list[str], r: int, rec: dict, head_row=1):
             continue
         cell = ws.cell(r, idx[c])
         cell.value = _cell_in(c, rec[c])  # None 도 대입해 '비우기'가 저장되게 함
+        val = cell.value
+        if isinstance(val, str) and val[:1] in ("=", "+", "-", "@"):
+            # 수식 주입 방지: openpyxl 은 '='로 시작하면 수식 셀로 저장 → 문자열 형식 + 따옴표 접두(엑셀에서 다시 편집해도 텍스트)
+            cell.data_type = "s"
+            cell.quotePrefix = True
+        elif cell.quotePrefix:
+            cell.quotePrefix = False
         if c in DATE_COLS:
             cell.number_format = "yyyy-mm-dd"
         elif c in NUM_COLS:
@@ -556,7 +596,8 @@ def read_all() -> dict:
             "ratt": _rows(wb[SHEET_RATT], RATT_COLS, 1, formulas),
         }
         req_state = {r["품의번호"]: r["상태"] for r in data["req"] if r.get("품의번호")}
-        for r in data["request"]:  # 연결 품의가 집행완료면 '완료' (읽을 때 계산)
+        for r in data["request"]:  # 연결 품의가 집행완료면 '완료' (읽을 때 계산), 없어진 품의면 '승인'
+            _norm_request(r, req_state)
             r["상태"] = request_status(r, req_state)
         for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력
             r["인건비예산"] = None if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산") else r["인건비예산"]
@@ -609,11 +650,35 @@ _SHEETS = {
 
 
 def request_status(rec: dict, req_state: dict) -> str:
-    """신청 상태: 연결 품의가 집행완료면 '완료', 그 외에는 시트 값 (빈 값은 '신청')."""
+    """신청 상태: 연결 품의가 집행완료면 '완료', 연결 품의가 품의내역에 없으면(엑셀에서 지움) '승인', 그 외에는 시트 값 (빈 값은 '신청')."""
     no = str(rec.get("연결품의번호") or "").strip()
-    if no and req_state.get(no) == "집행완료":
-        return "완료"
-    return str(rec.get("상태") or "") or "신청"
+    st = str(rec.get("상태") or "") or "신청"
+    if no:
+        if no not in req_state:
+            return "승인" if st in REQUEST_LOCKED else st
+        if req_state.get(no) == "집행완료":
+            return "완료"
+    return st
+
+
+def _norm_request(rec: dict, req_state: dict) -> bool:
+    """연결품의번호가 가리키는 품의가 없으면 끊긴 연결로 보고 (메모리에서) 연결을 비우고 상태를 '승인'으로. 이 행을 쓰면 정리가 저장된다."""
+    no = str(rec.get("연결품의번호") or "").strip()
+    if no and no not in req_state:
+        rec["연결품의번호"] = ""
+        if str(rec.get("상태") or "") in REQUEST_LOCKED:
+            rec["상태"] = "승인"
+        return True
+    return False
+
+
+def _check_action_expect(rec: dict, expect: dict | None):
+    """결재·전환·주문 등 동작 경로의 충돌 검사: 동작과 무관한 문구로 안내."""
+    try:
+        _check_expect("request", rec, expect)
+    except NotFound:
+        no = str((expect or {}).get("신청번호") or rec.get("신청번호") or "이 신청")
+        raise NotFound(STALE_MSG.format(no=no)) from None
 
 
 def _req_state(wb) -> dict:
@@ -655,7 +720,7 @@ def _check_expect(kind: str, existing: dict, expect: dict | None):
         cols = _SHEETS[kind][1]
         changed = [c for c in cols if c in snap and c != "상태" and _norm_cmp(c, snap[c]) != _norm_cmp(c, existing.get(c))]
         if changed:
-            raise NotFound(f"다른 곳에서 이 행의 {', '.join(changed[:3])} 이(가) 먼저 바뀌었습니다. 새로고침한 뒤 다시 수정하세요.")
+            raise NotFound(f"다른 곳에서 이 행의 {', '.join(changed[:3])} 이(가) 먼저 바뀌었습니다. 새로고침한 뒤 다시 시도하세요.")
 
 
 def _labor_refs(wb) -> set[str]:
@@ -693,17 +758,66 @@ def _number_refs(wb, key: str) -> set[str]:
     return refs
 
 
+def _meta_ws(wb, create: bool = False):
+    if SHEET_META in wb.sheetnames:
+        return wb[SHEET_META]
+    if not create:
+        return None
+    ws = wb.create_sheet(SHEET_META)
+    ws.cell(1, 1, "키").font = Font(bold=True)
+    ws.cell(1, 2, "값").font = Font(bold=True)
+    ws.column_dimensions["A"].width = 24
+    ws.sheet_state = "hidden"
+    return ws
+
+
+def _meta_get(wb, key: str):
+    ws = _meta_ws(wb)
+    if ws is None:
+        return None
+    for r in range(2, ws.max_row + 1):
+        if str(ws.cell(r, 1).value or "").strip() == key:
+            return ws.cell(r, 2).value
+    return None
+
+
+def _meta_set(wb, key: str, value):
+    ws = _meta_ws(wb, create=True)
+    for r in range(2, ws.max_row + 1):
+        if str(ws.cell(r, 1).value or "").strip() == key:
+            ws.cell(r, 2).value = value
+            return
+    r = _next_row(ws)
+    ws.cell(r, 1, key)
+    ws.cell(r, 2, value)
+
+
+def _hw_key(year: str) -> str:
+    return f"신청번호최고-{year}"
+
+
+def _bump_request_hw(wb, number: str):
+    """신청번호의 연도별 최고값을 메타 시트에 기록 (지운 마지막 번호·드라이브 폴더가 다시 쓰이지 않도록)."""
+    m = re.match(r"^R-(\d{4})-(\d+)$", str(number or ""))
+    if not m:
+        return
+    cur = int(_to_num(_meta_get(wb, _hw_key(m[1]))))
+    if int(m[2]) > cur:
+        _meta_set(wb, _hw_key(m[1]), int(m[2]))
+
+
 def _assign_request_number(wb, ws, rec):
-    """R-YYYY-NNN (신청일 연도, 연도별 일련번호, 참조된 번호는 재사용하지 않음)."""
+    """R-YYYY-NNN (신청일 연도, 연도별 일련번호). 참조된 번호와 메타 시트의 연도별 최고값 이하는 재사용하지 않음."""
     d = _to_date(rec.get("신청일")) or dt.date.today().isoformat()
     year = d[:4]
-    mx = 0
+    mx = int(_to_num(_meta_get(wb, _hw_key(year))))
     seen = [str(r.get("신청번호") or "") for r in _rows(ws, REQUEST_COLS)] + list(_number_refs(wb, "신청번호"))
     for v in seen:
         m = re.match(r"^R-(\d{4})-(\d+)$", v)
         if m and m[1] == year:
             mx = max(mx, int(m[2]))
     rec["신청번호"] = f"R-{year}-{mx + 1:03d}"
+    _meta_set(wb, _hw_key(year), mx + 1)
 
 
 def split_suppliers(v) -> list[str]:
@@ -836,10 +950,23 @@ def _validate_months(rec: dict, cols):
             rec[c] = _to_month(rec[c])
 
 
-def _validate(kind: str, rec: dict):
+def _validate_text_len(kind: str, rec: dict, cols):
+    """텍스트 열: 엑셀이 받지 않는 제어문자 제거(응답·저장 값 일치), 32,767자 초과는 오류."""
+    for c in cols:
+        if c in DATE_COLS or c in NUM_COLS or c in MONTH_COLS or (kind == "request" and c in REQUEST_SYSTEM):
+            continue
+        v = rec.get(c)
+        if isinstance(v, str):
+            v = rec[c] = ILLEGAL_CHARACTERS_RE.sub("", v)
+        if isinstance(v, str) and len(v) > TEXT_MAX:
+            raise ValueError(f"{c}은(는) {TEXT_MAX:,}자를 넘을 수 없습니다 (지금 {len(v):,}자). 내용을 줄이거나 파일로 첨부하세요.")
+
+
+def _validate(kind: str, rec: dict, existing: dict | None = None):
     cols = _SHEETS[kind][1]
     _validate_dates(rec, cols)
     _validate_months(rec, cols)
+    _validate_text_len(kind, rec, cols)
     if kind == "evidence":
         if not str(rec.get("거래번호") or "").strip() or not str(rec.get("파일명") or "").strip():
             raise ValueError("거래번호와 파일명은 필수입니다.")
@@ -849,13 +976,13 @@ def _validate(kind: str, rec: dict):
             raise ValueError("신청번호와 파일명은 필수입니다.")
         return
     if kind == "request":
-        _validate_request(rec)
+        _validate_request(rec, existing)
         return
     if kind == "exec":
         rec["상태"] = exec_status(rec)  # 날짜 우선, '보완'만 유지
     for c in cols:
         if c in NUM_COLS and rec.get(c) not in (None, ""):
-            _to_num(rec[c], strict=True)
+            _to_num(rec[c], strict=True, label=c)
     if kind == "tags":
         if not str(rec.get("태그명") or "").strip():
             raise ValueError("태그명은 필수입니다.")
@@ -869,6 +996,8 @@ def _validate(kind: str, rec: dict):
     elif kind in ("exec", "req"):
         if not str(rec.get("재원") or "").strip():
             raise ValueError("재원은 필수입니다.")
+        if not str(rec.get("예산목") or "").strip():
+            raise ValueError("예산목을 고르세요.")
         if rec.get("예산목") not in BUDGET_ITEMS:
             raise ValueError(f"예산목 '{rec.get('예산목') or ''}' 은 목록에 없습니다. 가능한 값: {', '.join(BUDGET_ITEMS)}")
         if not _to_date(rec.get("원인발생일")):
@@ -941,11 +1070,20 @@ def _validate(kind: str, rec: dict):
             raise ValueError("금액은 0이 될 수 없습니다 (+ 선급, − 미지급).")
 
 
-def _validate_request(rec: dict):
-    """신청 행 검증·기본값: 구분·상태 목록, 신청인·품목 필수, 신청일=오늘, 수량=1, 금액=단가×수량(비어 있을 때), 상세 JSON."""
+def _validate_request(rec: dict, existing: dict | None = None):
+    """신청 행 검증·기본값: 구분·상태 목록, 신청인·품목 필수, 신청일=오늘, 수량=1(양의 정수), 상세 JSON.
+    금액 규칙 (장비·소모품·기타): 0 < 단가 ≤ 1조, 부가세구분 N → 금액 = 단가×수량 (부가세액 비움),
+    Y → 단가는 공급가, 부가세액 기본 = round(단가×수량×0.1), 금액 = 단가×수량 + 부가세액. 학회는 금액 직접(0 허용, 계산기), 부가세 N.
+    existing(수정)이 있으면 빠진 금액 열은 기존 값으로 채우고, 금액 관련 열이 하나도 안 바뀌었으면 다시 계산하지 않음(이전 장부 행 보호)."""
+    if existing is not None:
+        for c in ("구분", "단가", "수량", "금액", "부가세구분"):
+            if c not in rec:
+                rec[c] = existing.get(c)
+        if "부가세액" not in rec and _cell_out("부가세구분", existing.get("부가세구분")) == "Y":
+            rec["부가세액"] = existing.get("부가세액")
     for c in REQUEST_COLS:
         if c in NUM_COLS and rec.get(c) not in (None, ""):
-            _to_num(rec[c], strict=True)
+            _to_num(rec[c], strict=True, label=c)
     rec["구분"] = str(rec.get("구분") or "").strip()
     if rec["구분"] not in REQUEST_TYPES:
         raise ValueError(f"구분 '{rec['구분']}' 은 목록에 없습니다. 가능한 값: {', '.join(REQUEST_TYPES)}")
@@ -964,12 +1102,54 @@ def _validate_request(rec: dict):
         rec["신청일"] = dt.date.today().isoformat()
     if rec.get("수량") in (None, ""):
         rec["수량"] = 1
-    if _to_num(rec["수량"]) <= 0:
-        raise ValueError("수량은 0보다 커야 합니다.")
-    if _to_num(rec.get("단가")) < 0 or _to_num(rec.get("금액")) < 0:
-        raise ValueError("단가·금액은 0 이상이어야 합니다.")
-    if rec.get("금액") in (None, "") and rec.get("단가") not in (None, ""):
-        rec["금액"] = _to_num(rec["단가"]) * _to_num(rec["수량"])
+    vat = "N" if rec["구분"] == "학회" else ("Y" if _yes(rec.get("부가세구분")) else "N")
+    rec["부가세구분"] = vat
+    money = ("구분", "단가", "수량", "금액", "부가세구분", "부가세액")
+    changed = existing is None or any(_norm_cmp(c, rec.get(c)) != _norm_cmp(c, existing.get(c)) for c in money)
+    if changed:
+        qty = _to_num(rec["수량"], strict=True, label="수량")
+        if qty <= 0 or not float(qty).is_integer():
+            raise ValueError(f"수량은 1 이상의 정수여야 합니다 (입력: {rec['수량']}).")
+        if qty > QTY_MAX:
+            raise ValueError(f"수량이 너무 큽니다 ({QTY_MAX:,} 이하).")
+        rec["수량"] = int(qty)
+        if rec["구분"] == "학회":
+            price = _to_num(rec.get("단가"), strict=True, label="단가")
+            amt = _to_num(rec.get("금액"), strict=True, label="금액")
+            if price < 0 or amt < 0:
+                raise ValueError("단가·금액은 0 이상이어야 합니다.")
+            if price > UNIT_MAX:
+                raise ValueError("단가가 너무 큽니다 (1조 원 이하).")
+            if rec.get("금액") in (None, "") and rec.get("단가") not in (None, ""):
+                amt = price * qty
+                rec["금액"] = amt
+            if amt > AMOUNT_MAX:
+                raise ValueError("금액이 너무 큽니다.")
+            rec["부가세액"] = ""
+        else:
+            price = _to_num(rec.get("단가"), strict=True, label="단가")
+            if price <= 0:
+                raise ValueError("단가를 입력하세요 (0보다 큰 원 단위 금액).")
+            if price > UNIT_MAX:
+                raise ValueError("단가가 너무 큽니다 (1조 원 이하).")
+            base = price * qty
+            tax = 0
+            if vat == "Y":
+                given = rec.get("부가세액")
+                if existing is not None and _cell_out("부가세구분", existing.get("부가세구분")) == "N" and _to_num(given) == 0:
+                    given = None  # N→Y 전환: 행 전체를 다시 보내 딸려 온 0 은 '입력 없음'으로 보고 기본값
+                tax = _round_won(base * VAT_RATE) if given in (None, "") else _to_num(given, strict=True, label="부가세액")
+                if tax < 0:
+                    raise ValueError("부가세액은 0 이상이어야 합니다.")
+                if tax > AMOUNT_MAX:
+                    raise ValueError("부가세액이 너무 큽니다.")
+                rec["부가세액"] = tax
+            else:
+                rec["부가세액"] = ""
+            amt = base + tax
+            if amt > AMOUNT_MAX:
+                raise ValueError("금액이 너무 큽니다 (단가 × 수량을 확인하세요).")
+            rec["금액"] = amt
     d = rec.get("상세")
     if isinstance(d, (dict, list)):
         rec["상세"] = json.dumps(d, ensure_ascii=False)
@@ -980,6 +1160,7 @@ def _validate_request(rec: dict):
             raise ValueError("상세(JSON) 형식이 올바르지 않습니다.") from None
     if len(str(rec.get("상세") or "")) > 32000:
         raise ValueError("상세(JSON)가 너무 깁니다 (엑셀 셀 한도 32,000자).")
+    _validate_text_len("request", rec, REQUEST_COLS)
 
 
 def _person(wb, name: str) -> dict:
@@ -1083,21 +1264,27 @@ def create(kind: str, rec: dict) -> dict:
         return rec
 
 
-def update(kind: str, row: int, rec: dict, expect: dict | None = None) -> dict:
+def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: dict | None = None) -> dict:
+    """extra (신청만): {keep_approval: true} 면 승인된 신청의 품목·금액 등을 바꿔도 승인 유지. 승인이 풀리면 결과에 reapproval: true."""
     sheet, cols, head_row, key = _SHEETS[kind]
+    reapproval = False
     with _write_session() as wb:
         ws = wb[sheet]
         if row <= head_row or row > ws.max_row:
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
-        _validate(kind, rec)
+        if kind != "request":
+            _validate(kind, rec)
         rec = {k: v for k, v in rec.items() if not k.startswith("_")}
         cur = _rows(ws, cols, head_row)
         existing = next((x for x in cur if x["_row"] == row), None)
         if existing is None:
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
+        if kind == "request":
+            _norm_request(existing, _req_state(wb))
         _check_expect(kind, existing, expect)
         if kind == "request":
-            _prepare_request_update(wb, existing, rec)
+            _validate(kind, rec, existing)
+            reapproval = _prepare_request_update(wb, existing, rec, _yes((extra or {}).get("keep_approval")))
         if kind in ("order", "ratt"):
             # 주문·첨부 행은 비고(주문은 배송일도)만 화면에서 수정
             free = ("비고", "배송일") if kind == "order" else ("비고",)
@@ -1146,26 +1333,36 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None) -> dict:
             _refresh_budget_summary(wb)
         _save(wb)
         rec["_row"] = row
+        if reapproval:
+            rec["reapproval"] = True
         return rec
 
 
-def _prepare_request_update(wb, existing: dict, rec: dict):
-    """신청 수정: 시스템 열은 기존 값 유지, 품의전환·완료는 비고만, 주문에 묶이면 금액 관련 열 잠금, 단가·수량이 바뀌면 금액 재계산."""
+def _prepare_request_update(wb, existing: dict, rec: dict, keep_approval: bool = False) -> bool:
+    """신청 수정: 시스템 열은 기존 값 유지, 품의전환·완료는 비고만, 주문에 묶이면 금액 관련 열 잠금.
+    승인된 신청의 품목·규격·단가·수량·금액·관련과제·부가세가 바뀌면 '신청'으로 되돌리고 결재인·결재일을 비움 (keep_approval 이면 유지).
+    되돌렸으면 True."""
     status = request_status(existing, _req_state(wb))
     if status in REQUEST_LOCKED:
         for c in REQUEST_COLS:
             if c in rec and c != "비고" and c not in REQUEST_SYSTEM and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c)):
                 raise ValueError(f"'{status}' 상태의 신청은 비고만 수정할 수 있습니다 ({c} 변경 불가).")
     if existing.get("주문번호"):
-        for c in ("구분", "단가", "수량", "금액", "구매처"):
+        for c in ("구분", "단가", "수량", "금액", "부가세구분", "부가세액", "구매처"):
             if c in rec and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c)):
                 raise ValueError(f"주문 {existing['주문번호']} 에 묶인 신청이라 {c}을(를) 바꿀 수 없습니다. 주문을 먼저 취소하세요.")
     _check_supplier(rec, existing)
     for c in REQUEST_SYSTEM:
         rec[c] = existing.get(c)
-    if rec["구분"] != "학회" and rec.get("단가") not in (None, "") and _norm_cmp("금액", rec.get("금액")) == _norm_cmp("금액", existing.get("금액")) \
-            and (_norm_cmp("단가", rec.get("단가")) != _norm_cmp("단가", existing.get("단가")) or _norm_cmp("수량", rec.get("수량")) != _norm_cmp("수량", existing.get("수량"))):
-        rec["금액"] = _to_num(rec["단가"]) * _to_num(rec["수량"])
+    if status != "승인" or keep_approval:
+        return False
+    changed = [c for c in REAPPROVE_COLS if c in rec and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c))]
+    if not changed:
+        return False
+    if existing.get("주문번호"):
+        raise ValueError(f"주문 {existing['주문번호']} 에 묶인 승인 신청이라 {', '.join(changed)}을(를) 바꾸면 다시 승인받아야 합니다. 주문을 먼저 취소하세요.")
+    rec.update({"상태": "신청", "결재인": "", "결재일": ""})
+    return True
 
 
 def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = False) -> dict:
@@ -1183,6 +1380,8 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
         existing = next((x for x in _rows(ws, cols, head_row) if x["_row"] == row), None)
         if existing is None:
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
+        if kind == "request":
+            _norm_request(existing, _req_state(wb))
         _check_expect(kind, existing, expect)
         if kind == "tags":
             n = _tag_usage(wb, existing["태그명"])
@@ -1215,7 +1414,7 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
         if kind == "request":
             status = request_status(existing, _req_state(wb))
             if status in REQUEST_LOCKED:
-                raise ValueError(f"'{status}' 상태의 신청은 삭제할 수 없습니다. 연결 품의 {existing.get('연결품의번호') or ''} 를 먼저 정리하세요.")
+                raise ValueError(f"'{status}' 상태의 신청은 삭제할 수 없습니다. {_link_msg(existing)}")
             if existing.get("주문번호"):
                 raise ValueError(f"주문 {existing['주문번호']} 에 묶인 신청입니다. 주문을 먼저 취소하세요.")
             ws_at = wb[SHEET_RATT]
@@ -1226,6 +1425,7 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
                 _delete_row(ws_at, a["_row"])
                 if a.get("드라이브파일ID"):
                     out["trash"].append(a["드라이브파일ID"])
+            _bump_request_hw(wb, existing["신청번호"])  # 지운 번호(마지막 번호 포함)는 다시 쓰지 않음
         if kind == "req" and existing.get("품의번호"):
             # 신청에서 전환된 품의를 지우면 신청은 '승인'으로 되돌림 (다시 전환 가능)
             ws_rq = wb[SHEET_RQ]
@@ -1598,50 +1798,109 @@ def _find_row(ws, cols, row: int, label: str) -> dict:
     return rec
 
 
+def _link_msg(rec: dict) -> str:
+    return f"연결 품의 {rec.get('연결품의번호') or ''}를 품의내역에서 삭제하면 신청이 '승인'으로 돌아갑니다."
+
+
+REQUEST_ACTIONS = ("approve", "reject", "unapprove", "reopen")
+
+
+def _apply_request_action(rec: dict, action: str, extra: dict, status: str):
+    """결재 동작을 rec 에 적용 (저장은 호출자). 규칙 위반은 ValueError."""
+    who = str(extra.get("결재인") or "").strip() or "담당자"
+    when = _to_date(extra.get("결재일")) or dt.date.today().isoformat()
+    if not _valid_date(when):
+        raise ValueError(f"결재일 형식이 올바르지 않습니다 (YYYY-MM-DD): {extra.get('결재일')}")
+    if action in ("approve", "reject"):
+        applied = _to_date(rec.get("신청일"))
+        if applied and _ISO.match(applied) and when < applied:
+            raise ValueError(f"결재일 {when} 이(가) 신청일 {applied} 보다 빠릅니다. 결재일을 지정하거나 신청일을 확인하세요.")
+    if action == "approve":
+        if status not in ("신청", "반려"):
+            raise ValueError(f"'{status}' 상태의 신청은 승인할 수 없습니다 (신청·반려만 가능).")
+        rec.update({"상태": "승인", "결재인": who, "결재일": when, "반려사유": ""})
+    elif action == "reject":
+        reason = str(extra.get("사유") or extra.get("반려사유") or "").strip()
+        if not reason:
+            raise ValueError("반려 사유를 입력하세요.")
+        if status not in ("신청", "승인"):
+            raise ValueError(f"'{status}' 상태의 신청은 반려할 수 없습니다.")
+        if rec.get("주문번호"):
+            raise ValueError(f"주문 {rec['주문번호']} 에 묶인 신청입니다. 주문을 먼저 취소하세요.")
+        rec.update({"상태": "반려", "결재인": who, "결재일": when, "반려사유": reason})
+    elif action == "unapprove":
+        if status in REQUEST_LOCKED:
+            raise ValueError(f"'{status}' 상태의 신청은 승인을 취소할 수 없습니다. {_link_msg(rec)}")
+        if status != "승인":
+            raise ValueError("승인된 신청만 승인 취소할 수 있습니다.")
+        if rec.get("주문번호"):
+            raise ValueError(f"주문 {rec['주문번호']} 에 묶인 신청입니다. 주문을 먼저 취소하세요.")
+        rec.update({"상태": "신청", "결재인": "", "결재일": ""})
+    elif action == "reopen":
+        if status != "반려":
+            raise ValueError("반려된 신청만 다시 신청 상태로 돌릴 수 있습니다.")
+        rec.update({"상태": "신청", "결재인": "", "결재일": ""})  # 반려사유는 이력으로 남김 (승인 시 비움)
+    else:
+        raise ValueError(f"알 수 없는 동작: {action}")
+
+
 def request_action(row: int, action: str, extra: dict | None = None, expect: dict | None = None) -> dict:
     """신청 결재. approve(신청·반려→승인) | reject(사유 필수 → 반려) | unapprove(승인→신청) | reopen(반려→신청)."""
     extra = extra or {}
     with _write_session() as wb:
         ws = wb[SHEET_RQ]
         rec = _find_row(ws, REQUEST_COLS, row, "신청")
-        _check_expect("request", rec, expect)
         state = _req_state(wb)
-        status = request_status(rec, state)
-        who = str(extra.get("결재인") or "").strip() or "담당자"
-        when = _to_date(extra.get("결재일")) or dt.date.today().isoformat()
-        if not _valid_date(when):
-            raise ValueError(f"결재일 형식이 올바르지 않습니다 (YYYY-MM-DD): {extra.get('결재일')}")
-        if action == "approve":
-            if status not in ("신청", "반려"):
-                raise ValueError(f"'{status}' 상태의 신청은 승인할 수 없습니다 (신청·반려만 가능).")
-            rec.update({"상태": "승인", "결재인": who, "결재일": when, "반려사유": ""})
-        elif action == "reject":
-            reason = str(extra.get("사유") or extra.get("반려사유") or "").strip()
-            if not reason:
-                raise ValueError("반려 사유를 입력하세요.")
-            if status not in ("신청", "승인"):
-                raise ValueError(f"'{status}' 상태의 신청은 반려할 수 없습니다.")
-            if rec.get("주문번호"):
-                raise ValueError(f"주문 {rec['주문번호']} 에 묶인 신청입니다. 주문을 먼저 취소하세요.")
-            rec.update({"상태": "반려", "결재인": who, "결재일": when, "반려사유": reason})
-        elif action == "unapprove":
-            if status in REQUEST_LOCKED:
-                raise ValueError("품의로 전환된 신청은 승인을 취소할 수 없습니다. 연결 품의를 먼저 삭제하세요.")
-            if status != "승인":
-                raise ValueError("승인된 신청만 승인 취소할 수 있습니다.")
-            if rec.get("주문번호"):
-                raise ValueError(f"주문 {rec['주문번호']} 에 묶인 신청입니다. 주문을 먼저 취소하세요.")
-            rec.update({"상태": "신청", "결재인": "", "결재일": ""})
-        elif action == "reopen":
-            if status != "반려":
-                raise ValueError("반려된 신청만 다시 신청 상태로 돌릴 수 있습니다.")
-            rec.update({"상태": "신청", "결재인": "", "결재일": ""})  # 반려사유는 이력으로 남김 (승인 시 비움)
-        else:
-            raise ValueError(f"알 수 없는 동작: {action}")
+        _norm_request(rec, state)  # 끊긴 연결 품의는 '승인'으로 보고, 이 저장에서 연결을 비움
+        _check_action_expect(rec, expect)
+        _apply_request_action(rec, action, extra, request_status(rec, state))
         _write_row(ws, REQUEST_COLS, row, rec)
         _save(wb)
         rec["상태"] = request_status(rec, state)
         return rec
+
+
+def request_batch_action(rows: list, action: str, extra: dict | None = None) -> dict:
+    """여러 신청에 같은 결재 동작을 한 번에 (한 번 저장, 하나라도 실패하면 아무것도 저장하지 않음).
+    rows: [{row, expect}] (또는 행 번호). action: approve|reject|unapprove|reopen. 오류는 'R-…: 사유' 형식."""
+    extra = extra or {}
+    if action not in REQUEST_ACTIONS:
+        raise ValueError(f"알 수 없는 동작: {action}")
+    items = [it if isinstance(it, dict) else {"row": it} for it in (rows or [])]
+    if not items:
+        raise ValueError("신청을 1건 이상 선택하세요.")
+    if len(items) > 500:
+        raise ValueError("한 번에 500건까지만 처리할 수 있습니다.")
+    with _write_session() as wb:
+        ws = wb[SHEET_RQ]
+        state = _req_state(wb)
+        cur = {r["_row"]: r for r in _rows(ws, REQUEST_COLS)}
+        seen, done = set(), []
+        for it in items:
+            try:
+                row = int(it.get("row") or 0)
+            except (TypeError, ValueError):
+                raise ValueError(f"행 번호가 올바르지 않습니다: {it.get('row')}") from None
+            if row in seen:
+                raise ValueError("같은 신청이 중복 선택되었습니다.")
+            seen.add(row)
+            rec = cur.get(row)
+            if rec is None:
+                no = (it.get("expect") or {}).get("신청번호") or f"행 {row}"
+                raise NotFound(STALE_MSG.format(no=no))
+            _norm_request(rec, state)
+            _check_action_expect(rec, it.get("expect"))
+            try:
+                _apply_request_action(rec, action, extra, request_status(rec, state))
+            except ValueError as e:
+                raise ValueError(f"{rec['신청번호']}: {e}") from None
+            done.append(rec)
+        for rec in done:
+            _write_row(ws, REQUEST_COLS, rec["_row"], rec)
+        _save(wb)
+        for rec in done:
+            rec["상태"] = request_status(rec, state)
+        return {"action": action, "count": len(done), "items": done, "numbers": [r["신청번호"] for r in done]}
 
 
 def _pick_requests(ws, rows: list, expects: list | None) -> list[dict]:
@@ -1651,16 +1910,15 @@ def _pick_requests(ws, rows: list, expects: list | None) -> list[dict]:
     if len(set(rows)) != len(rows):
         raise ValueError("같은 신청이 중복 선택되었습니다.")
     cur = {r["_row"]: r for r in _rows(ws, REQUEST_COLS)}
+    state = _req_state(ws.parent)
     picked = []
     for i, row in enumerate(rows):
+        exp = expects[i] if expects and i < len(expects) else None
         rec = cur.get(row)
         if rec is None:
-            raise NotFound(f"행 {row}: 신청을 찾을 수 없습니다. 목록을 새로고침하세요.")
-        exp = expects[i] if expects and i < len(expects) else None
-        try:
-            _check_expect("request", rec, exp)
-        except NotFound as e:
-            raise NotFound(f"{rec['신청번호']}: {e}") from None
+            raise NotFound(STALE_MSG.format(no=(exp or {}).get("신청번호") or f"행 {row}"))
+        _norm_request(rec, state)  # 끊긴 연결 품의 → 승인 (전환·주문 가능, 저장 시 연결 정리)
+        _check_action_expect(rec, exp)
         picked.append(rec)
     return picked
 
@@ -1692,7 +1950,11 @@ def request_convert(rows: list, extra: dict | None = None, expects: list | None 
         rec["금액"] = extra.get("금액") if extra.get("금액") not in (None, "") else sum(_to_num(q.get("금액")) for q in picked)
         rec["품의자"] = str(extra.get("품의자") or "").strip() or ", ".join(names)
         rec["거래처"] = str(extra.get("거래처") or "").strip() or vendor
-        rec["비고"] = f"신청 {', '.join(numbers)}" + (f" / {extra['비고']}" if str(extra.get("비고") or "").strip() else "")
+        vat_rows = [q for q in picked if _cell_out("부가세구분", q.get("부가세구분")) == "Y"]
+        vat_total = sum(_to_num(q.get("부가세액")) for q in vat_rows)
+        user_note = str(extra.get("비고") or "").strip()
+        vat_note = f" / 부가세 별도 {_round_won(vat_total):,}원" if vat_rows and "부가세 별도" not in user_note else ""
+        rec["비고"] = f"신청 {', '.join(numbers)}" + vat_note + (f" / {user_note}" if user_note else "")
         rec["상태"] = "대기"
         _validate("req", rec)
         _validate_tag(rec, wb)
@@ -1789,7 +2051,8 @@ def order_action(row: int, action: str, extra: dict | None = None, expect: dict 
                 raise ValueError("배송된 주문은 취소할 수 없습니다. 배송일을 먼저 비우세요.")
             ws_rq = wb[SHEET_RQ]
             linked = [q for q in _rows(ws_rq, REQUEST_COLS) if q.get("주문번호") == no]
-            conv = [q["신청번호"] for q in linked if q.get("연결품의번호")]
+            state = _req_state(wb)
+            conv = [q["신청번호"] for q in linked if q.get("연결품의번호") and str(q["연결품의번호"]).strip() in state]
             if conv:
                 raise ValueError(f"품의로 전환된 신청({', '.join(conv)})이 있어 주문을 취소할 수 없습니다. 연결 품의를 먼저 삭제하세요.")
             for q in linked:
@@ -1816,10 +2079,11 @@ def order_sheet(row: int) -> dict:
         listed = [n.strip() for n in str(order.get("신청번호목록") or "").split(",") if n.strip()]
         reqs = [q for q in _rows(wb[SHEET_RQ], REQUEST_COLS) if q.get("주문번호") == order["주문번호"]]
         reqs.sort(key=lambda q: listed.index(q["신청번호"]) if q["신청번호"] in listed else len(listed))
-        lines = [{"순번": i, **{c: q.get(c) for c in ("온라인코드", "상품코드", "품목", "규격", "수량", "단가", "금액",
+        lines = [{"순번": i, **{c: q.get(c) for c in ("온라인코드", "상품코드", "품목", "규격", "수량", "단가", "부가세구분", "부가세액", "금액",
                                                    "신청번호", "신청인", "상품링크", "관련과제", "구매처")}}
                  for i, q in enumerate(reqs, 1)]
-        return {"order": order, "lines": lines, "total": sum(_to_num(x["금액"]) for x in lines)}
+        return {"order": order, "lines": lines, "total": sum(_to_num(x["금액"]) for x in lines),
+                "vat_total": sum(_to_num(x["부가세액"]) for x in lines if x.get("부가세구분") == "Y")}
 
 
 def ratt_for(number: str) -> list[dict]:
@@ -1847,16 +2111,61 @@ def _sync_request_attach(wb, number: str, folder_url: str | None = None):
     _write_row(ws, REQUEST_COLS, rec["_row"], rec)
 
 
+def _ratt_guard(wb, number: str, op: str = "upload", add_n: int = 0, add_bytes: int = 0, admin: bool = False) -> dict | None:
+    """첨부 규칙: 올리기는 신청·반려·승인 상태에서만, 신청 1건에 20개·합계 100MB까지 (TooLarge → 413).
+    지우기는 신청·반려 (승인은 admin=True 일 때만 — 화면의 담당자 표시일 뿐 보안 장치 아님). 신청이 없으면 지우기는 허용(None)."""
+    state = _req_state(wb)
+    rec = next((x for x in _rows(wb[SHEET_RQ], REQUEST_COLS) if x["신청번호"] == number), None)
+    if rec is None:
+        if op == "delete":
+            return None
+        raise NotFound(f"신청 {number} 을(를) 찾을 수 없습니다.")
+    _norm_request(rec, state)
+    st = request_status(rec, state)
+    rec["상태"] = st
+    if op == "upload":
+        if st not in RATT_UPLOAD_STATES:
+            raise ValueError(f"'{st}' 상태의 신청에는 첨부를 올릴 수 없습니다 (신청·반려·승인 상태에서만 가능).")
+        atts = [a for a in _rows(wb[SHEET_RATT], RATT_COLS) if a["신청번호"] == number]
+        if len(atts) + add_n > RATT_MAX_FILES:
+            raise TooLarge(f"첨부는 신청 1건에 {RATT_MAX_FILES}개까지입니다 (지금 {len(atts)}개 + 추가 {add_n}개). 아무것도 올리지 않았습니다.")
+        used = sum(_to_num(a.get("크기")) for a in atts)
+        if used + add_bytes > RATT_MAX_BYTES:
+            mb = lambda b: f"{b / 1024 / 1024:.1f}MB"  # noqa: E731
+            raise TooLarge(f"첨부 용량은 신청 1건에 합계 {RATT_MAX_BYTES // 1024 // 1024}MB까지입니다 (지금 {mb(used)} + 추가 {mb(add_bytes)}). 아무것도 올리지 않았습니다.")
+    else:
+        allowed = RATT_DELETE_STATES + (("승인",) if admin else ())
+        if st not in allowed:
+            if st == "승인":
+                raise ValueError("승인된 신청의 첨부는 담당자만 지울 수 있습니다.")
+            raise ValueError(f"'{st}' 상태의 신청 첨부는 지울 수 없습니다 (신청·반려 상태에서만 가능, 승인은 담당자만).")
+    return rec
+
+
+def ratt_precheck(number: str, add_n: int = 0, add_bytes: int = 0, expect: dict | None = None) -> dict:
+    """업로드 전 확인 (드라이브에 올리기 전에): 상태·개수·용량, expect(신청번호·_snapshot)가 오면 그 행이 그대로인지. 신청 행(상태는 계산값) 반환."""
+    with _lock:
+        wb = _load()
+        _ensure_structure(wb)
+        rec = _ratt_guard(wb, number, "upload", add_n, add_bytes)
+        if expect:
+            if str(expect.get("신청번호") or number) != number:
+                raise NotFound(STALE_MSG.format(no=expect.get("신청번호")))
+            _check_action_expect(rec, expect)
+        return rec
+
+
 def ratt_add(items: list[dict], folder_url: str | None = None) -> list[dict]:
-    """신청첨부 시트에 여러 행 추가 후 신청 요약 갱신. items 는 RATT_COLS 키를 가진 dict 목록."""
+    """신청첨부 시트에 여러 행 추가 후 신청 요약 갱신. items 는 RATT_COLS 키를 가진 dict 목록. 상태·개수·용량 규칙을 잠금 안에서 다시 확인."""
     with _write_session() as wb:
         ws = wb[SHEET_RATT]
-        known = {q["신청번호"] for q in _rows(wb[SHEET_RQ], REQUEST_COLS)}
-        out = []
         for it in items:
             _validate("ratt", it)
-            if it["신청번호"] not in known:
-                raise NotFound(f"신청 {it['신청번호']} 을(를) 찾을 수 없습니다.")
+        for number in dict.fromkeys(it["신청번호"] for it in items):
+            mine = [it for it in items if it["신청번호"] == number]
+            _ratt_guard(wb, number, "upload", len(mine), int(sum(_to_num(it.get("크기")) for it in mine)))
+        out = []
+        for it in items:
             r = _next_row(ws)
             _write_row(ws, RATT_COLS, r, it)
             it["_row"] = r
@@ -1867,12 +2176,13 @@ def ratt_add(items: list[dict], folder_url: str | None = None) -> list[dict]:
         return out
 
 
-def ratt_delete(row: int, expect: dict | None = None) -> dict:
-    """신청첨부 행 삭제 후 신청 요약 갱신. 삭제된 행(드라이브파일ID 포함) 반환."""
+def ratt_delete(row: int, expect: dict | None = None, admin: bool = False) -> dict:
+    """신청첨부 행 삭제 후 신청 요약 갱신. 삭제된 행(드라이브파일ID 포함) 반환. 신청·반려 상태만 (승인은 admin)."""
     with _write_session() as wb:
         ws = wb[SHEET_RATT]
         rec = _find_row(ws, RATT_COLS, row, "첨부")
         _check_expect("ratt", rec, expect)
+        _ratt_guard(wb, rec["신청번호"], "delete", admin=admin)
         _delete_row(ws, row)
         _sync_request_attach(wb, rec["신청번호"])
         _save(wb)

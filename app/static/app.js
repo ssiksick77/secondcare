@@ -121,19 +121,22 @@ function fundOptions() {
 
 // ---------- 데이터 로드 ----------
 let LAST_WRITE_ID = null;  // 서버가 알려준 직전 쓰기 ID (토스트 '되돌리기'는 자기 ID 일 때만)
+// body 가 FormData 면 그대로 전송 (파일 업로드). 실패 시 Error(한국어 문구) + err.status
 async function api(method, url, body) {
   let res;
-  try { res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }); }
+  const form = typeof FormData !== "undefined" && body instanceof FormData;
+  try { res = await fetch(url, { method, headers: form ? undefined : { "Content-Type": "application/json" }, body: form ? body : body ? JSON.stringify(body) : undefined }); }
   catch { throw new Error("서버에 연결할 수 없습니다. run.bat 이 실행 중인지 확인하세요."); }
   const wid = res.headers.get("X-Write-Id");
   if (wid && wid !== LAST_WRITE_ID) { LAST_WRITE_ID = wid; $$(".toast-undo").forEach(b => { if (b.dataset.wid !== wid) b.remove(); }); }  // 새 쓰기 뒤에는 이전 되돌리기 버튼 제거
   if (!res.ok) {
-    let msg = { 404: "찾을 수 없습니다", 409: "충돌", 422: "입력 형식 오류", 423: "장부 파일이 잠겨 있습니다", 500: "서버 오류" }[res.status] || res.statusText;
+    let msg = { 404: "찾을 수 없습니다", 405: "지원하지 않는 요청입니다", 409: "충돌", 413: "파일이 너무 큽니다 (25MB 이하)", 422: "입력 형식 오류", 423: "장부 파일이 잠겨 있습니다", 500: "서버 오류" }[res.status] || res.statusText;
     try { const d = (await res.json()).detail; if (Array.isArray(d)) msg = d.map(x => x.msg || JSON.stringify(x)).join(" / "); else if (d) msg = typeof d === "string" ? d : JSON.stringify(d); } catch { }
-    throw new Error(msg);
+    const err = new Error(msg); err.status = res.status; throw err;
   }
   return res.json();
 }
+const isResearcher = () => document.body.classList.contains("request-mode") && !document.body.classList.contains("req-admin");
 
 async function load() {
   try {
@@ -151,7 +154,9 @@ async function load() {
 
 function renderStatus() {
   const st = $("#file-status");
-  st.textContent = (DATA.meta.locked ? "주의: 엑셀에서 열려 있음 (저장 불가) · " : "") + (DATA.meta.formula_count ? `수식 셀 ${DATA.meta.formula_count}개 · ` : "") + "파일 수정 " + DATA.meta.mtime.replace("T", " ");
+  // 연구원 화면(/request 직접 접속): 장부 파일 경로·수정 시각은 숨기고, 잠겼을 때만 할 일을 알림
+  st.textContent = isResearcher() ? (DATA.meta.locked ? "지금은 저장할 수 없습니다. 담당자에게 알려 주세요." : "")
+    : (DATA.meta.locked ? "주의: 엑셀에서 열려 있음 (저장 불가) · " : "") + (DATA.meta.formula_count ? `수식 셀 ${DATA.meta.formula_count}개 · ` : "") + "파일 수정 " + DATA.meta.mtime.replace("T", " ");
   st.classList.toggle("locked", DATA.meta.locked);
   showBanner(DATA.meta.formula_count ? `장부에 수식 셀이 ${DATA.meta.formula_count}개 있습니다 (${DATA.meta.formula_cells.join(", ")}). 앱은 수식을 읽지 못해 0으로 집계하며, 해당 행을 저장하면 값으로 바뀝니다. 엑셀에서 값으로 바꿔 주세요.` : "");
   $("#foot-path").textContent = DATA.meta.file;
@@ -280,7 +285,7 @@ function renderList(kind) {
   if (kind === "exec") table.classList.toggle("delmode", DELMODE);
   const minorCls = c => c.minor ? " col-minor" : "";
   const CENTER = new Set(["구분", "결제수단", "지급월", "귀속월", "월", "시작월", "종료월", "인건비구분", "변경회차", "상태", "증빙", "태그"]);
-  const ctrCls = c => (c.t === "date" || c.t === "badge" || CENTER.has(c.k)) ? " ctr" : "";
+  const ctrCls = c => (c.ctr || c.t === "date" || c.t === "badge" || CENTER.has(c.k)) ? " ctr" : "";
   const SORT_SVG = d => `<span class="sort-ind" aria-hidden="true"><svg viewBox="0 0 10 10"><path d="${d > 0 ? "M2 7l3-4 3 4" : "M2 3l3 4 3-4"}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
   const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="sortbtn">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</button></th>`).join("")}${noAct ? "" : '<th class="actions">작업</th>'}</tr></thead>`;
   const selHead = kind === "exec" && DELMODE ? `<th class="sel"><input type="checkbox" id="exec-sel-all" aria-label="표시된 행 모두 선택"></th>` : (SEL_HOOK[kind]?.head() || "");
@@ -295,7 +300,7 @@ function renderList(kind) {
       return td(cellHtml(c, r, v));
     }).join("");
     return rowHtml(r, tds);
-  }).join("") + more : `<tr><td class="empty" colspan="${span}">표시할 항목이 없습니다.</td></tr>`;
+  }).join("") + more : `<tr><td class="empty" colspan="${span}">${SEL_HOOK[kind]?.empty?.() || "표시할 항목이 없습니다."}</td></tr>`;
   function cellHtml(c, r, v) {
       if (c.html) return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}">${c.html(r)}</td>`;  // 열 정의가 직접 그리는 칸 (값은 함수 안에서 esc)
       if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미입력">-</span>' : fmt(v)}</td>`;
@@ -637,12 +642,12 @@ function openForm(kind, row, preset, opts = {}) {
     else if (f.type === "date") input = `<input id="${id}" name="${esc(f.k)}" type="date" value="${esc(v)}"${f.req ? " required" : ""}>`;
     else if (f.type === "month") input = `<input id="${id}" name="${esc(f.k)}" type="month" value="${esc(v)}"${f.req ? " required" : ""}>`;
     else if (f.type === "num") input = `<input id="${id}" name="${esc(f.k)}" type="text" inputmode="numeric" class="num-input" value="${v === "" || v == null ? "" : fmt(v)}"${f.req ? " required" : ""} placeholder="0" title="'=' 로 시작하면 계산식 입력 가능 (예: =12000*3)">`;
-    else if (f.type === "datalist") input = `<input id="${id}" name="${esc(f.k)}" type="text" list="dl-${esc(f.list || (f.k === "품의자" ? "사용자" : f.k))}" value="${esc(v)}" autocomplete="off">`;
+    else if (f.type === "datalist") input = `<input id="${id}" name="${esc(f.k)}" type="text" list="dl-${esc(f.list || (f.k === "품의자" ? "사용자" : f.k))}" value="${esc(v)}" autocomplete="off"${f.req ? ' required aria-required="true"' : ""}>`;
     else input = `<input id="${id}" name="${esc(f.k)}" type="text" value="${esc(v)}"${f.req ? " required" : ""}>`;
     return `<label class="${f.cls || ""}" for="${id}" data-dep="${esc(f.dep || "")}"><span class="lab">${lab}${f.hint ? ` <small>(${esc(f.hint)})</small>` : ""}</span>${input}</label>`;
   }).join("");
   syncDepFields();
-  if (kind === "exec" && rec) { const o = execOrigin(rec); if (o?.locked) { LOCKED_COLS.forEach(k => { const el = F(k); if (el) { el.readOnly = true; el.setAttribute("aria-readonly", "true"); if (el.tagName === "SELECT") el.dataset.lock = el.value; el.classList.add("locked"); el.title = `${o.kind} 연결 행: 원본에서만 변경`; } }); $("#dlg-error").textContent = `${o.label} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리하고, 여기서는 세목·태그·관리번호·청구·승인·결의일·비고만 바꿀 수 있습니다.`; $("#dlg-error").hidden = false; $("#dlg-error").classList.add("info"); } }
+  if (kind === "exec" && rec) { const o = execOrigin(rec); if (o?.locked) { LOCKED_COLS.forEach(k => { const el = F(k); if (el) { el.readOnly = true; el.setAttribute("aria-readonly", "true"); if (el.tagName === "SELECT") el.dataset.lock = el.value; el.classList.add("locked"); el.title = `${o.kind} 연결 행: 원본에서만 변경`; } }); $("#dlg-error").textContent = `${o.label} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리하고, 여기서는 세목·태그·관리번호·청구·승인·결의일·비고만 바꿀 수 있습니다.`; $("#dlg-error").hidden = false; $("#dlg-error").classList.add("info"); $("#dlg-error").setAttribute("role", "status"); } }
   const dlg = $("#dlg");
   dlg.dataset.kind = kind; dlg.dataset.row = row ?? ""; dlg.dataset.convert = opts.convertRow ?? "";
   dlg.dataset.convertReq = opts.convertRequests ? JSON.stringify(opts.convertRequests) : "";  // 신청 → 품의 전환 (request.js)
@@ -670,7 +675,7 @@ $("#dlg-fields").addEventListener("keydown", e => {
   const next = list[i + 1];
   if (next) { next.focus(); if (next.select) next.select(); } else $("#dlg-save").focus();
 });
-const confirmDiscard = () => confirmDlg({ title: "입력 취소", body: "입력한 내용은 저장되지 않습니다.", verb: "버리고 닫기", danger: true });
+const confirmDiscard = () => confirmDlg({ title: "입력 취소", body: "입력한 내용은 저장되지 않습니다.", verb: "버리고 닫기", cancel: "계속 입력", danger: true });
 $("#dlg").addEventListener("cancel", async e => {  // Esc: confirmDlg 가 비동기라 항상 막고, 확인되면 직접 닫는다
   if (!formDirty()) return;
   e.preventDefault();
@@ -710,7 +715,7 @@ $("#dlg-form").addEventListener("submit", async e => {
       const ev = evalAmount(v);
       if (ev === null) { invalid.push(`${f.label || f.k}(수식 계산 불가)`); mark(); }
       else if (ev !== undefined) { v = ev; el.value = ev.toLocaleString("ko-KR"); }
-      else { v = v.replace(/[,\s원]/g, ""); if (v && isNaN(Number(v))) { invalid.push(`${f.label || f.k}(숫자 아님)`); mark(); } v = v === "" ? "" : Number(v); }
+      else if (v !== "") { const n = numText(v); if (n == null) { invalid.push(`${f.label || f.k}(숫자 아님)`); mark(); } else { v = n; el.value = n.toLocaleString("ko-KR"); } }
     }
     if (f.req === "exec" && recordExec && v === "") { missing.push(f.label || f.k); mark(); }
     if (f.req === true && (v === "" || v == null)) { missing.push(f.label || f.k); mark(); }
@@ -743,6 +748,8 @@ $("#dlg-form").addEventListener("submit", async e => {
   }
   if (kind === "exec" && row) { const cur = DATA.exec.find(x => x._row === Number(row)); if (cur) ["상태", "증빙폴더", "증빙목록"].forEach(k => { rec[k] = cur[k]; }); }
   if (kind === "request" && typeof requestPrepare === "function") { const err = requestPrepare(rec, row ? Number(row) : null); if (err) { showFormError(err); return; } }
+  let putExtra = null;  // 신청: 승인된 건을 고칠 때 담당자가 고른 처리 (승인 유지 → {keep_approval: true})
+  if (kind === "request" && row && typeof requestConfirmSave === "function") { const r = await requestConfirmSave(rec, Number(row)); if (r === null) return; putExtra = r || null; }
   const more = dlg.dataset.saveMore === "1"; dlg.dataset.saveMore = "";
   const convertRow = dlg.dataset.convert ? Number(dlg.dataset.convert) : null;
   const convertReq = dlg.dataset.convertReq ? JSON.parse(dlg.dataset.convertReq) : null;
@@ -759,15 +766,17 @@ $("#dlg-form").addEventListener("submit", async e => {
       const req = DATA.req.find(x => x._row === convertRow);
       saved = await api("POST", `/api/req/${convertRow}/to-exec`, { extra: rec, expect: expectOf("req", req) });
     } else {
-      saved = row ? await api("PUT", `/api/${kind}/${row}`, { rec, expect: expectOf(kind, DATA[kind].find(x => x._row === Number(row))) }) : await api("POST", `/api/${kind}`, rec);
+      saved = row ? await api("PUT", `/api/${kind}/${row}`, { rec, expect: expectOf(kind, DATA[kind].find(x => x._row === Number(row))), ...(putExtra ? { extra: putExtra } : {}) }) : await api("POST", `/api/${kind}`, rec);
     }
     const cb = DLG_ON_SAVED; DLG_ON_SAVED = null;
     if (!row) rememberLast(kind, rec);
     const no = saved["거래번호"] || saved["품의번호"] || saved["신청번호"] || saved["재원코드"] || saved["태그명"] || "";
     dlg.dataset.initial = ""; dlg.close();
     if (doneMsg) showAlert(doneMsg, "ok", { undo: true });
+    else if (kind === "request" && typeof requestSavedMsg === "function") requestSavedMsg(saved, !row);
     else showAlert(`${no ? no + " " : ""}저장했습니다.` + (convertRow != null ? " (품의 → 집행 전환 완료)" : ""), "ok");
     await load();
+    if (kind === "request" && typeof requestAfterSave === "function") requestAfterSave(saved);
     if (cb) cb(saved);
     if (more) { const carry = {}; ["원인발생일", "일자", "귀속월", "지급월", "이름"].forEach(k => { if (rec[k]) carry[k] = rec[k]; }); openForm(kind, null, { ...carry, 거래처: "", 금액: "", 적요: "", 세목: "", 세세목: "", 관리번호: "", 비고: "", 증빙번호: "", 결의일: "", 지출완료일: "", 지급청구일: "" }); }
   } catch (err) {
@@ -805,7 +814,7 @@ function availableBudget(fund, item, opts = {}) {
 let DLG_ON_SAVED = null;
 $("#dlg-cancel").addEventListener("click", async () => { if (formDirty() && !await confirmDiscard()) return; DLG_ON_SAVED = null; $("#dlg").dataset.initial = ""; $("#dlg").close(); });
 $("#dlg").addEventListener("close", () => { DLG_ON_SAVED = null; });
-function showFormError(msg) { const p = $("#dlg-error"); p.textContent = msg; p.hidden = false; }
+function showFormError(msg) { const p = $("#dlg-error"); p.textContent = msg; p.hidden = false; p.classList.remove("info"); p.setAttribute("role", "alert"); }
 
 // 금액 칸의 '=' 수식: "=12000*3+500" 처럼 사칙연산·괄호만 허용해 계산하고, 저장은 숫자로. 계산 불가면 null
 function evalAmount(str) {
@@ -816,16 +825,29 @@ function evalAmount(str) {
   try { const n = Function(`"use strict"; return (${body});`)(); return Number.isFinite(n) ? Math.round(n) : null; } catch { return null; }
 }
 // 금액 입력 자동 쉼표 (입력 중 캐럿 이동을 막기 위해 포커스를 벗어날 때만). '=' 로 시작하면 수식을 계산해 숫자로 바꿈
+// 숫자 칸 글자 → 수: 쉼표·공백·'원' 허용, '350만'·'1.2억' 처럼 만/억 한 단위. 그 밖의 글자가 있으면 null (값을 몰래 고치지 않음)
+const NUM_PLAIN = /^-?[\d,\s]*\.?\d*원?$/;
+function numText(str) {
+  const t = String(str ?? "").trim();
+  if (!/\d/.test(t)) return null;
+  const m = /^(-?[\d,]*\.?\d*)\s*(만|억)\s*원?$/.exec(t);
+  const n = m ? Number(m[1].replace(/,/g, "")) * (m[2] === "억" ? 1e8 : 1e4) : NUM_PLAIN.test(t) ? Number(t.replace(/[,\s원]/g, "")) : NaN;
+  return Number.isFinite(n) && Math.abs(n) < 1e15 ? (m ? Math.round(n) : n) : null;
+}
+// 금액 입력 자동 쉼표 (입력 중 캐럿 이동을 막기 위해 포커스를 벗어날 때만). 순수 숫자·'=' 수식만 다시 쓰고, 그 밖은 표시만 하고 글자를 그대로 둔다
 document.addEventListener("focusout", e => {
-  if (!e.target.classList?.contains("num-input")) return;
-  const ev = evalAmount(e.target.value);
-  if (ev === null) { e.target.setAttribute("aria-invalid", "true"); e.target.title = "수식을 계산할 수 없습니다. 숫자와 + - * / ( ) 만 쓸 수 있습니다."; return; }
-  e.target.removeAttribute("aria-invalid"); e.target.title = "";
-  if (ev !== undefined) { e.target.value = ev.toLocaleString("ko-KR"); e.target.dispatchEvent(new Event("input", { bubbles: true })); return; }
-  const raw = e.target.value.replace(/[^\d.-]/g, "");
-  if (raw === "" || raw === "-") return;
-  const n = Number(raw); if (isNaN(n)) return;
-  e.target.value = n.toLocaleString("ko-KR");
+  const el = e.target;
+  if (!el.classList?.contains("num-input")) return;
+  if (el.dataset.hint === undefined) el.dataset.hint = el.title || "";
+  const bad = msg => { el.setAttribute("aria-invalid", "true"); el.title = msg; };
+  const v = el.value.trim(), ev = evalAmount(v);
+  if (ev === null) return bad("수식을 계산할 수 없습니다. 숫자와 + - * / ( ) 만 쓸 수 있습니다.");
+  if (ev === undefined && (v === "" || v === "-")) { el.removeAttribute("aria-invalid"); el.title = el.dataset.hint; return; }
+  const n = ev !== undefined ? ev : numText(v);
+  if (n == null) return bad("숫자 또는 =수식만 입력할 수 있습니다");
+  el.removeAttribute("aria-invalid"); el.title = el.dataset.hint;
+  const out = n.toLocaleString("ko-KR");
+  if (el.value !== out) { el.value = out; el.dispatchEvent(new Event("input", { bubbles: true })); }  // 미리보기·합계 갱신
 });
 
 // ---------- 품의 -> 집행 전환 ----------
@@ -875,32 +897,48 @@ async function del(kind, row) {
   const laborLbl = typeof laborLabel === "function" ? laborLabel(kind, r) : null;
   const label = laborLbl ? laborLbl + (kind === "labor" && r["연결거래번호"] ? `\n연결 집행 ${r["연결거래번호"]} 도 함께 삭제됩니다.` : "") : no ? [no, r["거래처"] || r["과제명"] || r["분류"], r["금액"] != null && kind !== "funds" && kind !== "tags" ? fmt(r["금액"]) + "원" : "", r["원인발생일"] ? mmdd(r["원인발생일"]) : "", (r["적요"] || r["설명"] || "").slice(0, 30)].filter(Boolean).join(" · ")
     : (kind === "deposit" ? `${r?.["일자"]} ${r?.["거래처"]} ${r?.["구분"]} ${fmt(r?.["금액"])}원` : `${r?.["재원"]} ${r?.["변경회차"]}회차`);
-  if (!await confirmDlg({ title: `${DEL_KIND[kind] || "항목"} 삭제`, body: `${label}\n\n삭제 직후 토스트의 '되돌리기'로 복구할 수 있습니다. 그 뒤에는 app/backup 폴더의 백업 파일로만 복원됩니다.`, verb: "삭제", danger: true })) return;
+  if (!await confirmDlg({ title: `${DEL_KIND[kind] || "항목"} 삭제`, body: `${label}\n\n삭제 직후 알림의 [되돌리기]로 복구할 수 있습니다. 그 뒤에는 app/backup 폴더의 백업 파일로만 복원됩니다.`, verb: "삭제", danger: true })) return;
   try { await api("DELETE", `/api/${kind}/${row}`, { expect: expectOf(kind, r) }); showAlert(`${no || label} 삭제했습니다.`, "ok", { undo: true }); await load(); }
   catch (e) { showAlert(e.message, "error"); }
 }
 
 // ---------- 공통 UI ----------
-// 스타일 확인 대화상자. confirmDlg({title, body, verb, danger, input:{label,type,value}}) → 확인이면 true(입력 있으면 값), 취소면 null
+// 스타일 확인 대화상자. confirmDlg({title, body, verb, danger, cancel, alt, input:{label,type,value,required,error}})
+// → 확인이면 true(입력 있으면 값), alt 버튼이면 "alt", 취소면 null. input.required 는 대화상자 안에서 검증(빈 값이면 열린 채 오류 표시)
 function confirmDlg(o) {
   return new Promise(resolve => {
-    const d = $("#dlg-confirm"), form = $("#dlg-confirm-form"), cancel = $("#confirm-cancel"), ok = $("#confirm-ok");
-    const w = $("#confirm-input-wrap"), inp = $("#confirm-input");
+    const d = $("#dlg-confirm"), form = $("#dlg-confirm-form"), cancel = $("#confirm-cancel"), ok = $("#confirm-ok"), alt = $("#confirm-alt");
+    const w = $("#confirm-input-wrap"), inp = $("#confirm-input"), err = $("#confirm-input-err");
     $("#confirm-title").textContent = o.title || "확인";
     $("#confirm-body").textContent = o.body || "";
-    w.hidden = !o.input; if (o.input) { $("#confirm-input-label").textContent = o.input.label || ""; inp.type = o.input.type || "text"; inp.value = o.input.value || ""; }
+    w.hidden = !o.input; err.hidden = true; err.textContent = ""; inp.removeAttribute("aria-invalid"); inp.required = false; inp.removeAttribute("aria-required");
+    if (o.input) {
+      $("#confirm-input-label").innerHTML = esc(o.input.label || "") + (o.input.required ? ' <span class="req" aria-hidden="true">*</span>' : "");
+      inp.type = o.input.type || "text"; inp.value = o.input.value || "";
+      if (o.input.required) { inp.required = true; inp.setAttribute("aria-required", "true"); }
+    }
     ok.textContent = o.verb || "확인"; ok.className = "btn " + (o.danger ? "btn-danger-solid" : "btn-primary");
+    cancel.textContent = o.cancel || "취소";
+    alt.hidden = !o.alt; alt.textContent = o.alt || "";
     let done = false;
-    const onSubmit = e => { e.preventDefault(); finish(o.input ? inp.value : true); };
+    const onSubmit = e => {
+      e.preventDefault();
+      if (o.input?.required && !String(inp.value).trim()) {  // 대화상자를 닫지 않고 그 자리에서 알림
+        inp.setAttribute("aria-invalid", "true"); err.textContent = o.input.error || `${o.input.label || "값"}을(를) 입력하세요.`; err.hidden = false; inp.focus(); return;
+      }
+      finish(o.input ? inp.value : true);
+    };
     const onCancel = () => finish(null);
+    const onAlt = () => finish("alt");
     const onClose = () => finish(null);
+    const onInput = () => { if (!err.hidden && String(inp.value).trim()) { err.hidden = true; inp.removeAttribute("aria-invalid"); } };
     function finish(v) {
       if (done) return; done = true;
-      form.removeEventListener("submit", onSubmit); cancel.removeEventListener("click", onCancel); d.removeEventListener("close", onClose);
+      form.removeEventListener("submit", onSubmit); cancel.removeEventListener("click", onCancel); alt.removeEventListener("click", onAlt); d.removeEventListener("close", onClose); inp.removeEventListener("input", onInput);
       if (d.open) d.close();
       resolve(v);
     }
-    form.addEventListener("submit", onSubmit); cancel.addEventListener("click", onCancel);
+    form.addEventListener("submit", onSubmit); cancel.addEventListener("click", onCancel); alt.addEventListener("click", onAlt); inp.addEventListener("input", onInput);
     // 직전 대화상자의 close 이벤트가 뒤늦게 도착해 이번 대화상자를 닫지 않도록, 열고 난 다음 틱에 close 를 듣는다
     const open = () => { d.showModal(); (o.input ? inp : (o.danger ? cancel : ok)).focus(); setTimeout(() => { if (!done) d.addEventListener("close", onClose); }, 0); };
     if (d.open) { d.close(); setTimeout(open, 0); } else open();
@@ -1081,10 +1119,16 @@ document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
 });
 // 다른 창·MCP·엑셀이 장부를 바꿨으면 탭으로 돌아올 때 자동 새로고침 (입력 중인 대화상자가 없을 때만)
-document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState !== "visible" || !DATA || document.querySelector("dialog[open]")) return;
+// 창으로 돌아올 때(focus)도 같은 검사. 업로드 등 진행 중([aria-busy=true])이면 건너뜀
+let STALE_CHECK = false;
+async function refreshIfStale() {
+  if (document.visibilityState !== "visible" || !DATA || STALE_CHECK || document.querySelector("dialog[open], [aria-busy=true]")) return;
+  STALE_CHECK = true;
   try { const m = await api("GET", "/api/meta"); if (m.mtime === DATA.meta.mtime && m.suppliers && typeof requestSettingsSaved === "function" && JSON.stringify([m.suppliers, m.supplier_note]) !== JSON.stringify([DATA.meta.suppliers, DATA.meta.supplier_note])) requestSettingsSaved({ suppliers: m.suppliers, supplier_note: m.supplier_note }); if (m.mtime !== DATA.meta.mtime) { await load(); showAlert("다른 곳에서 바뀐 장부를 다시 불러왔습니다.", "ok"); } } catch { }
-});
+  finally { STALE_CHECK = false; }
+}
+document.addEventListener("visibilitychange", refreshIfStale);
+window.addEventListener("focus", refreshIfStale);
 
 try { const t = localStorage.getItem("ledger-tab"); if (t && $("#tab-" + t)) switchTab(t); } catch { }
 load();

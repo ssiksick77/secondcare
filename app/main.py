@@ -4,6 +4,8 @@
 """
 from __future__ import annotations
 
+import json
+import logging
 import os
 import threading
 import webbrowser
@@ -29,6 +31,7 @@ HOST, PORT = "127.0.0.1", int(os.environ.get("LEDGER_PORT", "8791"))
 STATIC = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="센터 회계대장 관리도구")
+log = logging.getLogger("ledger")
 
 
 @app.exception_handler(store.LedgerLocked)
@@ -46,9 +49,22 @@ async def _ai_err(_: Request, e: ai.AIError):
     return JSONResponse({"detail": str(e)}, status_code=502)
 
 
+@app.exception_handler(store.TooLarge)
+async def _too_large(_: Request, e: store.TooLarge):
+    return JSONResponse({"detail": str(e)}, status_code=413)
+
+
 @app.exception_handler(ValueError)
 async def _bad(_: Request, e: ValueError):
     return JSONResponse({"detail": str(e)}, status_code=400)
+
+
+@app.exception_handler(Exception)
+async def _unhandled(request: Request, e: Exception):
+    """예상하지 못한 오류: 콘솔에 traceback 을 남기고, 화면에는 읽을 수 있는 JSON detail (500)."""
+    log.error("처리 중 오류: %s %s", request.method, request.url.path, exc_info=(type(e), e, e.__traceback__))
+    msg = str(e).strip() or type(e).__name__
+    return JSONResponse({"detail": f"서버 오류: {msg[:300]} (콘솔 창에 자세한 내용이 있습니다)"}, status_code=500)
 
 
 @app.get("/")
@@ -193,6 +209,13 @@ def request_convert(body: dict):
     return store.request_convert(body.get("rows") or [], body.get("extra") or {}, body.get("expects"))
 
 
+@app.post("/api/request/batch-action")
+def request_batch_action(body: dict):
+    """일괄 결재: body {rows: [{row, expect}], action: approve|reject|unapprove|reopen, extra: {결재인?, 결재일?, 사유?}}.
+    한 번 저장 · 전부 성공 또는 전부 취소. → {action, count, items, numbers}"""
+    return store.request_batch_action(body.get("rows") or [], body.get("action") or "", body.get("extra") or {})
+
+
 @app.post("/api/request/{row}/action")
 def request_action(row: int, body: dict):
     """body: {action: approve|reject|unapprove|reopen, extra: {결재인?, 결재일?, 사유?}, expect}"""
@@ -234,12 +257,17 @@ def ratt_list(number: str):
 
 
 @app.post("/api/ratt/{number}")
-async def ratt_upload(number: str, files: list[UploadFile] = File(...), note: str = Form("")):
-    """여러 파일을 드라이브 신청/YYYY/신청번호 에 올리고 신청첨부 시트에 기록 (실패 시 올린 파일은 휴지통)."""
-    rec = next((r for r in store.read_all()["request"] if r["신청번호"] == number), None)
-    if rec is None:
-        raise HTTPException(404, "신청 행을 찾을 수 없습니다.")
-    year = (rec.get("신청일") or dt.date.today().isoformat())[:4]
+async def ratt_upload(number: str, files: list[UploadFile] = File(...), note: str = Form(""), expect: str = Form("")):
+    """여러 파일을 드라이브 신청/YYYY/신청번호 에 올리고 신청첨부 시트에 기록 (실패 시 올린 파일은 휴지통).
+    규칙: 신청·반려·승인 상태만, 파일당 25MB, 신청 1건에 20개·합계 100MB (넘으면 413).
+    expect (선택, JSON 문자열 {신청번호, _snapshot}): 열린 패널이 보던 행과 다르면 404 (오래된 패널에서 올리기 방지)."""
+    exp = None
+    if expect.strip():
+        try:
+            exp = json.loads(expect)
+        except ValueError:
+            raise HTTPException(400, "expect 형식이 올바르지 않습니다 (JSON).") from None
+    store.ratt_precheck(number)  # 없는 신청·올릴 수 없는 상태는 파일을 읽기 전에 거부
     blobs = []
     for f in files:  # 크기 검사를 먼저 전부 수행 (중간 실패로 고아 파일이 생기지 않도록)
         data = await f.read()
@@ -248,6 +276,8 @@ async def ratt_upload(number: str, files: list[UploadFile] = File(...), note: st
         if not data:
             raise HTTPException(400, f"{f.filename}: 빈 파일입니다.")
         blobs.append((f, data))
+    rec = store.ratt_precheck(number, len(blobs), sum(len(d) for _, d in blobs), exp if isinstance(exp, dict) else None)
+    year = (rec.get("신청일") or dt.date.today().isoformat())[:4]
     folder = drive.ensure_folder([year, number], root=drive.REQUEST_ROOT)
     existing = store.ratt_names(number)
     items, uploaded = [], []
@@ -273,7 +303,9 @@ async def ratt_upload(number: str, files: list[UploadFile] = File(...), note: st
 
 
 def ratt_delete(row: int, body: dict | None = None):
-    rec = store.ratt_delete(row, (body or {}).get("expect"))
+    """body: {expect, extra: {admin?}} — 승인된 신청의 첨부는 admin=true(담당자 화면)일 때만. admin 은 화면 구분이며 보안 장치가 아님."""
+    body = body or {}
+    rec = store.ratt_delete(row, body.get("expect"), bool((body.get("extra") or {}).get("admin")))
     try:
         drive.trash(rec.get("드라이브파일ID") or "")
     except drive.DriveError as e:
@@ -291,11 +323,15 @@ def create(kind: str, rec: dict):
 
 @app.put("/api/{kind}/{row}")
 def update(kind: str, row: int, body: dict):
-    """body: 레코드 자체, 또는 {"rec": {...}, "expect": {식별열: 값}} (expect 는 행 밀림 감지용)."""
+    """body: 레코드 자체, 또는 {"rec": {...}, "expect": {식별열: 값}, "extra": {...}} (expect 는 행 밀림 감지용).
+    신청: extra.keep_approval=true 면 승인된 신청의 품목·금액 등을 바꿔도 승인 유지, 아니면 '신청'으로 되돌리고 결과에 reapproval: true."""
     _kind(kind)
-    # 신형: {"rec": {...}, "expect": {...}} / 구형(예전 화면 캐시): 레코드 자체
-    rec, expect = (body.get("rec"), body.get("expect")) if isinstance(body.get("rec"), dict) else (body, None)
-    return store.update(kind, row, rec, expect)
+    # 신형: {"rec": {...}, "expect": {...}, "extra": {...}} / 구형(예전 화면 캐시): 레코드 자체
+    if isinstance(body.get("rec"), dict):
+        rec, expect, extra = body.get("rec"), body.get("expect"), body.get("extra")
+    else:
+        rec, expect, extra = body, None, None
+    return store.update(kind, row, rec, expect, extra if isinstance(extra, dict) else None)
 
 
 @app.delete("/api/{kind}/{row}")

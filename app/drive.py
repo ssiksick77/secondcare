@@ -309,12 +309,18 @@ def safe_part(s: str, limit: int = 40) -> str:
     return s[:limit].strip() or "-"
 
 
+def safe_ext(ext: str) -> str:
+    """확장자 정제: safe_part 로 금지 문자(: 등, NTFS 대체 스트림 방지) 제거, 공백 제거, 10자 이하, 소문자. 비면 ''."""
+    e = safe_part(str(ext or "").lstrip("."), 10).replace(" ", "").lower()
+    return "" if e in ("", "-") else "." + e
+
+
 def build_request_filename(number: str, item: str, original: str, existing: list[str]) -> str:
     """신청번호_품목_원본파일명(_n).ext — 같은 이름이 있으면 _2, _3"""
     original = str(original or "")
     stem, ext = (original.rsplit(".", 1) if "." in original else (original, ""))
     base = "_".join([safe_part(number, 20), safe_part(item), safe_part(stem, 60)])
-    ext = ("." + ext.lower().lstrip(".")) if ext else ""
+    ext = safe_ext(ext)
     name, n = base + ext, 2
     taken = set(existing)
     while name in taken:
@@ -327,7 +333,7 @@ def build_filename(fund: str, summary: str, kind: str, amount, yymmdd: str, ext:
     """재원_적요_증빙종류_금액_YYMMDD(_n).ext — 같은 이름이 있으면 _2, _3"""
     amt = str(int(float(amount))) if str(amount).strip() not in ("", "None") else "0"
     base = "_".join([safe_part(fund, 20), safe_part(summary), safe_part(kind, 20), amt, yymmdd])
-    ext = ("." + ext.lower().lstrip(".")) if ext else ""
+    ext = safe_ext(ext)
     name, n = base + ext, 2
     taken = set(existing)
     while name in taken:
