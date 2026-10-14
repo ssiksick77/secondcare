@@ -13,8 +13,8 @@ const mmdd = d => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d.s
 const IDENT = { funds: ["재원코드"], exec: ["거래번호"], req: ["품의번호"], tags: ["태그명"], budget: ["재원", "변경회차", "신청일자"], deposit: ["일자", "거래처", "구분", "금액"] };
 const F = k => document.getElementById("f-" + k);
 // 단계 ↔ 날짜: 발생=원인발생일, 청구=지급청구일, (보완=수동 표시), 승인=지출완료일, 결의=결의일
-const STATUS_LABEL = { 발생: "발생", 청구: "청구", 보완: "보완", 완료: "승인", 결의: "결의" };
-const STATUS_HELP = { 발생: "원인발생일만 있음. 다음: 청구(지급청구일)", 청구: "지급청구일 등록됨. 다음: 승인(지출완료일)", 보완: "서류·증빙 보완이 필요하다고 표시한 건", 완료: "지출완료일 등록됨(승인). 다음: 결의(결의일)", 결의: "결의일 등록됨 (마지막 단계)" };
+const STATUS_LABEL = { 발생: "발생", 청구: "청구", 보완: "보완", 완료: "승인", 결의: "완료" };  // 결의일이 등록되면 '완료'로 표시
+const STATUS_HELP = { 발생: "원인발생일만 있음. 다음: 청구(지급청구일)", 청구: "지급청구일 등록됨. 다음: 승인(지출완료일)", 보완: "서류·증빙 보완이 필요하다고 표시한 건 (청구 단계)", 완료: "지출완료일 등록됨(승인). 다음: 결의(결의일)", 결의: "결의일 등록됨, 완료" };
 // 상태 열의 다음 단계 버튼: [동작, 라벨, 설명]
 const NEXT_STEP = { 발생: ["claim", "청구", "지급청구일을 오늘로 등록"], 청구: ["complete", "승인", "지출완료일을 오늘로 등록"], 보완: ["complete", "승인", "지출완료일을 오늘로 등록 (보완 해제)"], 완료: ["resolve", "결의", "결의일을 오늘로 등록 (마지막 단계)"] };
 const DATE_STAGE = { 원인발생일: "발생", 지급청구일: "청구", 지출완료일: "승인", 결의일: "결의" };  // 폼 필드 (예산목 이름에 괄호·점이 있어 CSS 선택자 불가)
@@ -28,7 +28,7 @@ const COLS = {
   exec: [
     { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "원인발생일", t: "date", label: "날짜" }, { k: "지급청구일", t: "date", hide: true },
     { k: "지출완료일", t: "date", hide: true }, { k: "결의일", t: "date", hide: true }, { k: "재원" }, { k: "예산목" }, { k: "세목" }, { k: "세세목", minor: true },
-    { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => availableBudget(r["재원"], r["예산목"]), title: "이 건의 재원·예산목 가용잔액 (예산현액 − 집행 − 품의대기)" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 파일 수" }, { k: "비고", wrap: true, minor: true },
+    { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (예산현액 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 파일 수" }, { k: "비고", wrap: true, minor: true },
   ],
   req: [
     { k: "품의번호" }, { k: "상태", t: "badge" }, { k: "원인발생일", t: "date" }, { k: "지출예정일", t: "date" }, { k: "재원" },
@@ -130,7 +130,7 @@ async function api(method, url, body) {
 
 async function load() {
   try {
-    DATA = await api("GET", "/api/all");
+    DATA = await api("GET", "/api/all"); RUN_BAL = null;
     COLS.budget = [{ k: "재원" }, { k: "변경회차" }, { k: "신청일자", t: "date" }, { k: "변경사유", wrap: true },
       ...DATA.meta.budget_items.map((i, n) => ({ k: i, t: "num", amt: n === 0 })), { k: "합계", t: "num", calc: r => DATA.meta.budget_items.reduce((a, i) => a + (r[i] || 0), 0) }];
     renderStatus();
@@ -278,7 +278,8 @@ function renderList(kind) {
       }
       if (c.t === "badge") {
         const nx = kind === "exec" ? NEXT_STEP[v] : null;
-        return `<td class="st-cell"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</td>`;
+        const fixBtn = kind === "exec" && (v === "청구" || v === "보완") ? `<button type="button" class="fixtg${v === "보완" ? " on" : ""}" data-act="xact" data-action="${v === "보완" ? "unfix" : "fix"}" data-row="${r._row}" title="${v === "보완" ? "보완 해제" : "보완 필요로 표시"}" aria-label="${v === "보완" ? "보완 해제" : "보완 필요로 표시"}" aria-pressed="${v === "보완"}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M6 2.2v4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="6" cy="9.4" r="1" fill="currentColor"/></svg></button>` : "";
+        return `<td class="st-cell"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${fixBtn}${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</td>`;
       }
       if (c.t === "title") return `<td class="tit" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}"><div class="t">${esc(v || "")}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`;
       if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap">${esc(v)}${originBadge(r)}</td>`;
@@ -700,6 +701,22 @@ $("#dlg-save-more").addEventListener("click", () => { $("#dlg").dataset.saveMore
 
 // 가용잔액 = 예산현액 − 집행(파일 전체) − 대기 품의(날짜 무관). 대시보드·집행내역 열·저장 경고가 모두 이 함수를 쓴다 (2026-10-13 결정).
 // excludeReq / excludeExec: 품의→집행 전환 중인 품의, 수정 중인 집행 행은 빼고 계산 (이중 차감 방지)
+// 거래별 누적 잔액: 같은 재원·예산목의 집행을 원인발생일(같으면 행 순)으로 쌓아 "이 거래까지 반영한 뒤" 남는 예산. 예산 미입력이면 null
+let RUN_BAL = null;
+function runningBalance(r) {
+  if (!RUN_BAL) {
+    RUN_BAL = new Map();
+    const groups = {};
+    DATA.exec.forEach(x => { const k = x["재원"] + "" + x["예산목"]; (groups[k] = groups[k] || []).push(x); });
+    Object.values(groups).forEach(list => {
+      const f = list[0]["재원"], i = list[0]["예산목"];
+      const b = DATA.budget.filter(x => x["재원"] === f).reduce((a, x) => a + (x[i] || 0), 0);
+      list.sort((a, c) => (a["원인발생일"] || "").localeCompare(c["원인발생일"] || "") || a._row - c._row);
+      let acc = 0; list.forEach(x => { acc += x["금액"] || 0; RUN_BAL.set(x._row, b ? b - acc : null); });
+    });
+  }
+  return RUN_BAL.get(r._row) ?? null;
+}
 function availableBudget(fund, item, opts = {}) {
   if (!fund || !item) return null;
   const b = DATA.budget.filter(r => r["재원"] === fund).reduce((a, r) => a + (r[item] || 0), 0);
@@ -1203,7 +1220,7 @@ function renderExecTiles() {
     ["fix", "보완", n(r => r["상태"] === "보완")],
     ["done", "승인 (결의 대기)", n(r => r["상태"] === "완료")],
     ["noevid", "증빙 없음", n(r => !hasEvidence(r))],
-    ["resolved", "결의", n(r => r["상태"] === "결의")],
+    ["resolved", "완료", n(r => r["상태"] === "결의")],
   ];
   $("#exec-tiles").innerHTML = tiles.map(([k, l, c]) => `<div class="card ${QUICK === k ? "on" : ""}" role="button" tabindex="0" data-quick="${k}" aria-pressed="${QUICK === k}"><div class="k">${l}</div><div class="v">${c}건</div></div>`).join("");
 }
@@ -1248,8 +1265,8 @@ async function renderExecDrawer(fetchEvid) {
   if (st === "발생") acts.push(["claim", "청구 (지급청구일 등록)", true]);
   if (st === "청구") { acts.push(["complete", "승인 (지출완료일 등록)", true]); acts.push(["fix", "보완 표시", false]); }
   if (st === "보완") { acts.push(["complete", "승인 (지출완료일 등록)", true]); acts.push(["unfix", "보완 해제", false]); }
-  if (st === "완료") { acts.push(["resolve", "결의 (결의일 등록)", true]); acts.push(["uncomplete", "승인 취소", false]); }
-  if (st === "결의") { acts.push(["unresolve", "결의 취소", false]); }
+  if (st === "완료") { acts.push(["resolve", "결의 (결의일 등록 → 완료)", true]); acts.push(["uncomplete", "승인 취소", false]); }
+  if (st === "결의") { acts.push(["unresolve", "결의 취소 (승인으로 되돌림)", false]); }
   const evid = XD.evid || [];
   const kinds = [...new Set(evid.map(e => e["증빙종류"]).filter(Boolean))];
   const drive = XD.drive || {};

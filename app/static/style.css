@@ -418,3 +418,11 @@ table.grid td.st-cell { white-space: nowrap; }
 table.grid td.st-cell .next { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 8px; padding: 0; border: 1px solid var(--rule); border-radius: 50%; background: #fff; color: var(--ink-3); cursor: pointer; vertical-align: middle; }
 table.grid td.st-cell .next svg { width: 12px; height: 12px; }
 table.grid td.st-cell .next:hover, table.grid td.st-cell .next:focus-visible { color: #fff; background: var(--primary); border-color: var(--primary); outline: none; }
+
+/* 상태 칸: 보완 토글(!) */
+table.grid td.st-cell .fixtg { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 8px; padding: 0; border: 1px solid var(--rule); border-radius: 50%; background: #fff; color: var(--ink-3); cursor: pointer; vertical-align: middle; }
+table.grid td.st-cell .fixtg svg { width: 12px; height: 12px; }
+table.grid td.st-cell .fixtg:hover, table.grid td.st-cell .fixtg:focus-visible { color: var(--alert); border-color: var(--alert); outline: none; }
+table.grid td.st-cell .fixtg.on { color: #fff; background: var(--alert); border-color: var(--alert); }
+table.grid td.st-cell .fixtg.on:hover { background: var(--alert-deep); }
+table.grid td.st-cell .fixtg + .next { margin-left: 4px; }
