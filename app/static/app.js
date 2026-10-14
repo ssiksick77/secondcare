@@ -533,7 +533,7 @@ window.addEventListener("beforeprint", () => {
   const month = dash ? $("#dash-month").value : val('[data-filter="month"]');
   const period = year ? `${year}년${month ? " " + parseInt(month) + "월" : ""}` : month ? `${parseInt(month)}월` : "전체 기간";
   let name = (labor ? "인건비 " : "") + (tab?.textContent.trim() || "");
-  if (document.body.classList.contains("request-mode")) name = "지출 신청 " + ($("#request-tabs [aria-selected=true]")?.dataset.rtype || "");
+  if (document.body.classList.contains("request-mode")) name = "지출 신청 " + ($("#request-tabs [aria-selected=true]")?.dataset.rtype || "") + (typeof reqSub === "function" && reqSub() === "주문" ? " · 주문" : "");
   if (dash) name += ` (${$(".subtabs [aria-selected=true]")?.textContent.trim() || ""})`;
   const note = dash ? $("#dash-note").textContent.trim() : "";
   $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;

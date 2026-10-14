@@ -109,6 +109,28 @@ function switchReqTab(t, render = true) {
 }
 $$("#request-tabs [role=tab]").forEach(b => b.addEventListener("click", () => switchReqTab(b.dataset.rtype)));
 rovingTabs($("#request-tabs"));
+// 소모품 2단 메뉴 (담당자): 신청 목록 | 주문 표. 연구원 화면·다른 구분에서는 항상 신청 목록
+let REQ_SUB = "신청";
+try { if (localStorage.getItem("ledger-rtab-sub") === "주문") REQ_SUB = "주문"; } catch { }
+const reqSubOn = () => isReqAdmin() && reqType() === "소모품";
+const reqSub = () => reqSubOn() && REQ_SUB === "주문" ? "주문" : "신청";
+function switchReqSub(v, render = true) {
+  REQ_SUB = v === "주문" ? "주문" : "신청";
+  try { localStorage.setItem("ledger-rtab-sub", REQ_SUB); } catch { }
+  if (REQ_SUB === "주문") closeReqDrawer();
+  syncReqSub();
+  if (render && DATA) renderRequest();
+}
+function syncReqSub() {
+  const on = reqSubOn(), sub = reqSub(), list = $("#rview-list"), ord = $("#rview-order");
+  $("#req-subtabs").hidden = !on;
+  $$("#req-subtabs [role=tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.rsub === sub)));
+  list.hidden = sub !== "신청"; ord.hidden = sub !== "주문";
+  // 2단 메뉴가 보일 때만 두 보기를 탭 패널로 (다른 구분에서는 목록이 곧 #rpanel 내용)
+  [[list, "rsub-list"], [ord, "rsub-order"]].forEach(([el, tab]) => { if (on) { el.setAttribute("role", "tabpanel"); el.setAttribute("aria-labelledby", tab); } else { el.removeAttribute("role"); el.removeAttribute("aria-labelledby"); } });
+}
+$$("#req-subtabs [role=tab]").forEach(b => b.addEventListener("click", () => switchReqSub(b.dataset.rsub)));
+rovingTabs($("#req-subtabs"));
 $("#btn-request").addEventListener("click", () => {
   if (document.body.classList.contains("request-mode")) { setMode("main"); return; }
   try { sessionStorage.setItem("request-admin", "1"); } catch { }  // 회계대장에서 들어오면 담당자 (이 탭이 열려 있는 동안)
@@ -158,6 +180,7 @@ function renderRequest() {
   if (!DATA || !DATA.request) return;
   FILTERS.request["구분"] = reqType();
   $("#request-table").dataset.rtype = reqType();  // 소모품 탭은 열(구매처·주문번호)이 더 많아 최소 폭이 다름
+  syncReqSub();
   renderList("request");
   renderOrders();
   updateReqTabCounts();
@@ -796,22 +819,69 @@ $("#dlg-order-form").addEventListener("submit", async e => {
   finally { delete d.dataset.busy; btn.disabled = false; }
 });
 
+// 소모품 › 주문 보기: 연도(탭 막대) · 거래처 · 상태 · 검색. 상태는 배송일 유무뿐 (취소한 주문은 행이 지워짐)
+const ORDF = { vendor: "", state: "", q: "" };
+const ordNos = o => String(o["신청번호목록"] || "").split(",").map(x => x.trim()).filter(Boolean);
+const ordFiltered = () => !!(ORDF.vendor || ORDF.state || ORDF.q.trim());
 function renderOrders() {
-  const sec = $("#order-section"), show = isReqAdmin() && reqType() === "소모품";
-  sec.hidden = !show; if (!show) return;
-  const y = FILTERS.request.year;
-  const rows = (DATA.order || []).filter(o => !y || (o["주문일"] || "").startsWith(y)).sort((a, b) => (b["주문일"] || "").localeCompare(a["주문일"] || "") || b._row - a._row);
-  const cnt = o => String(o["신청번호목록"] || "").split(",").filter(s => s.trim()).length;
-  $("#order-table").innerHTML = `<thead><tr><th>주문번호</th><th class="ctr">주문일</th><th class="ctr">배송일</th><th>거래처</th><th class="num amt">주문금액</th><th class="num">결제금액</th><th class="ctr">적립금</th><th class="num">건수</th><th>신청번호</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(o => `<tr data-orow="${o._row}">
-    <td>${esc(o["주문번호"])}</td><td class="ctr" title="${esc(o["주문일"])}">${esc(mmdd(o["주문일"]))}</td>
-    <td class="ctr">${o["배송일"] ? `<span title="${esc(o["배송일"])}">${esc(mmdd(o["배송일"]))}</span> <button type="button" class="lnk" data-ord="undeliver" data-row="${o._row}" title="배송일 지우기 (배송 전으로)">지우기</button>` : `<button type="button" class="btn btn-sm" data-ord="deliver" data-row="${o._row}">배송 등록</button>`}</td>
-    <td>${esc(o["거래처"])}</td><td class="num amt">${fmt(o["주문금액"])}</td><td class="num">${fmt(o["결제금액"])}</td><td class="ctr">${o["적립금사용"] === "Y" ? "사용" : '<span class="muted">-</span>'}</td><td class="num">${cnt(o)}</td>
-    <td class="wrap" title="${esc(o["신청번호목록"])}">${esc(o["신청번호목록"])}</td>
-    <td class="actions"><button type="button" class="btn btn-sm" data-ord="sheet" data-row="${o._row}">발주서</button><button type="button" class="btn btn-sm btn-danger" data-ord="cancel" data-row="${o._row}"${o["배송일"] ? ' disabled title="배송된 주문은 배송일을 지운 뒤 취소할 수 있습니다"' : ' title="주문 취소: 신청 주문 해제, 적립금 사용 기록 삭제"'}>취소</button></td></tr>`).join("")
-    || `<tr><td class="empty" colspan="10">${y ? y + "년 " : ""}주문이 없습니다. 승인된 소모품 신청을 체크하고 [주문 생성]을 누르세요.</td></tr>`}</tbody>`;
+  const all = DATA.order || [], open = all.filter(o => !o["배송일"]).length;
+  $("#rsub-order").innerHTML = `주문${open ? ` <span class="tab-n" title="배송 전 ${open}건"><span class="sr-only">배송 전 </span>${open}<span class="sr-only">건</span></span>` : ""}`;
+  if (reqSub() !== "주문") return;
+  const vendors = [...new Set([...reqSuppliers().map(x => x.name), ...all.map(o => o["거래처"]).filter(Boolean)])];
+  const vsel = $("#ord-f-vendor"); setOptions(vsel, ["", ...vendors], ["전체", ...vendors]); ORDF.vendor = vsel.value;
+  const y = FILTERS.request.year, q = ORDF.q.trim().toLowerCase();
+  const rows = all.filter(o => (!y || (o["주문일"] || "").startsWith(y))
+      && (!ORDF.vendor || o["거래처"] === ORDF.vendor)
+      && (!ORDF.state || (ORDF.state === "done") === !!o["배송일"])
+      && (!q || String(o["주문번호"] || "").toLowerCase().includes(q) || ordNos(o).some(n => n.toLowerCase().includes(q))))
+    .sort((a, b) => (b["주문일"] || "").localeCompare(a["주문일"] || "") || b._row - a._row);
+  $("#order-sum").textContent = `${rows.length}건 · 주문금액 합계 ${fmt(rows.reduce((a, o) => a + (Number(o["주문금액"]) || 0), 0))}원`;
+  const date = v => `<td class="ctr" title="${esc(v)}">${esc(mmdd(v))}</td>`;
+  const reqLink = n => {
+    const r = (DATA.request || []).find(x => x["신청번호"] === n);
+    return r ? `<button type="button" class="lnk" data-ordreq="${esc(n)}" title="${esc(`${r["품목"] || ""} · ${r["신청인"] || ""} — 신청 보기에서 상세 패널 열기`)}">${esc(n)}</button>`
+      : `<span class="muted" title="신청 목록에 없는 번호">${esc(n)}</span>`;
+  };
+  const empty = all.length
+    ? `조건에 맞는 주문이 없습니다. ${ordFiltered() ? "검색어·필터를 지워 보세요." : "연도를 '전체'로 바꿔 보세요."}`
+    : `주문이 없습니다. <button type="button" class="lnk" data-ordgo="list">신청 보기</button>에서 승인된 소모품을 체크하고 [주문 생성]을 누르세요.`;
+  $("#order-table").innerHTML = `<thead><tr><th data-col="주문번호">주문번호</th><th class="ctr" data-col="주문일">주문일</th><th class="ctr" data-col="배송일">배송일</th><th data-col="거래처">거래처</th><th class="num amt" data-col="주문금액">주문금액</th><th class="num" data-col="결제금액">결제금액</th><th class="ctr" data-col="적립금">적립금</th><th class="ctr" data-col="건수">건수</th><th data-col="신청번호">신청번호</th><th class="actions" data-col="작업">작업</th></tr></thead><tbody>${rows.map(o => {
+    const nos = ordNos(o), done = !!o["배송일"];
+    return `<tr data-orow="${o._row}"><td>${esc(o["주문번호"])}</td>${date(o["주문일"])}`
+      + (done ? date(o["배송일"]) : `<td class="ctr"><button type="button" class="lnk" data-ord="deliver" data-row="${o._row}" title="배송일 등록 (배송 완료로)">등록</button></td>`)
+      + `<td>${esc(o["거래처"])}</td><td class="num amt">${fmt(o["주문금액"])}</td><td class="num pay">${fmt(o["결제금액"])}</td>`
+      + `<td class="ctr">${o["적립금사용"] === "Y" ? "사용" : '<span class="muted">-</span>'}</td><td class="ctr">${nos.length}</td>`
+      + `<td class="nos" title="${esc(nos.join(", "))}">${nos.map(reqLink).join(", ")}</td>`
+      + `<td class="actions"><button type="button" class="btn btn-sm" data-ord="sheet" data-row="${o._row}">발주서</button>${done
+        ? `<button type="button" class="btn btn-sm" data-ord="undeliver" data-row="${o._row}" title="배송일 지우기 (배송 전으로 되돌림)">배송 취소</button>`
+        : `<button type="button" class="btn btn-sm btn-danger" data-ord="cancel" data-row="${o._row}" title="주문 취소: 신청 주문 해제, 적립금 사용 기록 삭제">취소</button>`}</td></tr>`;
+  }).join("") || `<tr><td class="empty" colspan="10">${empty}</td></tr>`}</tbody>`;
   $("#order-table").closest(".table-wrap").classList.toggle("empty", !rows.length);
 }
+$("#ord-f-vendor").addEventListener("change", e => { ORDF.vendor = e.target.value; renderOrders(); });
+$("#ord-f-state").addEventListener("change", e => { ORDF.state = e.target.value; renderOrders(); });
+let ORDF_T = null;
+$("#ord-f-q").addEventListener("input", e => { clearTimeout(ORDF_T); ORDF_T = setTimeout(() => { ORDF.q = e.target.value; renderOrders(); }, 150); });
+// 주문 행의 신청번호 → 신청 보기로 가서 그 신청의 상세 패널 (목록에서 걸러져 있으면 필터를 풀고 그 연도로)
+function openReqFromOrder(no) {
+  const r = (DATA.request || []).find(x => x["신청번호"] === no);
+  if (!r) { showAlert(`신청 ${no} 을(를) 목록에서 찾을 수 없습니다. 새로고침해 보세요.`, "warn"); return; }
+  if (r["구분"] !== reqType()) switchReqTab(r["구분"], false);
+  switchReqSub("신청", false);
+  renderRequest();
+  if (!rdRows().includes(r._row)) {
+    ["상태", "신청인", "관련과제", "구매처", "q"].forEach(k => { FILTERS.request[k] = ""; });
+    $$("[data-filter][data-kind=request]").forEach(el => { el.value = ""; });
+    if (!setReqYear((r["신청일"] || "").slice(0, 4))) setReqYear("");
+    renderRequest();
+  }
+  openReqDrawer(r._row);
+  $(`#request-table tbody tr[data-row="${r._row}"]`)?.scrollIntoView({ block: "nearest" });
+}
 $("#order-table").addEventListener("click", async e => {
+  if (e.target.closest("[data-ordgo]")) { switchReqSub("신청"); $("#rsub-list").focus(); return; }
+  const link = e.target.closest("button[data-ordreq]");
+  if (link) { openReqFromOrder(link.dataset.ordreq); return; }
   const b = e.target.closest("button[data-ord]"); if (!b || b.disabled) return;
   const row = Number(b.dataset.row), o = (DATA.order || []).find(x => x._row === row); if (!o) return;
   const act = b.dataset.ord, no = o["주문번호"];
@@ -822,9 +892,9 @@ $("#order-table").addEventListener("click", async e => {
     if (d === null) return;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { showAlert("배송일 형식이 올바르지 않습니다 (YYYY-MM-DD).", "warn"); return; }
     extra = { 배송일: d }; msg = `주문 ${no} 배송일 ${mmdd(d)} 등록`;
-  } else if (act === "undeliver") msg = `주문 ${no} 배송일을 지웠습니다`;
+  } else if (act === "undeliver") msg = `주문 ${no} 배송일을 지웠습니다 (배송 전)`;
   else if (act === "cancel") {
-    if (!await confirmDlg({ title: "주문 취소", body: `주문 ${no} 을(를) 취소합니다.\n\n묶인 신청 ${String(o["신청번호목록"] || "").split(",").filter(s => s.trim()).length}건은 주문이 해제되어 '승인' 상태로 남고, 적립금 사용 기록${o["적립금사용"] === "Y" ? `(${fmt(o["결제금액"])}원)` : ""}이 있으면 함께 삭제됩니다.`, verb: "주문 취소", danger: true })) return;
+    if (!await confirmDlg({ title: "주문 취소", body: `주문 ${no} 을(를) 취소합니다.\n\n묶인 신청 ${ordNos(o).length}건은 주문이 해제되어 '승인' 상태로 남고, 적립금 사용 기록${o["적립금사용"] === "Y" ? `(${fmt(o["결제금액"])}원)` : ""}이 있으면 함께 삭제됩니다.`, verb: "주문 취소", danger: true })) return;
     msg = `주문 ${no} 을(를) 취소했습니다`;
   }
   b.disabled = true;
@@ -832,6 +902,8 @@ $("#order-table").addEventListener("click", async e => {
     const res = await api("POST", `/api/order/${row}/action`, { action: act, extra, expect: expectOf("order", o) });
     showAlert(msg + (res.released ? ` (신청 ${res.released.length}건 해제${res.deposit_removed ? ", 적립금 사용 기록 삭제" : ""})` : ""), "ok", { undo: true });
     await load();
+    // 같은 주문의 작업 버튼으로 포커스 (취소로 행이 사라졌으면 표의 첫 버튼, 없으면 검색 칸)
+    ($(`#order-table tr[data-orow="${row}"] .actions .btn:not(:disabled)`) || $("#order-table tbody button") || $("#ord-f-q")).focus();
   } catch (err) { showAlert(err.message, "error"); b.disabled = false; }
 });
 

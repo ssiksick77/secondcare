@@ -537,6 +537,11 @@ body.request-mode .top { border-bottom-color: var(--margin); }
 .req-role { margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }   /* 역할 표시: 버튼처럼 보이지 않게 글자만 */
 .tabs.request .req-prev-year { margin-left: auto; font-size: 12px; }
 .tabs.request .req-prev-year:not([hidden]) + .tabs-year { margin-left: 12px; }
+/* 소모품 2단 메뉴 (신청 | 주문): 탭 막대 바로 아래 32px 줄. 같은 탭 문법을 한 단계 낮게 (흰 바탕, 12px, 남색 밑줄) */
+.tabs.request-sub ul { padding: 0 6px; }
+.tabs.request-sub button { height: 32px; font-size: 12px; }
+.tabs.request-sub button[aria-selected="true"] { border-bottom-color: var(--margin); }
+body:not(.request-mode) #req-subtabs { display: none !important; }
 /* 담당자 전용 요소 / 연구원 화면 (직접 접속): 회계대장 이동·설정·AI 버튼 숨김 */
 body:not(.req-admin) .req-admin-only { display: none !important; }
 body.req-admin .req-researcher-note { display: none; }
@@ -585,7 +590,22 @@ body.drawer-open #request-table[data-rtype="소모품"] { min-width: 784px; }   
 .req-sup-info { margin: 0 0 8px; }
 .s-sup-checks { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
 .fields .s-sup-checks label.chk { min-height: 28px; }
-#order-section { margin-top: 16px; }
+/* 소모품 › 주문 표: 열 폭 고정 (필터·빈 결과에도 머리글이 움직이지 않게). 신청번호만 남는 폭 */
+.req-order-note { margin: 0 0 8px; }
+#order-table { table-layout: fixed; min-width: 920px; }                 /* 고정 열 760 + 신청번호 160 */
+#order-table th[data-col="주문번호"] { width: 128px; }                   /* 알파-YYYYMMDD-NN 한 줄 */
+#order-table th[data-col="주문일"], #order-table th[data-col="배송일"] { width: 56px; }
+#order-table th[data-col="거래처"] { width: 84px; }
+#order-table th[data-col="주문금액"] { width: 104px; }
+#order-table th[data-col="결제금액"] { width: 96px; }
+#order-table th[data-col="적립금"] { width: 48px; }
+#order-table th[data-col="건수"] { width: 44px; }
+#order-table th[data-col="작업"] { width: 144px; }                     /* 발주서 + 취소(배송 전) / 배송 취소(배송 후) */
+#order-table td { overflow: hidden; text-overflow: ellipsis; }
+#order-table td.pay { font-weight: 600; }
+#order-table td.nos .lnk { font-size: 13px; color: var(--primary-dark); }
+#order-table td.nos .lnk:hover { color: var(--primary); }
+.table-wrap:has(#order-table) { scrollbar-gutter: stable; }
 #order-table td .lnk, .xd-info .lnk { border: 0; background: none; padding: 0 2px; font: inherit; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 #order-table td .lnk:hover, .xd-info .lnk:hover { color: var(--ink); }
 #rd-body .lnk, .tabs.request .lnk { border: 0; background: none; padding: 0 2px; margin: 0; height: auto; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }

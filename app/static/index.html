@@ -60,6 +60,13 @@
   <button type="button" class="lnk req-prev-year" id="req-prev-year" hidden title="이전 연도에 아직 '신청' 상태로 남은 건을 봅니다"></button>
   <label class="tabs-year">연도 <select id="request-year"></select></label>
 </nav>
+<!-- 소모품 2단 메뉴 (담당자): 신청 목록 | 주문 표 -->
+<nav class="tabs request-sub req-admin-only" id="req-subtabs" aria-label="소모품 보기" hidden>
+  <ul role="tablist">
+    <li><button role="tab" id="rsub-list" data-rsub="신청" aria-controls="rview-list" aria-selected="true">신청</button></li>
+    <li><button role="tab" id="rsub-order" data-rsub="주문" aria-controls="rview-order" aria-selected="false">주문</button></li>
+  </ul>
+</nav>
 
 <main id="main" tabindex="-1">
   <div class="print-head" id="print-head" aria-hidden="true"></div>
@@ -131,37 +138,45 @@
 
   <!-- 신청: 하위 탭(구분)마다 같은 목록을 걸러 보여 줌 -->
   <section id="rpanel" role="tabpanel" aria-labelledby="rtab-장비" hidden>
-    <div class="toolbar">
-      <label>상태 <select data-filter="상태" data-kind="request"><option value="">전체</option><option>신청</option><option>승인</option><option>반려</option><option>품의전환</option><option>완료</option></select></label>
-      <label>신청인 <select data-filter="신청인" data-kind="request"><option value="">전체</option></select></label>
-      <label>관련과제 <select data-filter="관련과제" data-kind="request"><option value="">전체</option></select></label>
-      <label id="rq-sup-filter" hidden>구매처 <select data-filter="구매처" data-kind="request"><option value="">전체</option></select></label>
-      <label>검색 <input type="search" data-filter="q" data-kind="request" placeholder="품목, 규격, 사유, 번호"></label>
-      <div class="toolbar-end">
-        <span class="toolbar-sum" id="request-sum"></span>
-        <button type="button" class="btn req-admin-only" data-csv="request" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
-        <button type="button" class="btn btn-primary" data-add="request">신청 추가</button>
+    <div id="rview-list">
+      <div class="toolbar">
+        <label>상태 <select data-filter="상태" data-kind="request"><option value="">전체</option><option>신청</option><option>승인</option><option>반려</option><option>품의전환</option><option>완료</option></select></label>
+        <label>신청인 <select data-filter="신청인" data-kind="request"><option value="">전체</option></select></label>
+        <label>관련과제 <select data-filter="관련과제" data-kind="request"><option value="">전체</option></select></label>
+        <label id="rq-sup-filter" hidden>구매처 <select data-filter="구매처" data-kind="request"><option value="">전체</option></select></label>
+        <label>검색 <input type="search" data-filter="q" data-kind="request" placeholder="품목, 규격, 사유, 번호"></label>
+        <div class="toolbar-end">
+          <span class="toolbar-sum" id="request-sum"></span>
+          <button type="button" class="btn req-admin-only" data-csv="request" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
+          <button type="button" class="btn btn-primary" data-add="request">신청 추가</button>
+        </div>
       </div>
+      <div class="req-selbar req-admin-only" id="req-selbar" role="group" aria-label="선택한 신청 처리">
+        <span class="req-sel-n" id="req-sel-n" aria-live="polite" tabindex="-1">선택 없음</span>
+        <button type="button" class="btn btn-sm" data-rq="approve" disabled hidden>승인</button>
+        <button type="button" class="btn btn-sm" data-rq="reject" disabled hidden>반려</button>
+        <button type="button" class="btn btn-sm" data-rq="convert" disabled hidden title="승인된 신청을 품의 1건으로">품의 전환</button>
+        <button type="button" class="btn btn-sm" data-rq="order" id="rq-order-btn" disabled hidden title="승인된 소모품 신청을 주문 1건으로 묶음">주문 생성</button>
+        <button type="button" class="btn btn-sm btn-danger" data-rq="delete" disabled hidden>삭제</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-rq="clear" disabled hidden>선택 해제</button>
+        <span class="toolbar-note warn" id="req-sel-why" aria-live="polite" hidden></span>
+        <span class="toolbar-note" id="req-sel-help">신청을 체크하면 승인·반려·품의 전환을 한꺼번에 할 수 있습니다. 행을 누르면 상세 패널이 열립니다.</span>
+      </div>
+      <p class="toolbar-note req-researcher-note">① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.</p>
+      <p class="toolbar-note req-sup-info" id="req-sup-info" hidden></p>
+      <div class="table-wrap"><table class="grid clickable" id="request-table"></table></div>
     </div>
-    <div class="req-selbar req-admin-only" id="req-selbar" role="group" aria-label="선택한 신청 처리">
-      <span class="req-sel-n" id="req-sel-n" aria-live="polite" tabindex="-1">선택 없음</span>
-      <button type="button" class="btn btn-sm" data-rq="approve" disabled hidden>승인</button>
-      <button type="button" class="btn btn-sm" data-rq="reject" disabled hidden>반려</button>
-      <button type="button" class="btn btn-sm" data-rq="convert" disabled hidden title="승인된 신청을 품의 1건으로">품의 전환</button>
-      <button type="button" class="btn btn-sm" data-rq="order" id="rq-order-btn" disabled hidden title="승인된 소모품 신청을 주문 1건으로 묶음">주문 생성</button>
-      <button type="button" class="btn btn-sm btn-danger" data-rq="delete" disabled hidden>삭제</button>
-      <button type="button" class="btn btn-sm btn-ghost" data-rq="clear" disabled hidden>선택 해제</button>
-      <span class="toolbar-note warn" id="req-sel-why" aria-live="polite" hidden></span>
-      <span class="toolbar-note" id="req-sel-help">신청을 체크하면 승인·반려·품의 전환을 한꺼번에 할 수 있습니다. 행을 누르면 상세 패널이 열립니다.</span>
+    <!-- 소모품 › 주문 (담당자 전용) -->
+    <div id="rview-order" class="req-admin-only" hidden>
+      <div class="toolbar">
+        <label>거래처 <select id="ord-f-vendor"><option value="">전체</option></select></label>
+        <label>상태 <select id="ord-f-state"><option value="">전체</option><option value="open">주문 중</option><option value="done">배송 완료</option></select></label>
+        <label>검색 <input type="search" id="ord-f-q" placeholder="주문번호, 신청번호"></label>
+        <div class="toolbar-end"><span class="toolbar-sum" id="order-sum" aria-live="polite"></span></div>
+      </div>
+      <p class="toolbar-note req-order-note">배송일을 등록하면 배송 완료입니다. 배송 전 주문만 취소할 수 있습니다(연결 신청은 주문 해제, 적립금 사용 기록은 삭제). 신청번호를 누르면 신청 보기에서 그 신청의 상세 패널이 열립니다.</p>
+      <div class="table-wrap"><table class="grid" id="order-table"></table></div>
     </div>
-    <p class="toolbar-note req-researcher-note">① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.</p>
-    <p class="toolbar-note req-sup-info" id="req-sup-info" hidden></p>
-    <div class="table-wrap"><table class="grid clickable" id="request-table"></table></div>
-    <section id="order-section" class="req-admin-only" aria-labelledby="order-h" hidden>
-      <h2 id="order-h">주문 <span class="muted" style="font-weight:400">(소모품 묶음 · 적립금 사용)</span></h2>
-      <p class="toolbar-note" style="margin:0 0 6px">승인된 소모품 신청을 체크하고 [주문 생성]을 누르면 주문 1건으로 묶입니다. 배송일을 등록하면 배송 완료, 배송 전에는 취소할 수 있습니다(연결 신청은 주문 해제, 적립금 사용 기록은 삭제).</p>
-      <div class="table-wrap"><table class="grid compact" id="order-table"></table></div>
-    </section>
   </section>
 
   <!-- 대시보드 -->
