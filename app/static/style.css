@@ -439,3 +439,22 @@ table.grid td.st-cell .s { text-align: center; }
 table.grid td.st-cell .next.ph { visibility: hidden; border-color: transparent; }
 table.grid td.st-cell .badge { min-width: 34px; justify-content: flex-start; }
 table.grid td.tit .t .origin { margin-left: 6px; vertical-align: 0; }
+
+/* 집행내역 열 폭 고정: 필터·상태 변경으로 행이 바뀌어도 열 폭 유지 (적요만 남는 폭을 차지) */
+#exec-table { table-layout: fixed; }
+#exec-table th[data-col="거래번호"] { width: 130px; }
+#exec-table th[data-col="상태"] { width: 112px; }
+#exec-table th[data-col="원인발생일"] { width: 64px; }
+#exec-table th[data-col="재원"] { width: 84px; }
+#exec-table th[data-col="예산목"] { width: 112px; }
+#exec-table th[data-col="세목"] { width: 84px; }
+#exec-table th[data-col="세세목"], #exec-table th[data-col="관리번호"], #exec-table th[data-col="사용자"] { width: 90px; }
+#exec-table th[data-col="결제수단"] { width: 84px; }
+#exec-table th[data-col="금액"] { width: 104px; }
+#exec-table th[data-col="예산목 잔액"] { width: 104px; }
+#exec-table th[data-col="태그"] { width: 72px; }
+#exec-table th[data-col="증빙"] { width: 44px; }
+#exec-table th[data-col="비고"] { width: 140px; }
+#exec-table th.actions { width: 112px; }
+#exec-table td { overflow: hidden; text-overflow: ellipsis; }
+#exec-table td.tit { max-width: none; min-width: 0; }
