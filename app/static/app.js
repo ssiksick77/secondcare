@@ -324,6 +324,7 @@ function renderList(kind) {
     table.querySelector(`th[data-sort="${CSS.escape(k)}"] .sortbtn`)?.focus();  // 다시 그린 뒤 같은 머리글에 포커스 유지
   }));
   const wrap = table.closest(".table-wrap"); if (wrap) { wrap.classList.toggle("empty", rows.length === 0); wrap.classList.toggle("scrollable", table.scrollWidth > wrap.clientWidth + 4); }
+  if (kind === "exec") updateXdNav();  // 필터·정렬이 바뀌면 상세 패널의 n / N 도 갱신
 
   if (kind === "exec" || kind === "req" || kind === "labor") {
     const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
@@ -1405,11 +1406,13 @@ async function execAction(row, action, btn) {
   const md = (() => { const [, m, d] = today().split("-"); return `${parseInt(m)}/${parseInt(d)}`; })();
   const label = { claim: `청구 처리 · 지급청구일 ${md}`, resolve: `결의 처리 · 결의일 ${md} (완료)`, unresolve: "결의 취소", complete: `승인 처리 · 지출완료일 ${md}`, fix: "보완 표시", unfix: "보완 해제", uncomplete: "승인 취소 · 지출완료일 삭제" }[action];
   if (action === "uncomplete" && !await confirmDlg({ title: "승인 취소", body: `${r["거래번호"]} 의 지출완료일(${r["지출완료일"]})을 지우고 청구 상태로 되돌립니다.`, verb: "승인 취소", danger: true })) return;
+  const inDrawer = !!btn?.closest("#exec-drawer");
   if (btn) btn.disabled = true;
   try {
     await api("POST", `/api/exec/${row}/action`, { action, expect: expectOf("exec", r) });
     showAlert(`${r["거래번호"]} ${label}`, "ok", { undo: true });
     await load();
+    if (XD.row === row) { await renderExecDrawer(false); if (inDrawer) xdRefocus(action === "fix" || action === "unfix" ? ".xd-fix" : ".xd-step.next button[data-act=xact]"); }
   } catch (e) { showAlert(e.message, "error"); if (btn) btn.disabled = false; }
 }
 
@@ -1421,22 +1424,136 @@ function markExecRow(prev, next) {
   find(prev)?.classList.remove("selected"); n?.classList.add("selected");
   const wrap = t.closest(".table-wrap"); if (wrap) wrap.classList.toggle("scrollable", t.scrollWidth > wrap.clientWidth + 4);  // 열 접기로 폭이 바뀜
 }
-function openExecDrawer(row) {
+function openExecDrawer(row, opts = {}) {
   const prev = XD.row;
   XD.row = row; XD.evid = null;
   $("#ai-drawer").hidden = true;
   $("#exec-drawer").hidden = false; document.body.classList.add("drawer-open");
   markExecRow(prev, row);
   renderExecDrawer(true);
-  $("#xd-close").focus();
+  if (opts.focus !== false) $("#xd-close").focus();
 }
 $("#xd-close").addEventListener("click", closeExecDrawer);
+
+// ---- 이전/다음 건: 지금 그려진 집행 표의 행 순서 ----
+function xdRows() { return $$("#exec-table tbody tr[data-row]").map(tr => Number(tr.dataset.row)); }
+function updateXdNav() {
+  if (XD.row == null || $("#exec-drawer").hidden) return;
+  const rows = xdRows(), i = rows.indexOf(XD.row);
+  $("#xd-prev").disabled = i <= 0;
+  $("#xd-next").disabled = i < 0 || i >= rows.length - 1;
+  $("#xd-pos").textContent = rows.length ? `${i < 0 ? "–" : i + 1} / ${rows.length}` : "";
+}
+function xdNav(delta) {
+  const rows = xdRows(), i = rows.indexOf(XD.row), j = i + delta;
+  if (i < 0 || j < 0 || j >= rows.length) return false;
+  // 본문은 다시 그려지므로 그 안에 있던 포커스는 드로어로 옮겨 둠 (계속 ↑↓ 가능)
+  if ($("#xd-body").contains(document.activeElement)) $("#exec-drawer").focus();
+  openExecDrawer(rows[j], { focus: false });
+  $(`#exec-table tbody tr[data-row="${rows[j]}"]`)?.scrollIntoView({ block: "nearest" });
+  updateXdNav();
+  return true;
+}
+$("#xd-prev").addEventListener("click", () => xdNav(-1));
+$("#xd-next").addEventListener("click", () => xdNav(1));
+$("#exec-drawer").addEventListener("keydown", e => {
+  if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  const d = { ArrowUp: -1, PageUp: -1, ArrowDown: 1, PageDown: 1 }[e.key]; if (!d) return;
+  if (e.target.closest("input, select, textarea, [contenteditable=true]")) return;
+  e.preventDefault(); xdNav(d);
+});
+function xdRefocus(sel) { const el = sel && $(`#xd-body ${sel}`); (el || $("#exec-drawer")).focus(); }
+
+// ---- 단계 타임라인 · 바로 고치는 칸 ----
+// [라벨, 날짜 열, '오늘 등록' 동작(execAction)]
+const XD_STAGES = [["발생", "원인발생일", null], ["청구", "지급청구일", "claim"], ["승인", "지출완료일", "complete"], ["결의", "결의일", "resolve"]];
+// 드로어에서 바로 고치는 칸 (재원·예산목·금액·거래처·적요는 수정 창에서)
+const XD_INLINE = [["결제수단", "select"], ["세목", "text"], ["세세목", "text"], ["태그", "tag"], ["사용자", "text"], ["관리번호", "text"], ["비고", "textarea"]];
+const XD_DL = { 세목: "dl-세목", 세세목: "dl-세세목", 사용자: "dl-사용자" };
+const XD_IMG = /\.(jpe?g|png|gif|webp)$/i;
+const fileExt = n => (/\.([A-Za-z0-9]{1,5})$/.exec(n || "")?.[1] || "파일").toUpperCase();
+
+// 날짜 직접 저장 (청구·승인·결의일 지정/수정/삭제). 앞 단계 빈 날짜는 store.exec_action 과 같은 규칙으로 채움
+async function execSetDate(row, col, value) {
+  const r = DATA.exec.find(x => x._row === row); if (!r) return false;
+  const i = XD_STAGES.findIndex(s => s[1] === col); if (i < 0) return false;
+  const lab = XD_STAGES[i][0];
+  if (!value) {
+    if (col === "원인발생일") { showAlert("원인발생일은 비울 수 없습니다.", "warn"); return false; }
+    if (XD_STAGES.slice(i + 1).some(s => r[s[1]])) { showAlert("뒤 단계를 먼저 취소하세요", "warn"); return false; }
+  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) { showAlert("날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).", "warn"); return false; }
+  const rec = { ...r }; delete rec._row; rec[col] = value;
+  if (value && col === "지출완료일" && !rec["지급청구일"]) rec["지급청구일"] = value;
+  if (value && col === "결의일") { if (!rec["지급청구일"]) rec["지급청구일"] = value; if (!rec["지출완료일"]) rec["지출완료일"] = value; }
+  try {
+    await api("PUT", `/api/exec/${row}`, { rec, expect: expectOf("exec", r) });
+    showAlert(`${r["거래번호"]} ${value ? (r[col] ? `${lab} 날짜 변경 · ${col} ${mmdd(value)}` : `${lab} 처리 · ${col} ${mmdd(value)}`) : `${lab} 취소 · ${col} 삭제`}`, "ok", { undo: true });
+    await load();
+    if (XD.row === row) await renderExecDrawer(false);
+    return true;
+  } catch (e) { showAlert(e.message, "error"); return false; }
+}
+async function execSetField(row, field, value) {
+  const r = DATA.exec.find(x => x._row === row); if (!r) return false;
+  const rec = { ...r }; delete rec._row; rec[field] = value;
+  try {
+    await api("PUT", `/api/exec/${row}`, { rec, expect: expectOf("exec", r) });
+    showAlert(`${r["거래번호"]} ${field} 저장`, "ok", { undo: true });
+    await load();
+    if (XD.row === row) await renderExecDrawer(false);
+    return true;
+  } catch (e) { showAlert(e.message, "error"); return false; }
+}
+
+// 값 자리(host)를 그 자리 편집기로 바꿈. Enter(textarea 는 Ctrl+Enter)·blur 저장, Esc 취소, 값이 같으면 요청 없음
+function xdOpenEditor(host) {
+  const row = XD.row, field = host.dataset.field, type = host.dataset.type, pick = !!host.dataset.pick;
+  const r = DATA.exec.find(x => x._row === row); if (!r) return;
+  const orig = r[field] == null ? "" : String(r[field]);
+  let ed;
+  if (type === "select" || (type === "tag" && DATA.tags.length)) {
+    ed = document.createElement("select");
+    const opts = type === "select" ? ["", ...DATA.meta.pay_methods] : ["", ...DATA.tags.map(t => t["태그명"])];
+    if (orig && !opts.includes(orig)) opts.push(orig);  // 목록에 없는 기존 값도 유지
+    ed.innerHTML = opts.map(v => `<option value="${esc(v)}">${esc(v || "(없음)")}</option>`).join("");
+  } else if (type === "textarea") { ed = document.createElement("textarea"); ed.rows = 2; }
+  else {
+    ed = document.createElement("input"); ed.type = type === "date" ? "date" : "text"; ed.autocomplete = "off";
+    if (XD_DL[field]) ed.setAttribute("list", XD_DL[field]);
+    if (type === "tag") ed.setAttribute("list", "dl-태그");
+  }
+  ed.className = "xd-edit"; ed.dataset.field = field; ed.value = pick ? "" : orig;
+  ed.setAttribute("aria-label", `${host.dataset.label || field} ${type === "textarea" ? "(Ctrl+Enter 저장, Esc 취소)" : "(Enter 저장, Esc 취소)"}`);
+  let busy = false, closed = false, lastKey = 0;
+  const restore = focus => { closed = true; if (ed.isConnected) ed.replaceWith(host); if (focus) host.focus(); };
+  const commit = async viaKey => {
+    if (busy || closed) return;
+    const v = type === "textarea" ? ed.value.replace(/\s+$/, "") : ed.value.trim();
+    if (v === orig || (pick && !v)) { restore(viaKey); return; }
+    busy = true;
+    const ok = type === "date" ? await execSetDate(row, field, v) : await execSetField(row, field, v);
+    busy = false;
+    if (ok) { closed = true; if (viaKey || document.activeElement === document.body) xdRefocus(`.xd-val[data-field="${field}"]`); }
+    else if (ed.isConnected) ed.focus();  // 실패: 입력값 그대로 편집기 유지
+  };
+  ed.addEventListener("keydown", e => {
+    lastKey = Date.now();
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); restore(true); }
+    else if (e.key === "Enter" && (type !== "textarea" || e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(true); }
+  });
+  // 마우스로 목록·달력에서 고르면 바로 저장 (키보드로 넘기는 중에는 저장하지 않음)
+  if (ed.tagName === "SELECT" || type === "date") ed.addEventListener("change", () => { if (Date.now() - lastKey > 400) commit(true); });
+  ed.addEventListener("blur", () => { if (ed.isConnected) commit(false); });
+  host.replaceWith(ed); ed.focus();
+  if (type === "date" && pick) { try { ed.showPicker(); } catch { } }
+}
 
 async function renderExecDrawer(fetchEvid) {
   const r = DATA.exec.find(x => x._row === XD.row);
   if (!r) { $("#exec-drawer").hidden = true; XD.row = null; return; }
   $("#xd-title").innerHTML = esc(r["거래번호"]) + originBadge(r);
-  $("#xd-sub").textContent = `${r["재원"]} · ${r["예산목"]} · ${fmt(r["금액"])}원`;
+  $("#xd-sub").innerHTML = `${esc(r["재원"])} · ${esc(r["예산목"])} · <b>${fmt(r["금액"])}원</b>`;
+  updateXdNav();
   // 다른 저장·새로고침으로 다시 그릴 때 입력 중이던 증빙 업로드 폼은 유지
   const oldForm = $("#evid-form"), keep = oldForm && XD.formRow === r._row ? { kind: oldForm.kind.value, date: oldForm.date.value, note: oldForm.note.value, files: oldForm.files.files } : null;
   const seq = ++XD.seq;  // 빠르게 다른 행을 열면 늦게 온 응답은 버림
@@ -1444,62 +1561,79 @@ async function renderExecDrawer(fetchEvid) {
     try { const d = await api("GET", `/api/evidence/${encodeURIComponent(r["거래번호"])}`); if (seq !== XD.seq || XD.row !== r._row) return; XD.evid = d.items; XD.drive = d.drive; }
     catch (e) { XD.evid = []; XD.drive = { connected: false, error: e.message }; }
   }
-  const st = r["상태"];
-  const acts = [];
-  if (st === "발생") acts.push(["claim", "청구 (지급청구일 등록)", true]);
-  if (st === "청구") { acts.push(["complete", "승인 (지출완료일 등록)", true]); acts.push(["fix", "보완 표시", false]); }
-  if (st === "보완") { acts.push(["complete", "승인 (지출완료일 등록)", true]); acts.push(["unfix", "보완 해제", false]); }
-  if (st === "완료") { acts.push(["resolve", "결의 (결의일 등록 → 완료)", true]); acts.push(["uncomplete", "승인 취소", false]); }
-  if (st === "결의") { acts.push(["unresolve", "결의 취소 (승인으로 되돌림)", false]); }
+  if (seq !== XD.seq) return;
+  const body = $("#xd-body"), scroll = XD.shownRow === r._row ? body.scrollTop : 0;
+  const st = r["상태"], o = execOrigin(r), locked = !!o?.locked;
   const evid = XD.evid || [];
   const kinds = [...new Set(evid.map(e => e["증빙종류"]).filter(Boolean))];
   const drive = XD.drive || {};
-  $("#xd-body").innerHTML = `
-    <section class="xd-sec">
-      <h3>집행 정보 <span class="sp"></span><button type="button" class="btn btn-sm" data-act="edit" data-kind="exec" data-row="${r._row}">수정</button></h3>
-      <div class="kv">
-        <b>상태</b><span><span class="badge ${esc(st)}">${esc(STATUS_LABEL[st] || st)}</span> <span class="toolbar-note">${esc(STATUS_HELP[st] || "")}</span></span>
-        <b>발생 <small>원인발생일</small></b><span>${esc(r["원인발생일"] || "-")}</span>
-        <b>청구 <small>지급청구일</small></b><span>${esc(r["지급청구일"] || "-")}</span>
-        <b>승인 <small>지출완료일</small></b><span>${esc(r["지출완료일"] || "-")}</span>
-        <b>결의 <small>결의일</small></b><span>${esc(r["결의일"] || "-")}</span>
-        <b>결제수단</b><span>${esc(r["결제수단"] || "-")}</span>
-        <b>거래처</b><span>${esc(r["거래처"] || "-")}</span>
-        <b>적요</b><span>${esc(r["적요"] || "-")}</span>
-        <b>세목</b><span>${esc(r["세목"] || "-")}${r["세세목"] ? " / " + esc(r["세세목"]) : ""}</span>
-        <b>사용자</b><span>${esc(r["사용자"] || "-")}</span>
-        <b>태그</b><span>${esc(r["태그"] || "-")}</span>
-        <b>관리번호</b><span>${esc(r["관리번호"] || "-")}</span>
-        <b>비고</b><span>${esc(r["비고"] || "-")}</span>
-      </div>
+  // 타임라인: 마지막으로 날짜가 있는 단계의 다음이 '다음 단계'
+  const last = XD_STAGES.reduce((a, s, i) => r[s[1]] ? i : a, -1), next = last + 1;
+  const dateVal = (lab, col, v) => `<span class="xd-val xd-date${v ? "" : " empty"}" role="button" tabindex="0" data-field="${col}" data-type="date" data-label="${lab} ${col}" title="${col}: 눌러서 날짜 수정 (지우면 단계 취소)" aria-label="${lab} ${col} ${v || "없음"}, 눌러서 수정">${esc(v || "–")}</span>`;
+  const steps = XD_STAGES.map(([lab, col, act], i) => {
+    const v = r[col] || "", done = !!v, isNext = i === next, fix = i === 1 && st === "보완";
+    const cls = (done ? "done" : isNext ? "next" : "todo") + (fix ? " fix" : "");
+    let below;
+    if (done || i < next) below = col === "원인발생일" && locked ? `<span class="xd-date" title="${esc(o.kind)} 연결 행: 원인발생일은 원본에서만 변경">${esc(v || "–")}</span>` : dateVal(lab, col, v);
+    else if (isNext) below = (act ? `<button type="button" class="btn btn-sm btn-primary" data-act="xact" data-action="${act}" data-row="${r._row}" title="${col}을 오늘(${today()})로 등록">오늘 등록</button>` : "")
+      + `<button type="button" class="xd-pick" data-pick="1" data-field="${col}" data-type="date" data-label="${lab} ${col}" aria-label="${lab} ${col} 날짜 지정">날짜 지정</button>`;
+    else below = `<span class="xd-date empty" aria-hidden="true">–</span>`;
+    const fixBtn = i === 1 && (st === "청구" || st === "보완") ? `<button type="button" class="xd-fix" data-act="xact" data-action="${fix ? "unfix" : "fix"}" data-row="${r._row}" aria-pressed="${fix}" title="${fix ? "보완 해제" : "서류·증빙 보완이 필요하다고 표시"}"><span class="box" aria-hidden="true"><svg viewBox="0 0 12 12" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>보완</button>` : "";
+    const label = i === 3 && done ? STATUS_LABEL["결의"] : lab;
+    return `<li class="xd-step ${cls}" data-col="${col}"><span class="xd-dot" aria-hidden="true"></span><span class="xd-step-l">${label}<span class="sr-only">${done ? " 단계 완료" : isNext ? " 단계 (다음 처리)" : " 단계 (대기)"}${fix ? ", 보완 필요" : ""}</span></span><div class="xd-step-d">${below}${fixBtn}</div></li>`;
+  }).join("");
+  const kv = (k, v) => `<b>${k}</b><span class="xd-ro">${esc(v || "-")}</span>`;
+  const iv = (k, type) => { const v = r[k] == null ? "" : String(r[k]); return `<b>${k}</b><span class="xd-val${v ? "" : " empty"}${type === "textarea" ? " multi" : ""}" role="button" tabindex="0" data-field="${k}" data-type="${type}" title="눌러서 수정" aria-label="${k} ${esc(v || "비어 있음")}, 눌러서 수정">${esc(v || "–")}</span>`; };
+  const thumb = e => { const n = e["파일명"] || "", id = e["드라이브파일ID"]; return XD_IMG.test(n) && id ? `<img class="xd-thumb" loading="lazy" alt="" src="/api/evidence/thumb/${encodeURIComponent(id)}" data-ext="${esc(fileExt(n))}">` : `<span class="xd-chip" aria-hidden="true">${esc(fileExt(n))}</span>`; };
+  body.innerHTML = `
+    <section class="xd-sec xd-tl-sec" aria-label="처리 단계">
+      <h3>처리 단계 <span class="badge ${esc(st)}" title="${esc(STATUS_HELP[st] || "")}">${esc(STATUS_LABEL[st] || st)}</span></h3>
+      <ol class="xd-timeline">${steps}</ol>
     </section>
-    <section class="xd-sec">
-      <h3>다음 처리</h3>
-      <div class="xd-actions">${acts.length ? acts.map(([a, l, p]) => `<button type="button" class="btn btn-sm ${p ? "btn-primary" : ""}" data-act="xact" data-action="${a}" data-row="${r._row}">${l}</button>`).join("") : `<span class="toolbar-note">완료된 건입니다.</span><button type="button" class="btn btn-sm" data-act="xact" data-action="uncomplete" data-row="${r._row}">완료 취소</button>`}</div>
+    <section class="xd-sec xd-info">
+      <h3>집행 정보 <span class="sp"></span><button type="button" class="btn btn-sm" data-act="edit" data-kind="exec" data-row="${r._row}" title="재원·예산목·금액·거래처·적요는 수정 창에서">수정</button></h3>
+      ${locked ? `<p class="toolbar-note xd-lock">${esc(o.label)} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리합니다.</p>` : ""}
+      <div class="kv">
+        ${kv("거래처", r["거래처"])}${kv("적요", r["적요"])}
+        ${XD_INLINE.map(([k, t]) => iv(k, t)).join("")}
+      </div>
     </section>
     <section class="xd-sec">
       <h3>증빙 <span class="toolbar-note">${evid.length}개</span><span class="sp"></span>${r["증빙폴더"] ? `<a class="btn btn-sm" href="${esc(r["증빙폴더"])}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
       ${!drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않았습니다. 오른쪽 위 설정(톱니)에서 연결하면 업로드할 수 있습니다.${drive.error ? " (" + esc(drive.error) + ")" : ""}</p>` : ""}
-      ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th>종류</th><th>파일명</th><th class="num">크기</th><th>업로드</th><th></th></tr></thead><tbody>
-        ${evid.map(e => `<tr><td>${esc(e["증빙종류"])}</td><td class="evid-name">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e["파일명"])}</a>` : esc(e["파일명"])}${e["원본파일명"] && e["원본파일명"] !== e["파일명"] ? `<div class="toolbar-note">${esc(e["원본파일명"])}</div>` : ""}</td><td class="num">${e["크기"] ? Math.round(e["크기"] / 1024).toLocaleString() + " KB" : ""}</td><td>${esc(mmdd(e["업로드일"]))}</td><td><button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(e["파일명"])}" title="장부에서 삭제하고 드라이브 휴지통으로 이동">삭제</button></td></tr>`).join("")}
+      ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th class="xd-th-cell"><span class="sr-only">미리보기</span></th><th>종류</th><th>파일명</th><th class="num">크기</th><th>업로드</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>
+        ${evid.map(e => `<tr><td class="xd-th-cell">${thumb(e)}</td><td>${esc(e["증빙종류"])}</td><td class="evid-name">${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener" title="새 창에서 열기">${esc(e["파일명"])}</a>` : esc(e["파일명"])}${e["원본파일명"] && e["원본파일명"] !== e["파일명"] ? `<div class="toolbar-note">${esc(e["원본파일명"])}</div>` : ""}</td><td class="num">${e["크기"] ? Math.round(e["크기"] / 1024).toLocaleString() + " KB" : ""}</td><td>${esc(mmdd(e["업로드일"]))}</td><td><button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(e["파일명"])}" title="장부에서 삭제하고 드라이브 휴지통으로 이동">삭제</button></td></tr>`).join("")}
       </tbody></table></div>` : '<p class="toolbar-note">등록된 증빙이 없습니다.</p>'}
-      <div class="evid-list" style="margin-top:8px"><span class="toolbar-note">증빙목록</span><code>${esc(kinds.join(", ") || "(없음)")}</code>${kinds.length ? `<button type="button" class="btn btn-sm" id="evid-copy">복사</button>` : ""}</div>
+      <div class="evid-list"><span class="toolbar-note">증빙목록</span><code>${esc(kinds.join(", ") || "(없음)")}</code>${kinds.length ? `<button type="button" class="btn btn-sm" id="evid-copy">복사</button>` : ""}</div>
     </section>
     <section class="xd-sec">
       <h3>증빙 업로드</h3>
       <form id="evid-form" class="evid-form">
         <label>증빙종류 <input type="text" name="kind" list="dl-증빙종류" required autocomplete="off" placeholder="예: 카드전표, 견적서, 회의록"></label>
         <label>파일명 날짜 <input type="date" name="date" value="${esc(r["원인발생일"] || today())}"></label>
-        <label class="wide">비고 <input type="text" name="note" placeholder="선택"></label>
-        <label class="wide file-pick">파일 <span class="file-pick-row"><input type="file" name="files" multiple ${drive.connected ? "" : "disabled"}><span class="btn btn-sm file-btn" aria-hidden="true">파일 선택</span><span class="file-names">선택된 파일 없음</span></span></label>
-        <div class="drop wide" id="evid-drop"><b>파일을 여기로 끌어다 놓으세요</b><br>이름은 재원_적요_증빙종류_금액_YYMMDD 로 자동 변환되어 드라이브 증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])} 에 저장됩니다.</div>
-        <div class="wide" style="display:flex;justify-content:flex-end"><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
+        <label>비고 <input type="text" name="note" placeholder="선택"></label>
+        <label class="file-pick">파일 <span class="file-pick-row"><input type="file" name="files" multiple ${drive.connected ? "" : "disabled"}><span class="btn btn-sm file-btn" aria-hidden="true">파일 선택</span><span class="file-names">선택된 파일 없음</span></span></label>
+        <div class="wide evid-drop-row"><div class="drop" id="evid-drop" title="이름은 재원_적요_증빙종류_금액_YYMMDD 로 자동 변환됩니다"><b>파일을 여기로 끌어다 놓기</b> · 증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])}</div><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
       </form>
     </section>
-    <section class="xd-sec xd-foot">${(() => { const o = execOrigin(r), ev = evid.length; const dis = o?.locked || ev; return `<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${o?.locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${o?.locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
+    <section class="xd-sec xd-foot">${(() => { const ev = evid.length; const dis = locked || ev; return `<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
   bindEvidForm(r);
-  XD.formRow = r._row;
+  bindXdBody();
+  XD.formRow = r._row; XD.shownRow = r._row;
   if (keep) { const f = $("#evid-form"); f.kind.value = keep.kind; if (keep.date) f.date.value = keep.date; f.note.value = keep.note; try { if (keep.files?.length && !f.files.disabled) f.files.files = keep.files; } catch { } }
+  body.scrollTop = scroll;
+}
+function bindXdBody() {
+  const body = $("#xd-body");
+  $$(".xd-val, .xd-pick", body).forEach(el => {
+    el.addEventListener("click", () => xdOpenEditor(el));
+    if (el.tagName !== "BUTTON") el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " " || e.key === "F2") { e.preventDefault(); xdOpenEditor(el); } });
+  });
+  // 썸네일을 못 받으면(이미지 아님·드라이브 오류 → 204) 확장자 칩으로 바꿈
+  $$("img.xd-thumb", body).forEach(img => {
+    const toChip = () => { if (!img.isConnected) return; const c = document.createElement("span"); c.className = "xd-chip"; c.setAttribute("aria-hidden", "true"); c.textContent = img.dataset.ext; img.replaceWith(c); };
+    img.addEventListener("error", toChip);
+  });
 }
 
 function bindEvidForm(r) {

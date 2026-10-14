@@ -354,25 +354,83 @@ dialog .fld input, dialog .fld select { font-size: 13px; }
 .drawer-foot textarea { flex: 1; resize: none; }
 body.drawer-open main { padding-right: min(580px, 45vw); transition: padding-right .15s ease-out; }
 #exec-drawer { width: min(560px, 100vw); }
+#exec-drawer:focus { outline: none; }
+.xd-head { gap: 8px; }
+.xd-headtxt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#xd-title { display: flex; align-items: center; gap: 6px; }
+#xd-sub b { color: var(--ink); font-weight: 700; }
+.xd-nav { display: flex; align-items: center; gap: 4px; }
+.xd-nav .btn { width: 26px; padding: 0; justify-content: center; }
+.xd-pos { font-size: 12px; color: var(--ink-2); min-width: 52px; text-align: center; white-space: nowrap; }
 .xd-sec { border-bottom: 1px solid var(--rule-2); padding: 0 0 12px; }
 .xd-sec:last-child { border-bottom: 0; }
 .xd-sec h3 { font-size: 13px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
 .xd-sec h3 .sp { flex: 1; }
-.xd-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.xd-sec h3 .badge { font-size: 12px; }
 .xd-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--rule-2); }
+/* 처리 단계 타임라인: 점 10px + 괘선 연결. 완료 먹색, 다음 파랑 테두리, 보완 붉은색 */
+.xd-timeline { list-style: none; margin: 0; padding: 4px 0 0; display: flex; }
+.xd-step { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.xd-step::before { content: ""; position: absolute; top: 4px; right: 50%; width: 100%; height: 1px; background: var(--rule); }
+.xd-step:first-child::before { display: none; }
+.xd-step.done::before { background: var(--ink); }
+.xd-dot { position: relative; z-index: 1; width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; background: var(--bg); border: 1px solid var(--dot-idle); }
+.xd-step.done .xd-dot { background: var(--ink); border-color: var(--ink); }
+.xd-step.next .xd-dot { border: 2px solid var(--primary); }
+.xd-step.fix .xd-dot { background: var(--alert); border-color: var(--alert); }
+.xd-step-l { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.xd-step.done .xd-step-l { color: var(--ink); }
+.xd-step.next .xd-step-l { color: var(--primary-dark); }
+.xd-step.fix .xd-step-l { color: var(--alert); }
+.xd-step-d { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12px; min-height: 26px; }
+.xd-date { line-height: 20px; }
+.xd-date.empty { color: var(--ink-3); }
+.xd-pick { font: inherit; font-size: 12px; border: 0; background: none; padding: 0 4px; color: var(--primary-dark); text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; border-radius: var(--radius); }
+.xd-pick:hover { color: var(--ink); }
+.xd-fix { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2); border: 0; background: none; padding: 0 4px; min-height: 22px; cursor: pointer; border-radius: var(--radius); }
+.xd-fix .box { width: 12px; height: 12px; box-sizing: border-box; border: 1px solid var(--rule-hover); border-radius: var(--radius); background: var(--bg); display: inline-flex; align-items: center; justify-content: center; color: transparent; transition: background-color .12s ease-out, border-color .12s ease-out; }
+.xd-fix .box svg { width: 10px; height: 10px; display: block; }
+.xd-fix:hover { color: var(--ink); }
+.xd-fix:hover .box { border-color: var(--ink-3); }
+.xd-fix[aria-pressed="true"] { color: var(--alert); }
+.xd-fix[aria-pressed="true"] .box { background: var(--alert); border-color: var(--alert); color: var(--bg); }
+.xd-step .btn-sm { min-height: 24px; }
+/* 집행 정보: 28px 괘선 행. 값 자리를 누르면 그 자리에서 편집 */
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12.5px; }
 .kv b { color: var(--ink-2); font-weight: 600; }
+.xd-info .kv { grid-template-columns: 72px 1fr; gap: 0; }
+.xd-info .kv > * { min-height: 28px; display: flex; align-items: center; border-bottom: 1px solid var(--rule-2); min-width: 0; }
+.xd-info .kv > b { font-size: 12px; }
+.xd-info .kv > span { padding: 0 4px; word-break: break-word; }
+.xd-info .kv > .multi { white-space: pre-wrap; align-items: flex-start; padding-top: 5px; padding-bottom: 5px; line-height: 1.45; }
+.xd-val { cursor: text; border-radius: var(--radius); }
+.xd-val:hover, .xd-val:focus-visible { text-decoration: underline dotted var(--ink-3); text-underline-offset: 3px; }
+.xd-val.empty { color: var(--ink-3); }
+.xd-info .xd-val:hover { background: var(--bg-hover); }
+.xd-edit { width: 100%; min-height: 26px; padding: 2px 6px; font-size: 12.5px; }
+.xd-step .xd-edit { width: 128px; font-size: 12px; }
+textarea.xd-edit { resize: vertical; margin: 2px 0; }
+.xd-lock { margin: 0 0 8px; flex: none; }
+/* 증빙 표: 이미지 48×36 썸네일, 그 밖은 확장자 칩 */
 .evid-table td, .evid-table th { font-size: 12px; }
 .evid-name { word-break: break-all; white-space: normal !important; }
+.evid-table td.xd-th-cell, .evid-table th.xd-th-cell { width: 60px; padding: 2px 6px; }
+.xd-thumb { width: 48px; height: 36px; object-fit: cover; border: 1px solid var(--rule); border-radius: var(--radius); display: block; background: var(--bg); }
+.xd-chip { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 48px; height: 20px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg-table); color: var(--ink-2); font-size: 12px; font-weight: 600; letter-spacing: .04em; }
 .drop { border: 1px dashed var(--rule); border-radius: var(--radius); padding: 12px; text-align: center; color: var(--ink-2); font-size: 12px; background: var(--bg-table); transition: background-color .12s ease-out, border-color .12s ease-out; }
 .drop.hot { border-color: var(--primary); background: var(--primary-bg); color: var(--primary-dark); }
 .drop b { color: var(--ink); }
-.evid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-.evid-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); }
+.evid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin-bottom: 4px; }
+.evid-form label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-2); min-width: 0; }
 .evid-form .wide { grid-column: span 2; }
 .evid-form .btn { align-self: center; }
-.evid-list { font-size: 12px; background: var(--bg-table); border: 1px solid var(--rule-2); padding: 6px 8px; display: flex; align-items: center; gap: 8px; }
+.evid-form .file-pick-row { min-height: 32px; min-width: 0; }
+.evid-form .file-names { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.evid-drop-row { display: flex; align-items: stretch; gap: 8px; }
+.evid-drop-row .drop { flex: 1; min-width: 0; padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evid-list { margin-top: 8px; font-size: 12px; background: var(--bg-table); border: 1px solid var(--rule-2); padding: 6px 8px; display: flex; align-items: center; gap: 8px; }
 .evid-list code { flex: 1; }
+.evid-list .toolbar-note { flex: none; }
 
 /* ---------- AI 패널 ---------- */
 .ai-hint { font-size: 12px; color: var(--ink-2); margin: 0; line-height: 1.6; }
@@ -408,6 +466,8 @@ body.drawer-open main { padding-right: min(580px, 45vw); transition: padding-rig
 /* ---------- 토스트 ---------- */
 .toasts { position: fixed; top: 12px; right: 14px; z-index: 200; display: flex; flex-direction: column; gap: 6px; max-width: min(520px, 92vw); pointer-events: none; }
 .toasts:popover-open { position: fixed; inset: auto 14px auto auto; top: 12px; margin: 0; border: 0; padding: 0; background: transparent; overflow: visible; width: auto; max-width: min(520px, 92vw); }
+/* 집행 상세 패널이 열려 있으면 토스트는 패널 왼쪽에 (이전/다음·닫기 버튼을 가리지 않게) */
+body.drawer-open .toasts, body.drawer-open .toasts:popover-open { right: calc(min(560px, 100vw) + 14px); }
 .toast { pointer-events: auto; display: flex; align-items: flex-start; gap: 8px; padding: 8px 8px 8px 12px; border-radius: var(--radius); border: 1px solid; box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.4; background: var(--bg); animation: toast-in .18s ease-out; }
 .toast.ok { background: var(--ok-bg); border-color: var(--ok); color: var(--ok-deep); }
 .toast.error { background: var(--alert-bg); border-color: var(--alert); color: var(--alert-deep); }

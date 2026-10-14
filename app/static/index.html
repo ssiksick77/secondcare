@@ -265,10 +265,17 @@
   </form>
 </dialog>
 
-<aside id="exec-drawer" class="drawer" role="dialog" aria-labelledby="xd-title" aria-modal="false" hidden>
-  <div class="drawer-head">
-    <strong id="xd-title">집행 상세</strong>
-    <span class="drawer-model" id="xd-sub"></span>
+<aside id="exec-drawer" class="drawer" role="dialog" aria-labelledby="xd-title" aria-modal="false" tabindex="-1" hidden>
+  <div class="drawer-head xd-head">
+    <div class="xd-headtxt">
+      <strong id="xd-title">집행 상세</strong>
+      <span class="drawer-model" id="xd-sub"></span>
+    </div>
+    <div class="xd-nav" role="group" aria-label="집행 건 이동 (↑↓ 키)">
+      <button type="button" class="btn btn-sm btn-icon" id="xd-prev" aria-label="이전 건" title="이전 건 (↑)"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 7.5L6 4l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <span class="xd-pos" id="xd-pos" aria-live="polite"></span>
+      <button type="button" class="btn btn-sm btn-icon" id="xd-next" aria-label="다음 건" title="다음 건 (↓)"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
     <button type="button" class="btn btn-sm btn-x" id="xd-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
   </div>
   <div class="drawer-body" id="xd-body"></div>

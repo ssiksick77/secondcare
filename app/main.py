@@ -323,6 +323,20 @@ def drive_disconnect():
     return drive.disconnect()
 
 
+@app.get("/api/evidence/thumb/{file_id:path}")
+def evidence_thumb(file_id: str):
+    """증빙 이미지 썸네일. 모의 모드는 로컬 파일, 드라이브는 thumbnailLink. 이미지 아님·오류는 204 (화면은 확장자 칩)."""
+    from fastapi.responses import Response
+    try:
+        got = drive.thumbnail(file_id)
+    except Exception:
+        got = None
+    if not got:
+        return Response(status_code=204)
+    data, mime = got
+    return Response(content=data, media_type=mime, headers={"Cache-Control": "private, max-age=86400"})
+
+
 @app.get("/api/evidence/{number}")
 def evidence_list(number: str):
     items = store.evidence_for(number)

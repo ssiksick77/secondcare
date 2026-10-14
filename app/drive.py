@@ -247,6 +247,56 @@ def file_url(file_id: str) -> str:
     return f"https://drive.google.com/file/d/{file_id}/view"
 
 
+# ---------- 썸네일 (증빙 표 미리보기) ----------
+_IMG_EXT = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".webp": "image/webp"}
+
+
+def _downscale(data: bytes, mime: str, box: int = 160) -> tuple[bytes, str]:
+    """Pillow 가 있으면 작은 JPEG/PNG 로 줄임. 없거나 실패하면 원본 그대로."""
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(data))
+        im.thumbnail((box, box))
+        out = io.BytesIO()
+        if im.mode in ("RGBA", "LA", "P"):
+            im.save(out, "PNG", optimize=True)
+            return out.getvalue(), "image/png"
+        im.convert("RGB").save(out, "JPEG", quality=80)
+        return out.getvalue(), "image/jpeg"
+    except Exception:
+        return data, mime
+
+
+def thumbnail(file_id: str) -> tuple[bytes, str] | None:
+    """이미지 증빙의 작은 미리보기 (bytes, mime). 이미지가 아니거나 못 받으면 None."""
+    if not file_id:
+        return None
+    if file_id.startswith("mock:"):
+        root = MOCK_DIR.resolve()
+        p = (MOCK_DIR / file_id[5:]).resolve()
+        if root not in p.parents or not p.is_file():  # 모의 폴더 밖 경로는 거부
+            return None
+        mime = _IMG_EXT.get(p.suffix.lower())
+        if not mime:
+            return None
+        return _downscale(p.read_bytes(), mime)
+    if mock() or not connected():
+        return None
+
+    def meta():
+        with _lock:
+            return _svc().files().get(fileId=file_id, fields="thumbnailLink,mimeType").execute()
+    m = _guard(meta)
+    link = m.get("thumbnailLink")
+    if not link or not str(m.get("mimeType", "")).startswith("image/"):
+        return None
+    from google.auth.transport.requests import AuthorizedSession
+    res = AuthorizedSession(_creds()).get(link, timeout=10)
+    if res.status_code != 200 or not res.content:
+        return None
+    return res.content, res.headers.get("Content-Type", "image/jpeg")
+
+
 # ---------- 이름 규칙 ----------
 _BAD = re.compile(r'[\\/:*?"<>|\r\n\t]+')
 
