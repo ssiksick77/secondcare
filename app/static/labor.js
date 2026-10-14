@@ -197,10 +197,12 @@ function laborConfirm(row) {
 $("#dlg-pay-form").addEventListener("submit", async e => {
   e.preventDefault();
   const d = $("#dlg-pay"), row = Number(d.dataset.row), r = DATA.labor.find(x => x._row === row);
+  if (d.dataset.busy) return; d.dataset.busy = "1"; const payBtn = d.querySelector("button[type=submit]"); payBtn.disabled = true;
   try {
     const res = await api("POST", `/api/labor/${row}/action`, { action: "confirm", pay_date: $("#pay-date").value, expect: expectOf("labor", r) });
     d.close(); showAlert(`확정했습니다. 집행 ${res["연결거래번호"]} 생성`, "ok"); await load(); refreshCellDialog();
   } catch (err) { showAlert("확정 실패: " + err.message, "error"); }
+  finally { delete d.dataset.busy; payBtn.disabled = false; }
 });
 $("#dlg-pay-cancel").addEventListener("click", () => $("#dlg-pay").close());
 async function laborUnconfirm(row) {
@@ -307,7 +309,7 @@ $("#dlg-bulk-form").addEventListener("submit", async e => {
   const { out, dup } = bulkPlanRows();
   if (out.length > 1200) return showAlert("한 번에 1,200건까지만 생성할 수 있습니다.", "warn");
   if (dup.length === out.length) return showAlert("모든 건이 이미 있어 추가할 것이 없습니다.", "warn");
-  const btn = $("#bulk-save"); btn.disabled = true;
+  const btn = $("#bulk-save"); if (btn.disabled) return; btn.disabled = true;
   try { const res = await api("POST", "/api/labor/bulk", { rows: out, skip_dup: true }); $("#dlg-bulk").close(); showAlert(`예정 ${res.created}건을 추가했습니다.` + (res.skipped.length ? ` 이미 있는 ${res.skipped.length}건은 건너뛰었습니다.` : ""), "ok"); await load(); }
   catch (err) { showAlert("생성 실패: " + err.message, "error"); }
   finally { btn.disabled = false; }

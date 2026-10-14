@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import uuid
 import datetime as dt
 import os
 import re
@@ -384,12 +385,19 @@ def _file_hash() -> str:
 LAST_WRITE: dict | None = None
 
 
-def undo_last() -> dict:
-    """직전 저장 직전의 백업으로 장부를 되돌린다. 이후 다른 변경(다른 창·MCP·엑셀)이 있으면 거부."""
+def last_write_id() -> str | None:
+    return LAST_WRITE.get("id") if LAST_WRITE else None
+
+
+def undo_last(write_id: str | None = None) -> dict:
+    """직전 저장 직전의 백업으로 장부를 되돌린다. 이후 다른 변경(다른 창·MCP·엑셀)이 있으면 거부.
+    write_id 가 오면 그 쓰기가 아직 '직전 쓰기'일 때만 되돌린다 (오래된 토스트가 다른 변경을 되돌리지 않도록)."""
     global LAST_WRITE
     with _lock, _file_lock():
         if not LAST_WRITE or not Path(LAST_WRITE["backup"]).exists():
             raise ValueError("되돌릴 직전 변경이 없습니다.")
+        if write_id and write_id != LAST_WRITE.get("id"):
+            raise ValueError("그 뒤에 다른 변경이 있어 이 변경은 되돌릴 수 없습니다. 필요하면 app/backup 의 백업 파일로 복원하세요.")
         if _file_hash() != LAST_WRITE["after"]:
             raise ValueError("그 뒤에 장부가 다시 바뀌어 되돌릴 수 없습니다. 목록을 새로고침하세요.")
         _check_writable()
@@ -419,7 +427,7 @@ def _save(wb):
     try:
         wb.save(tmp)
         os.replace(tmp, XLSX_PATH)
-        LAST_WRITE = {"backup": str(backup), "after": _file_hash(), "at": dt.datetime.now().isoformat(timespec="seconds")}
+        LAST_WRITE = {"backup": str(backup), "after": _file_hash(), "at": dt.datetime.now().isoformat(timespec="seconds"), "id": uuid.uuid4().hex[:12]}
     except PermissionError as e:
         tmp.unlink(missing_ok=True)
         raise LedgerLocked("장부 파일에 쓸 수 없습니다. 다른 프로그램에서 열려 있는지 확인하세요.") from e
@@ -568,13 +576,27 @@ def _ident(kind: str, rec: dict) -> dict:
     return {c: _cell_out(c, rec.get(c)) for c in IDENT_COLS[kind]}
 
 
+def _norm_cmp(c: str, v) -> str:
+    v = _cell_out(c, v)
+    if isinstance(v, float) and v.is_integer():
+        v = int(v)
+    return "" if v is None else str(v)
+
+
 def _check_expect(kind: str, existing: dict, expect: dict | None):
-    """클라이언트가 보던 행과 실제 행이 같은지 확인 (다른 창/MCP 에서 행이 밀린 경우 감지)."""
+    """클라이언트가 보던 행과 실제 행이 같은지 확인 (다른 창/MCP 에서 행이 밀리거나 내용이 바뀐 경우 감지).
+    expect 에 _snapshot(행 전체)이 있으면 모든 열을 비교해 '덮어쓰기'를 막는다."""
     if not expect:
         return
     for c in IDENT_COLS[kind]:
         if c in expect and _cell_out(c, expect[c]) != existing.get(c):
             raise NotFound("다른 곳에서 장부가 바뀌어 행이 일치하지 않습니다. 새로고침 후 다시 시도하세요.")
+    snap = expect.get("_snapshot")
+    if isinstance(snap, dict):
+        cols = _SHEETS[kind][1]
+        changed = [c for c in cols if c in snap and c != "상태" and _norm_cmp(c, snap[c]) != _norm_cmp(c, existing.get(c))]
+        if changed:
+            raise NotFound(f"다른 곳에서 이 행의 {', '.join(changed[:3])} 이(가) 먼저 바뀌었습니다. 새로고침한 뒤 다시 수정하세요.")
 
 
 def _labor_refs(wb) -> set[str]:

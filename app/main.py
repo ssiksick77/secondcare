@@ -63,9 +63,27 @@ def labor_page():
 
 
 @app.post("/api/undo")
-def undo_last():
-    """직전 저장을 되돌림 (삭제·확정 취소·상태 변경 토스트의 '되돌리기')."""
-    return store.undo_last()
+def undo_last(body: dict | None = None):
+    """직전 저장을 되돌림 (삭제·확정 취소·상태 변경 토스트의 '되돌리기'). body.write_id 가 직전 쓰기와 다르면 거부."""
+    return store.undo_last((body or {}).get("write_id"))
+
+
+@app.get("/api/meta")
+def meta():
+    """가벼운 상태 확인: 파일 수정 시각 (다른 창·MCP 변경 감지용)."""
+    import datetime as _dt
+    return {"mtime": _dt.datetime.fromtimestamp(store.XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"), "write_id": store.last_write_id()}
+
+
+@app.middleware("http")
+async def _write_id_header(request: Request, call_next):
+    """쓰기 요청 뒤 직전 쓰기 ID를 헤더로 전달 (토스트 '되돌리기'가 자기 변경만 되돌리도록)."""
+    response = await call_next(request)
+    if request.method in ("POST", "PUT", "DELETE") and request.url.path.startswith("/api/"):
+        wid = store.last_write_id()
+        if wid:
+            response.headers["X-Write-Id"] = wid
+    return response
 
 
 @app.post("/api/exec/batch")

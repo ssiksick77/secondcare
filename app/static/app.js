@@ -18,7 +18,8 @@ const STATUS_HELP = { 발생: "원인발생일만 있음. 다음: 청구(지급�
 // 상태 열의 다음 단계 버튼: [동작, 라벨, 설명]
 const NEXT_STEP = { 발생: ["claim", "청구", "지급청구일을 오늘로 등록"], 청구: ["complete", "승인", "지출완료일을 오늘로 등록"], 보완: ["complete", "승인", "지출완료일을 오늘로 등록 (보완 해제)"], 완료: ["resolve", "결의", "결의일을 오늘로 등록 (마지막 단계)"] };
 const DATE_STAGE = { 원인발생일: "발생", 지급청구일: "청구", 지출완료일: "승인", 결의일: "결의" };  // 폼 필드 (예산목 이름에 괄호·점이 있어 CSS 선택자 불가)
-const expectOf = (kind, r) => r ? Object.fromEntries((IDENT[kind] || []).map(c => [c, r[c]])) : undefined;
+// 행 식별값 + 전체 스냅샷: 서버가 다른 창/MCP 에서 먼저 바뀐 행을 덮어쓰지 않도록 검사
+const expectOf = (kind, r) => r ? { ...Object.fromEntries((IDENT[kind] || []).map(c => [c, r[c]])), _snapshot: Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith("_"))) } : undefined;
 
 let DATA = null;
 const FILTERS = { exec: {}, req: {}, budget: {}, deposit: {} };
@@ -118,11 +119,16 @@ function fundOptions() {
 }
 
 // ---------- 데이터 로드 ----------
+let LAST_WRITE_ID = null;  // 서버가 알려준 직전 쓰기 ID (토스트 '되돌리기'는 자기 ID 일 때만)
 async function api(method, url, body) {
-  const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  let res;
+  try { res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }); }
+  catch { throw new Error("서버에 연결할 수 없습니다. run.bat 이 실행 중인지 확인하세요."); }
+  const wid = res.headers.get("X-Write-Id");
+  if (wid && wid !== LAST_WRITE_ID) { LAST_WRITE_ID = wid; $$(".toast-undo").forEach(b => { if (b.dataset.wid !== wid) b.remove(); }); }  // 새 쓰기 뒤에는 이전 되돌리기 버튼 제거
   if (!res.ok) {
-    let msg = res.statusText;
-    try { msg = (await res.json()).detail || msg; } catch { }
+    let msg = { 404: "찾을 수 없습니다", 409: "충돌", 422: "입력 형식 오류", 423: "장부 파일이 잠겨 있습니다", 500: "서버 오류" }[res.status] || res.statusText;
+    try { const d = (await res.json()).detail; if (Array.isArray(d)) msg = d.map(x => x.msg || JSON.stringify(x)).join(" / "); else if (d) msg = typeof d === "string" ? d : JSON.stringify(d); } catch { }
     throw new Error(msg);
   }
   return res.json();
@@ -258,7 +264,7 @@ function renderList(kind) {
     rows.sort((a, b) => { const va = val(a), vb = val(b); const c = (typeof va === "number" && typeof vb === "number") ? va - vb : String(va ?? "").localeCompare(String(vb ?? ""), "ko"); return (c || (a._row - b._row)) * sort.dir; });
   }
   const table = $(`#${kind}-table`);
-  const showMinor = kind === "exec" && localStorage.getItem("ledger-exec-minor") === "1";
+  let showMinor = false; try { showMinor = kind === "exec" && localStorage.getItem("ledger-exec-minor") === "1"; } catch { }
   table.classList.toggle("show-minor", showMinor);
   const minorCls = c => c.minor ? " col-minor" : "";
   const CENTER = new Set(["구분", "결제수단", "지급월", "귀속월", "월", "시작월", "종료월", "인건비구분", "변경회차", "상태", "증빙", "태그"]);
@@ -635,6 +641,7 @@ $("#dlg-fields").addEventListener("change", e => { if (e.target.dataset.lock !==
 $("#dlg-form").addEventListener("submit", async e => {
   e.preventDefault();
   const dlg = $("#dlg");
+  if (dlg.dataset.busy) return;  // Ctrl+Enter 연타 등 이중 제출 방지
   const kind = dlg.dataset.kind, row = dlg.dataset.row;
   const rec = {};
   const fields = formFields(kind).filter(f => !(f.onlyNew && row));
@@ -687,6 +694,7 @@ $("#dlg-form").addEventListener("submit", async e => {
   const more = dlg.dataset.saveMore === "1"; dlg.dataset.saveMore = "";
   const convertRow = dlg.dataset.convert ? Number(dlg.dataset.convert) : null;
   const saveBtn = $("#dlg-save"), moreBtn = $("#dlg-save-more");
+  dlg.dataset.busy = "1";
   try {
     saveBtn.disabled = true; moreBtn.disabled = true; saveBtn.textContent = "저장 중…";
     let saved;
@@ -706,7 +714,7 @@ $("#dlg-form").addEventListener("submit", async e => {
     if (more) { const carry = {}; ["원인발생일", "일자", "귀속월", "지급월", "이름"].forEach(k => { if (rec[k]) carry[k] = rec[k]; }); openForm(kind, null, { ...carry, 거래처: "", 금액: "", 적요: "", 세목: "", 세세목: "", 관리번호: "", 비고: "", 증빙번호: "", 결의일: "", 지출완료일: "", 지급청구일: "" }); }
   } catch (err) {
     showFormError(err.message); showAlert("저장 실패: " + err.message, "error");
-  } finally { saveBtn.disabled = false; moreBtn.disabled = false; saveBtn.textContent = "저장"; }
+  } finally { delete dlg.dataset.busy; saveBtn.disabled = false; moreBtn.disabled = false; saveBtn.textContent = "저장"; }
 });
 $("#dlg-save-more").addEventListener("click", () => { $("#dlg").dataset.saveMore = "1"; $("#dlg-form").requestSubmit(); });
 
@@ -839,8 +847,8 @@ function confirmDlg(o) {
   });
 }
 // 직전 저장 되돌리기 (서버가 저장 직전 백업을 복원; 그 뒤 다른 변경이 있으면 거부)
-async function undoLast(t) {
-  try { await api("POST", "/api/undo"); if (t) t.remove(); showAlert("되돌렸습니다.", "ok"); await load(); if (typeof refreshCellDialog === "function") refreshCellDialog(); }
+async function undoLast(t, wid) {
+  try { await api("POST", "/api/undo", { write_id: wid || LAST_WRITE_ID }); if (t) t.remove(); showAlert("되돌렸습니다.", "ok"); await load(); if (typeof refreshCellDialog === "function") refreshCellDialog(); }
   catch (e) { showAlert("되돌리기 실패: " + e.message, "error"); }
 }
 // 토스트 메시지: ok 4초, warn 7초 후 자동 닫힘. error 는 닫기 버튼을 누를 때까지 유지(최대 5개).
@@ -855,7 +863,7 @@ function showAlert(msg, type = "ok", opts = {}) {
   t.className = "toast " + type; t.setAttribute("role", type === "error" ? "alert" : "status");
   t.innerHTML = `<span class="toast-msg"></span><button type="button" class="toast-x" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>`;
   t.querySelector(".toast-msg").textContent = msg;
-  if (opts.undo) { const u = document.createElement("button"); u.type = "button"; u.className = "btn btn-sm toast-undo"; u.textContent = "되돌리기"; u.addEventListener("click", () => undoLast(t)); t.insertBefore(u, t.querySelector(".toast-x")); }
+  if (opts.undo) { const u = document.createElement("button"); u.type = "button"; u.className = "btn btn-sm toast-undo"; u.textContent = "되돌리기"; u.dataset.wid = LAST_WRITE_ID || ""; u.addEventListener("click", () => undoLast(t, u.dataset.wid)); t.insertBefore(u, t.querySelector(".toast-x")); }
   t.querySelector(".toast-x").addEventListener("click", () => t.remove());
   box.appendChild(t);
   while (box.children.length > 5) box.firstChild.remove();
@@ -931,6 +939,11 @@ $("#dash-year").addEventListener("change", renderDashboard);
 $("#btn-reload").addEventListener("click", load);
 document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
+});
+// 다른 창·MCP·엑셀이 장부를 바꿨으면 탭으로 돌아올 때 자동 새로고침 (입력 중인 대화상자가 없을 때만)
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible" || !DATA || document.querySelector("dialog[open]")) return;
+  try { const m = await api("GET", "/api/meta"); if (m.mtime !== DATA.meta.mtime) { await load(); showAlert("다른 곳에서 바뀐 장부를 다시 불러왔습니다.", "ok"); } } catch { }
 });
 
 try { const t = localStorage.getItem("ledger-tab"); if (t && $("#tab-" + t)) switchTab(t); } catch { }
@@ -1224,7 +1237,7 @@ $("#s-clear-key").addEventListener("click", async () => {
 
 // ================= 집행 상세 드로어 · 증빙 · 단계 처리 =================
 let QUICK = "";
-const XD = { row: null, evid: null, drive: null };
+const XD = { row: null, evid: null, drive: null, seq: 0 };
 function evidCount(r) { return (DATA.evidence || []).filter(e => e["거래번호"] === r["거래번호"]).length; }
 // 집행 행의 출처: 인건비 확정 / 적립금 적립 기록 / 품의 전환. 연결 행은 핵심 열이 잠김
 const LOCKED_COLS = ["재원", "예산목", "금액", "거래처", "원인발생일"];
@@ -1296,8 +1309,9 @@ async function renderExecDrawer(fetchEvid) {
   $("#xd-sub").textContent = `${r["재원"]} · ${r["예산목"]} · ${fmt(r["금액"])}원`;
   // 다른 저장·새로고침으로 다시 그릴 때 입력 중이던 증빙 업로드 폼은 유지
   const oldForm = $("#evid-form"), keep = oldForm && XD.formRow === r._row ? { kind: oldForm.kind.value, date: oldForm.date.value, note: oldForm.note.value, files: oldForm.files.files } : null;
+  const seq = ++XD.seq;  // 빠르게 다른 행을 열면 늦게 온 응답은 버림
   if (fetchEvid || !XD.evid) {
-    try { const d = await api("GET", `/api/evidence/${encodeURIComponent(r["거래번호"])}`); XD.evid = d.items; XD.drive = d.drive; }
+    try { const d = await api("GET", `/api/evidence/${encodeURIComponent(r["거래번호"])}`); if (seq !== XD.seq || XD.row !== r._row) return; XD.evid = d.items; XD.drive = d.drive; }
     catch (e) { XD.evid = []; XD.drive = { connected: false, error: e.message }; }
   }
   const st = r["상태"];
