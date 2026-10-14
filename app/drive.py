@@ -22,6 +22,7 @@ FOLDER_CACHE = APP_DIR / "drive_folders.json"
 MOCK_DIR = APP_DIR / "drive_mock"
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 ROOT_NAME = "증빙관리"
+REQUEST_ROOT = "신청"  # 신청 첨부: 내 드라이브/신청/YYYY/신청번호
 
 _lock = threading.RLock()
 _service = None
@@ -177,11 +178,12 @@ def _find_or_create_folder(name: str, parent: str | None) -> str:
     return svc.files().create(body=meta, fields="id").execute()["id"]
 
 
-def ensure_folder(parts: list[str]) -> dict:
-    """ROOT/parts... 폴더를 보장하고 {id, url} 반환."""
-    key = "/".join([ROOT_NAME] + parts)
+def ensure_folder(parts: list[str], root: str | None = None) -> dict:
+    """root/parts... 폴더를 보장하고 {id, url} 반환. root 기본값은 증빙 루트(ROOT_NAME)."""
+    root = root or ROOT_NAME
+    key = "/".join([root] + parts)
     if mock():
-        p = MOCK_DIR.joinpath(ROOT_NAME, *parts)
+        p = MOCK_DIR.joinpath(root, *parts)
         p.mkdir(parents=True, exist_ok=True)
         return {"id": key, "url": p.resolve().as_uri()}
     with _lock:
@@ -198,7 +200,7 @@ def ensure_folder(parts: list[str]) -> dict:
         def run():
             parent = None
             path = []
-            for name in [ROOT_NAME] + parts:
+            for name in [root] + parts:
                 path.append(name)
                 k = "/".join(path)
                 if k in cache:
@@ -305,6 +307,20 @@ def safe_part(s: str, limit: int = 40) -> str:
     s = _BAD.sub(" ", str(s or "")).strip().replace("_", "-")
     s = re.sub(r"\s+", " ", s)
     return s[:limit].strip() or "-"
+
+
+def build_request_filename(number: str, item: str, original: str, existing: list[str]) -> str:
+    """신청번호_품목_원본파일명(_n).ext — 같은 이름이 있으면 _2, _3"""
+    original = str(original or "")
+    stem, ext = (original.rsplit(".", 1) if "." in original else (original, ""))
+    base = "_".join([safe_part(number, 20), safe_part(item), safe_part(stem, 60)])
+    ext = ("." + ext.lower().lstrip(".")) if ext else ""
+    name, n = base + ext, 2
+    taken = set(existing)
+    while name in taken:
+        name = f"{base}_{n}{ext}"
+        n += 1
+    return name
 
 
 def build_filename(fund: str, summary: str, kind: str, amount, yymmdd: str, ext: str, existing: list[str]) -> str:

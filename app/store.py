@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import json
 import uuid
 import datetime as dt
 import os
@@ -36,6 +37,9 @@ SHEET_SALARY = "기준급여"
 SHEET_PAYEE = "지급처"
 SHEET_LABOR = "인건비지급"
 SHEET_LADJ = "인건비조정"
+SHEET_RQ = "신청"
+SHEET_ORDER = "주문"
+SHEET_RATT = "신청첨부"
 
 BUDGET_ITEMS = [
     "내부인건비(공통)", "외부인건비(공통)", "연구시설.장비비", "연구활동비",
@@ -66,11 +70,25 @@ DEP_COLS = ["일자", "거래처", "구분", "금액", "적요", "사용자", "�
 TAG_COLS = ["태그명", "분류", "설명"]
 EVID_COLS = ["거래번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
 DEP_TYPES = ["적립", "사용"]
+# 신청 (신청_설계_2026-10-14.md)
+REQUEST_COLS = ["신청번호", "구분", "상태", "신청인", "신청일", "관련과제", "품목", "규격", "단가", "수량", "금액", "사유",
+                "희망일", "온라인코드", "상품코드", "상품링크", "결재인", "결재일", "반려사유", "주문번호", "연결품의번호",
+                "첨부폴더", "첨부목록", "상세", "비고"]
+ORDER_COLS = ["주문번호", "주문일", "배송일", "거래처", "주문금액", "결제금액", "적립금사용", "신청번호목록", "비고"]
+RATT_COLS = ["신청번호", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
+REQUEST_TYPES = ["장비", "소모품", "학회", "기타"]
+REQUEST_STATUS = ["신청", "승인", "반려", "품의전환", "완료"]
+REQUEST_LOCKED = ("품의전환", "완료")  # 비고만 수정 가능
+# 신청 행에서 화면 수정으로 바꿀 수 없는 열 (동작·주문·첨부로만 바뀜)
+REQUEST_SYSTEM = ["신청번호", "상태", "결재인", "결재일", "반려사유", "주문번호", "연결품의번호", "첨부폴더", "첨부목록"]
+ORDER_VENDOR = "알파몰"
+ORDER_PREFIX = "알파"
 BUDGET_HEAD_ROW = 8
 BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS  # A~D + E~M
 
-DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일"}
-NUM_COLS = {"금액", "인건비예산", "월액", "이월선급"} | set(BUDGET_ITEMS)
+DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일",
+             "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일"}
+NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
 IDENT_COLS = {
     "funds": ["재원코드"], "exec": ["거래번호"], "req": ["품의번호"], "tags": ["태그명"],
@@ -78,6 +96,7 @@ IDENT_COLS = {
     "evidence": ["거래번호", "파일명"],
     "people": ["이름"], "salary": ["이름", "시작월"], "payee": ["지급처코드"],
     "labor": ["지급월", "귀속월", "이름", "지급처"], "ladj": ["월", "이름", "금액"],
+    "request": ["신청번호"], "order": ["주문번호"], "ratt": ["신청번호", "파일명"],
 }
 
 _lock = threading.RLock()
@@ -324,7 +343,11 @@ def _ensure_structure(wb) -> bool:
                                (SHEET_SALARY, SALARY_COLS, (14, 10, 10, 14, 30)),
                                (SHEET_PAYEE, PAYEE_COLS, (14, 30, 16, 30)),
                                (SHEET_LABOR, LABOR_COLS, (10, 10, 14, 16, 14, 8, 12, 18, 30)),
-                               (SHEET_LADJ, LADJ_COLS, (10, 14, 14, 30))):
+                               (SHEET_LADJ, LADJ_COLS, (10, 14, 14, 30)),
+                               (SHEET_RQ, REQUEST_COLS, (14, 8, 10, 10, 12, 16, 30, 20, 12, 8, 14, 30,
+                                                         12, 14, 14, 30, 10, 12, 24, 18, 18, 30, 30, 20, 24)),
+                               (SHEET_ORDER, ORDER_COLS, (18, 12, 12, 14, 14, 14, 10, 40, 24)),
+                               (SHEET_RATT, RATT_COLS, (14, 44, 30, 36, 10, 12, 20))):
         if name not in wb.sheetnames:
             ws = wb.create_sheet(name)
             for i, c in enumerate(cols, 1):
@@ -345,6 +368,15 @@ def _ensure_structure(wb) -> bool:
             cell.font = head_font
             ws.column_dimensions[get_column_letter(col)].width = width
             changed = True
+
+    for name, cols in ((SHEET_RQ, REQUEST_COLS), (SHEET_ORDER, ORDER_COLS), (SHEET_RATT, RATT_COLS)):
+        ws = wb[name]  # 신청 계열 시트: 나중에 추가된 열 보정
+        heads = _headers(ws)
+        for c in cols:
+            if c not in heads:
+                heads.append(c)
+                ws.cell(1, len(heads), c).font = head_font
+                changed = True
 
     for name in (SHEET_EXEC, SHEET_REQ):
         ws = wb[name]
@@ -516,7 +548,13 @@ def read_all() -> dict:
             "payee": _rows(wb[SHEET_PAYEE], PAYEE_COLS, 1, formulas),
             "labor": _rows(wb[SHEET_LABOR], LABOR_COLS, 1, formulas),
             "ladj": _rows(wb[SHEET_LADJ], LADJ_COLS, 1, formulas),
+            "request": _rows(wb[SHEET_RQ], REQUEST_COLS, 1, formulas),
+            "order": _rows(wb[SHEET_ORDER], ORDER_COLS, 1, formulas),
+            "ratt": _rows(wb[SHEET_RATT], RATT_COLS, 1, formulas),
         }
+        req_state = {r["품의번호"]: r["상태"] for r in data["req"] if r.get("품의번호")}
+        for r in data["request"]:  # 연결 품의가 집행완료면 '완료' (읽을 때 계산)
+            r["상태"] = request_status(r, req_state)
         for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력
             r["인건비예산"] = None if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산") else r["인건비예산"]
         for r in data["payee"]:
@@ -530,6 +568,8 @@ def read_all() -> dict:
             "budget_items": BUDGET_ITEMS,
             "pay_methods": PAY_METHODS,
             "req_status": REQ_STATUS,
+            "request_types": REQUEST_TYPES,
+            "request_status": REQUEST_STATUS,
             "file": str(XLSX_PATH),
             "mtime": dt.datetime.fromtimestamp(XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"),
             "locked": XLSX_PATH.with_name("~$" + XLSX_PATH.name).exists(),
@@ -558,7 +598,22 @@ _SHEETS = {
     "deposit": (SHEET_DEP, DEP_COLS, 1, None),
     "tags": (SHEET_TAG, TAG_COLS, 1, "태그명"),
     "evidence": (SHEET_EVID, EVID_COLS, 1, None),
+    "request": (SHEET_RQ, REQUEST_COLS, 1, "신청번호"),
+    "order": (SHEET_ORDER, ORDER_COLS, 1, "주문번호"),
+    "ratt": (SHEET_RATT, RATT_COLS, 1, None),
 }
+
+
+def request_status(rec: dict, req_state: dict) -> str:
+    """신청 상태: 연결 품의가 집행완료면 '완료', 그 외에는 시트 값 (빈 값은 '신청')."""
+    no = str(rec.get("연결품의번호") or "").strip()
+    if no and req_state.get(no) == "집행완료":
+        return "완료"
+    return str(rec.get("상태") or "") or "신청"
+
+
+def _req_state(wb) -> dict:
+    return {r["품의번호"]: r["상태"] for r in _rows(wb[SHEET_REQ], REQ_COLS) if r.get("품의번호")}
 
 
 def exec_status(rec: dict) -> str:
@@ -615,7 +670,48 @@ def _number_refs(wb, key: str) -> set[str]:
             m = re.search(r"품의 (\d{4}-.+?-\d+)", str(r.get("비고") or ""))
             if m:
                 refs.add(m[1])
+        for r in _rows(wb[SHEET_RQ], REQUEST_COLS):
+            if r.get("연결품의번호"):
+                refs.add(str(r["연결품의번호"]))
+    elif key == "신청번호":
+        for r in _rows(wb[SHEET_RATT], RATT_COLS):
+            refs.add(str(r.get("신청번호") or ""))
+        for r in _rows(wb[SHEET_ORDER], ORDER_COLS):
+            refs.update(re.findall(r"R-\d{4}-\d+", str(r.get("신청번호목록") or "")))
+        for sheet, cols in ((SHEET_REQ, REQ_COLS), (SHEET_EXEC, EXEC_COLS)):
+            for r in _rows(wb[sheet], cols):
+                refs.update(re.findall(r"R-\d{4}-\d+", str(r.get("비고") or "")))
+    elif key == "주문번호":
+        for r in _rows(wb[SHEET_RQ], REQUEST_COLS):
+            refs.add(str(r.get("주문번호") or ""))
+        for r in _rows(wb[SHEET_DEP], DEP_COLS):
+            refs.add(str(r.get("증빙번호") or ""))
     return refs
+
+
+def _assign_request_number(wb, ws, rec):
+    """R-YYYY-NNN (신청일 연도, 연도별 일련번호, 참조된 번호는 재사용하지 않음)."""
+    d = _to_date(rec.get("신청일")) or dt.date.today().isoformat()
+    year = d[:4]
+    mx = 0
+    seen = [str(r.get("신청번호") or "") for r in _rows(ws, REQUEST_COLS)] + list(_number_refs(wb, "신청번호"))
+    for v in seen:
+        m = re.match(r"^R-(\d{4})-(\d+)$", v)
+        if m and m[1] == year:
+            mx = max(mx, int(m[2]))
+    rec["신청번호"] = f"R-{year}-{mx + 1:03d}"
+
+
+def _assign_order_number(wb, ws, rec):
+    """알파-YYYYMMDD-NN (주문일별 일련번호)."""
+    d = _to_date(rec.get("주문일")) or dt.date.today().isoformat()
+    prefix = f"{ORDER_PREFIX}-{d.replace('-', '')}-"
+    mx = 0
+    seen = [str(r.get("주문번호") or "") for r in _rows(ws, ORDER_COLS)] + list(_number_refs(wb, "주문번호"))
+    for v in seen:
+        if v.startswith(prefix) and v[len(prefix):].isdigit():
+            mx = max(mx, int(v[len(prefix):]))
+    rec["주문번호"] = f"{prefix}{mx + 1:02d}"
 
 
 def _assign_number(wb, ws, cols, head_row, key, rec):
@@ -689,6 +785,13 @@ def _validate(kind: str, rec: dict):
     if kind == "evidence":
         if not str(rec.get("거래번호") or "").strip() or not str(rec.get("파일명") or "").strip():
             raise ValueError("거래번호와 파일명은 필수입니다.")
+        return
+    if kind == "ratt":
+        if not str(rec.get("신청번호") or "").strip() or not str(rec.get("파일명") or "").strip():
+            raise ValueError("신청번호와 파일명은 필수입니다.")
+        return
+    if kind == "request":
+        _validate_request(rec)
         return
     if kind == "exec":
         rec["상태"] = exec_status(rec)  # 날짜 우선, '보완'만 유지
@@ -780,6 +883,43 @@ def _validate(kind: str, rec: dict):
             raise ValueError("금액은 0이 될 수 없습니다 (+ 선급, − 미지급).")
 
 
+def _validate_request(rec: dict):
+    """신청 행 검증·기본값: 구분·상태 목록, 신청인·품목 필수, 신청일=오늘, 수량=1, 금액=단가×수량(비어 있을 때), 상세 JSON."""
+    for c in REQUEST_COLS:
+        if c in NUM_COLS and rec.get(c) not in (None, ""):
+            _to_num(rec[c], strict=True)
+    rec["구분"] = str(rec.get("구분") or "").strip()
+    if rec["구분"] not in REQUEST_TYPES:
+        raise ValueError(f"구분 '{rec['구분']}' 은 목록에 없습니다. 가능한 값: {', '.join(REQUEST_TYPES)}")
+    rec["상태"] = str(rec.get("상태") or "").strip() or "신청"
+    if rec["상태"] not in REQUEST_STATUS:
+        raise ValueError(f"상태 '{rec['상태']}' 이(가) 올바르지 않습니다. 가능한 값: {', '.join(REQUEST_STATUS)}")
+    for c in ("신청인", "품목"):
+        rec[c] = str(rec.get(c) or "").strip()
+        if not rec[c]:
+            raise ValueError(f"{c}은(는) 필수입니다.")
+    if not _to_date(rec.get("신청일")):
+        rec["신청일"] = dt.date.today().isoformat()
+    if rec.get("수량") in (None, ""):
+        rec["수량"] = 1
+    if _to_num(rec["수량"]) <= 0:
+        raise ValueError("수량은 0보다 커야 합니다.")
+    if _to_num(rec.get("단가")) < 0 or _to_num(rec.get("금액")) < 0:
+        raise ValueError("단가·금액은 0 이상이어야 합니다.")
+    if rec.get("금액") in (None, "") and rec.get("단가") not in (None, ""):
+        rec["금액"] = _to_num(rec["단가"]) * _to_num(rec["수량"])
+    d = rec.get("상세")
+    if isinstance(d, (dict, list)):
+        rec["상세"] = json.dumps(d, ensure_ascii=False)
+    elif d not in (None, "") and str(d).strip():
+        try:
+            json.loads(str(d))
+        except ValueError:
+            raise ValueError("상세(JSON) 형식이 올바르지 않습니다.") from None
+    if len(str(rec.get("상세") or "")) > 32000:
+        raise ValueError("상세(JSON)가 너무 깁니다 (엑셀 셀 한도 32,000자).")
+
+
 def _person(wb, name: str) -> dict:
     p = next((x for x in _rows(wb[SHEET_PEOPLE], PEOPLE_COLS) if _same_key(x["이름"], name)), None)
     if p is None:
@@ -821,6 +961,15 @@ def _validate_salary_refs(wb, rec: dict, others: list[dict]):
 
 def create(kind: str, rec: dict) -> dict:
     sheet, cols, head_row, key = _SHEETS[kind]
+    if kind == "order":
+        raise ValueError("주문은 신청 화면의 '주문 생성'으로 만드세요.")
+    if kind == "ratt":
+        raise ValueError("신청 첨부는 파일 업로드로 추가하세요.")
+    if kind == "request":  # 새 신청은 항상 '신청' 상태로 시작 (결재·주문·연결·첨부는 동작으로만 기록)
+        rec = dict(rec)
+        for c in REQUEST_SYSTEM:
+            rec[c] = ""
+        rec["상태"] = "신청"
     with _write_session() as wb:
         ws = wb[sheet]
         _validate(kind, rec)
@@ -838,7 +987,9 @@ def create(kind: str, rec: dict) -> dict:
             rec[key] = str(rec[key]).strip()
             if any(_same_key(f["재원코드"], rec[key]) for f in _rows(wb[SHEET_FUND], FUND_COLS)):
                 raise ValueError("재원코드와 같은 지급처코드는 쓸 수 없습니다 (재원은 그대로 지급처로 사용 가능).")
-        if key and kind not in ("funds", "tags", "people", "payee"):
+        if kind == "request":
+            _assign_request_number(wb, ws, rec)
+        elif key and kind not in ("funds", "tags", "people", "payee"):
             _assign_number(wb, ws, cols, head_row, key, rec)
         if kind in ("funds", "tags", "people", "payee"):
             rec[key] = str(rec[key]).strip()
@@ -882,6 +1033,17 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None) -> dict:
         if existing is None:
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
         _check_expect(kind, existing, expect)
+        if kind == "request":
+            _prepare_request_update(wb, existing, rec)
+        if kind in ("order", "ratt"):
+            # 주문·첨부 행은 비고(주문은 배송일도)만 화면에서 수정
+            free = ("비고", "배송일") if kind == "order" else ("비고",)
+            for c in cols:
+                if c in rec and c not in free and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c)):
+                    raise ValueError(f"{'주문' if kind == 'order' else '첨부'} 행의 {c}은(는) 여기서 바꿀 수 없습니다. "
+                                     + ("주문을 취소한 뒤 다시 만드세요." if kind == "order" else "파일을 지우고 다시 올리세요."))
+            rec = {**existing, **{c: rec[c] for c in free if c in rec}}
+            rec.pop("_row", None)
         if kind == "exec" and (existing["거래번호"] in _labor_refs(wb) or existing["거래번호"] in _number_refs(wb, "거래번호")):
             # 인건비 확정·적립 기록으로 생긴 행: 원본과 어긋나지 않도록 핵심 열은 잠금 (부가 정보만 수정 가능)
             for c in LINKED_LOCKED:
@@ -924,8 +1086,32 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None) -> dict:
         return rec
 
 
-def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = False):
+def _prepare_request_update(wb, existing: dict, rec: dict):
+    """신청 수정: 시스템 열은 기존 값 유지, 품의전환·완료는 비고만, 주문에 묶이면 금액 관련 열 잠금, 단가·수량이 바뀌면 금액 재계산."""
+    status = request_status(existing, _req_state(wb))
+    if status in REQUEST_LOCKED:
+        for c in REQUEST_COLS:
+            if c in rec and c != "비고" and c not in REQUEST_SYSTEM and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c)):
+                raise ValueError(f"'{status}' 상태의 신청은 비고만 수정할 수 있습니다 ({c} 변경 불가).")
+    if existing.get("주문번호"):
+        for c in ("구분", "단가", "수량", "금액"):
+            if c in rec and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c)):
+                raise ValueError(f"주문 {existing['주문번호']} 에 묶인 신청이라 {c}을(를) 바꿀 수 없습니다. 주문을 먼저 취소하세요.")
+    for c in REQUEST_SYSTEM:
+        rec[c] = existing.get(c)
+    if rec["구분"] != "학회" and rec.get("단가") not in (None, "") and _norm_cmp("금액", rec.get("금액")) == _norm_cmp("금액", existing.get("금액")) \
+            and (_norm_cmp("단가", rec.get("단가")) != _norm_cmp("단가", existing.get("단가")) or _norm_cmp("수량", rec.get("수량")) != _norm_cmp("수량", existing.get("수량"))):
+        rec["금액"] = _to_num(rec["단가"]) * _to_num(rec["수량"])
+
+
+def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = False) -> dict:
+    """행 삭제. 반환: {"trash": [드라이브파일ID...]} (신청을 첨부와 함께 지운 경우 휴지통으로 보낼 파일)."""
     sheet, cols, head_row, key = _SHEETS[kind]
+    out = {"trash": []}
+    if kind == "order":
+        raise ValueError("주문은 삭제 대신 '주문 취소'를 사용하세요 (연결 신청·적립금 사용 기록을 함께 정리).")
+    if kind == "ratt":
+        raise ValueError("신청 첨부는 첨부 목록에서 삭제하세요.")
     with _write_session() as wb:
         ws = wb[sheet]
         if row <= head_row or row > ws.max_row:
@@ -962,10 +1148,32 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
             raise ValueError(f"재원코드 '{existing['재원코드']}' 는 인건비 지급 내역에서 사용 중이라 삭제할 수 없습니다.")
         if kind == "labor" and existing.get("연결거래번호"):
             _remove_labor_exec(wb, existing["연결거래번호"])
+        if kind == "request":
+            status = request_status(existing, _req_state(wb))
+            if status in REQUEST_LOCKED:
+                raise ValueError(f"'{status}' 상태의 신청은 삭제할 수 없습니다. 연결 품의 {existing.get('연결품의번호') or ''} 를 먼저 정리하세요.")
+            if existing.get("주문번호"):
+                raise ValueError(f"주문 {existing['주문번호']} 에 묶인 신청입니다. 주문을 먼저 취소하세요.")
+            ws_at = wb[SHEET_RATT]
+            atts = [a for a in _rows(ws_at, RATT_COLS) if a["신청번호"] == existing["신청번호"]]
+            if atts and not cascade:
+                raise ValueError(f"첨부 {len(atts)}건이 있습니다. '첨부도 함께 삭제'를 선택하거나 첨부를 먼저 지우세요.")
+            for a in sorted(atts, key=lambda a: -a["_row"]):
+                _delete_row(ws_at, a["_row"])
+                if a.get("드라이브파일ID"):
+                    out["trash"].append(a["드라이브파일ID"])
+        if kind == "req" and existing.get("품의번호"):
+            # 신청에서 전환된 품의를 지우면 신청은 '승인'으로 되돌림 (다시 전환 가능)
+            ws_rq = wb[SHEET_RQ]
+            for q in _rows(ws_rq, REQUEST_COLS):
+                if q.get("연결품의번호") == existing["품의번호"]:
+                    q.update({"상태": "승인", "연결품의번호": ""})
+                    _write_row(ws_rq, REQUEST_COLS, q["_row"], q)
         _delete_row(ws, row)
         if kind == "budget":
             _refresh_budget_summary(wb)
         _save(wb)
+        return out
 
 
 def req_to_exec(row: int, extra: dict, expect: dict | None = None) -> dict:
@@ -1316,3 +1524,287 @@ def evidence_delete(row: int, expect: dict | None = None) -> dict:
 def evidence_names(number: str) -> list[str]:
     """같은 건의 기존 파일명 (중복 번호 부여용)."""
     return [e["파일명"] for e in evidence_for(number)]
+
+
+# ---------- 신청 (신청_설계_2026-10-14.md) ----------
+def _find_row(ws, cols, row: int, label: str) -> dict:
+    rec = next((x for x in _rows(ws, cols) if x["_row"] == row), None)
+    if rec is None:
+        raise NotFound(f"{label} 행을 찾을 수 없습니다. 목록을 새로고침하세요.")
+    return rec
+
+
+def request_action(row: int, action: str, extra: dict | None = None, expect: dict | None = None) -> dict:
+    """신청 결재. approve(신청·반려→승인) | reject(사유 필수 → 반려) | unapprove(승인→신청) | reopen(반려→신청)."""
+    extra = extra or {}
+    with _write_session() as wb:
+        ws = wb[SHEET_RQ]
+        rec = _find_row(ws, REQUEST_COLS, row, "신청")
+        _check_expect("request", rec, expect)
+        state = _req_state(wb)
+        status = request_status(rec, state)
+        who = str(extra.get("결재인") or "").strip() or "담당자"
+        when = _to_date(extra.get("결재일")) or dt.date.today().isoformat()
+        if not _valid_date(when):
+            raise ValueError(f"결재일 형식이 올바르지 않습니다 (YYYY-MM-DD): {extra.get('결재일')}")
+        if action == "approve":
+            if status not in ("신청", "반려"):
+                raise ValueError(f"'{status}' 상태의 신청은 승인할 수 없습니다 (신청·반려만 가능).")
+            rec.update({"상태": "승인", "결재인": who, "결재일": when, "반려사유": ""})
+        elif action == "reject":
+            reason = str(extra.get("사유") or extra.get("반려사유") or "").strip()
+            if not reason:
+                raise ValueError("반려 사유를 입력하세요.")
+            if status not in ("신청", "승인"):
+                raise ValueError(f"'{status}' 상태의 신청은 반려할 수 없습니다.")
+            if rec.get("주문번호"):
+                raise ValueError(f"주문 {rec['주문번호']} 에 묶인 신청입니다. 주문을 먼저 취소하세요.")
+            rec.update({"상태": "반려", "결재인": who, "결재일": when, "반려사유": reason})
+        elif action == "unapprove":
+            if status in REQUEST_LOCKED:
+                raise ValueError("품의로 전환된 신청은 승인을 취소할 수 없습니다. 연결 품의를 먼저 삭제하세요.")
+            if status != "승인":
+                raise ValueError("승인된 신청만 승인 취소할 수 있습니다.")
+            if rec.get("주문번호"):
+                raise ValueError(f"주문 {rec['주문번호']} 에 묶인 신청입니다. 주문을 먼저 취소하세요.")
+            rec.update({"상태": "신청", "결재인": "", "결재일": ""})
+        elif action == "reopen":
+            if status != "반려":
+                raise ValueError("반려된 신청만 다시 신청 상태로 돌릴 수 있습니다.")
+            rec.update({"상태": "신청", "결재인": "", "결재일": ""})  # 반려사유는 이력으로 남김 (승인 시 비움)
+        else:
+            raise ValueError(f"알 수 없는 동작: {action}")
+        _write_row(ws, REQUEST_COLS, row, rec)
+        _save(wb)
+        rec["상태"] = request_status(rec, state)
+        return rec
+
+
+def _pick_requests(ws, rows: list, expects: list | None) -> list[dict]:
+    if not rows:
+        raise ValueError("신청을 1건 이상 선택하세요.")
+    rows = [int(r) for r in rows]
+    if len(set(rows)) != len(rows):
+        raise ValueError("같은 신청이 중복 선택되었습니다.")
+    cur = {r["_row"]: r for r in _rows(ws, REQUEST_COLS)}
+    picked = []
+    for i, row in enumerate(rows):
+        rec = cur.get(row)
+        if rec is None:
+            raise NotFound(f"행 {row}: 신청을 찾을 수 없습니다. 목록을 새로고침하세요.")
+        exp = expects[i] if expects and i < len(expects) else None
+        try:
+            _check_expect("request", rec, exp)
+        except NotFound as e:
+            raise NotFound(f"{rec['신청번호']}: {e}") from None
+        picked.append(rec)
+    return picked
+
+
+def request_convert(rows: list, extra: dict | None = None, expects: list | None = None) -> dict:
+    """승인된 신청 여러 건 → 품의 1건 (한 번에 저장). 신청은 품의전환 + 연결품의번호 기록."""
+    extra = extra or {}
+    with _write_session() as wb:
+        ws = wb[SHEET_RQ]
+        picked = _pick_requests(ws, rows, expects)
+        state = _req_state(wb)
+        for q in picked:
+            st = request_status(q, state)
+            if st != "승인" or q.get("연결품의번호"):
+                raise ValueError(f"{q['신청번호']}: '{st}' 상태라 품의로 전환할 수 없습니다 (승인된 신청만 가능).")
+        numbers = [q["신청번호"] for q in picked]
+        items = [q["품목"] for q in picked]
+        names = list(dict.fromkeys(q["신청인"] for q in picked if q.get("신청인")))
+        summary = ", ".join(items) if len(items) <= 3 else ", ".join(items[:3]) + f" 외 {len(items) - 3}건"
+        orders = {q.get("주문번호") or "" for q in picked}
+        vendor = ""
+        if len(orders) == 1 and next(iter(orders)):  # 한 주문 묶음이면 주문 거래처를 기본값으로
+            o = next((x for x in _rows(wb[SHEET_ORDER], ORDER_COLS) if x["주문번호"] == next(iter(orders))), None)
+            vendor = (o or {}).get("거래처") or ""
+        rec = {c: "" for c in REQ_COLS}
+        rec.update({c: v for c, v in extra.items() if c in REQ_COLS and c not in ("품의번호", "상태", "비고")})
+        rec["원인발생일"] = _to_date(extra.get("원인발생일")) or dt.date.today().isoformat()
+        rec["적요"] = str(extra.get("적요") or "").strip() or summary
+        rec["금액"] = extra.get("금액") if extra.get("금액") not in (None, "") else sum(_to_num(q.get("금액")) for q in picked)
+        rec["품의자"] = str(extra.get("품의자") or "").strip() or ", ".join(names)
+        rec["거래처"] = str(extra.get("거래처") or "").strip() or vendor
+        rec["비고"] = f"신청 {', '.join(numbers)}" + (f" / {extra['비고']}" if str(extra.get("비고") or "").strip() else "")
+        rec["상태"] = "대기"
+        _validate("req", rec)
+        _validate_tag(rec, wb)
+        ws_req = wb[SHEET_REQ]
+        _assign_number(wb, ws_req, REQ_COLS, 1, "품의번호", rec)
+        r = _next_row(ws_req)
+        _write_row(ws_req, REQ_COLS, r, rec)
+        for q in picked:
+            q.update({"상태": "품의전환", "연결품의번호": rec["품의번호"]})
+            _write_row(ws, REQUEST_COLS, q["_row"], q)
+        _save(wb)
+        rec["_row"] = r
+        return {"req": rec, "numbers": numbers, "품의번호": rec["품의번호"]}
+
+
+def _yes(v) -> bool:
+    return v is True or str(v or "").strip().upper() in ("Y", "1", "TRUE", "예", "YES")
+
+
+def order_create(rows: list, extra: dict | None = None, expects: list | None = None) -> dict:
+    """승인된 소모품 신청 묶음 → 주문 1건. 적립금사용=Y 면 적립금 '사용' 1행도 함께 기록."""
+    extra = extra or {}
+    with _write_session() as wb:
+        ws = wb[SHEET_RQ]
+        picked = _pick_requests(ws, rows, expects)
+        state = _req_state(wb)
+        for q in picked:
+            st = request_status(q, state)
+            if q["구분"] != "소모품":
+                raise ValueError(f"{q['신청번호']}: 소모품 신청만 주문으로 묶을 수 있습니다.")
+            if st != "승인" or q.get("연결품의번호"):
+                raise ValueError(f"{q['신청번호']}: '{st}' 상태라 주문할 수 없습니다 (승인된 신청만 가능).")
+            if q.get("주문번호"):
+                raise ValueError(f"{q['신청번호']}: 이미 주문 {q['주문번호']} 에 묶여 있습니다.")
+        d = _to_date(extra.get("주문일")) or dt.date.today().isoformat()
+        if not _valid_date(d):
+            raise ValueError(f"주문일 형식이 올바르지 않습니다 (YYYY-MM-DD): {extra.get('주문일')}")
+        total = sum(_to_num(q.get("금액")) for q in picked)
+        pay = _to_num(extra.get("결제금액"), strict=True) if extra.get("결제금액") not in (None, "") else total
+        if pay < 0:
+            raise ValueError("결제금액은 0 이상이어야 합니다.")
+        use = _yes(extra.get("적립금사용"))
+        order = {"주문번호": "", "주문일": d, "배송일": "", "거래처": str(extra.get("거래처") or "").strip() or ORDER_VENDOR,
+                 "주문금액": total, "결제금액": pay, "적립금사용": "Y" if use else "N",
+                 "신청번호목록": ", ".join(q["신청번호"] for q in picked), "비고": str(extra.get("비고") or "")}
+        ws_o = wb[SHEET_ORDER]
+        _assign_order_number(wb, ws_o, order)
+        dep = None
+        if use:
+            dep = {c: "" for c in DEP_COLS}
+            dep.update({"일자": d, "거래처": order["거래처"], "구분": "사용", "금액": pay,
+                        "적요": f"소모품 주문 {order['주문번호']}", "증빙번호": order["주문번호"],
+                        "사용자": str(extra.get("사용자") or ""), "태그": str(extra.get("태그") or "")})
+            _validate("deposit", dep)
+            _validate_tag(dep, wb)
+            ws_d = wb[SHEET_DEP]
+            dep["_row"] = _next_row(ws_d)
+            _write_row(ws_d, DEP_COLS, dep["_row"], dep)
+        r = _next_row(ws_o)
+        _write_row(ws_o, ORDER_COLS, r, order)
+        for q in picked:
+            q["주문번호"] = order["주문번호"]
+            _write_row(ws, REQUEST_COLS, q["_row"], q)
+        _save(wb)
+        order["_row"] = r
+        return {"order": order, "deposit": dep, "numbers": [q["신청번호"] for q in picked]}
+
+
+def order_action(row: int, action: str, extra: dict | None = None, expect: dict | None = None) -> dict:
+    """주문 처리. deliver(배송일=오늘/지정) | undeliver(배송일 비움) | cancel(배송 전만: 신청 주문번호 해제·적립금 사용 행 삭제·주문 삭제)."""
+    extra = extra or {}
+    with _write_session() as wb:
+        ws = wb[SHEET_ORDER]
+        order = _find_row(ws, ORDER_COLS, row, "주문")
+        _check_expect("order", order, expect)
+        no = order["주문번호"]
+        result = {"order": order}
+        if action == "deliver":
+            d = _to_date(extra.get("배송일")) or dt.date.today().isoformat()
+            if not _valid_date(d):
+                raise ValueError(f"배송일 형식이 올바르지 않습니다 (YYYY-MM-DD): {extra.get('배송일')}")
+            order["배송일"] = d
+            _write_row(ws, ORDER_COLS, row, order)
+        elif action == "undeliver":
+            order["배송일"] = ""
+            _write_row(ws, ORDER_COLS, row, order)
+        elif action == "cancel":
+            if order.get("배송일"):
+                raise ValueError("배송된 주문은 취소할 수 없습니다. 배송일을 먼저 비우세요.")
+            ws_rq = wb[SHEET_RQ]
+            linked = [q for q in _rows(ws_rq, REQUEST_COLS) if q.get("주문번호") == no]
+            conv = [q["신청번호"] for q in linked if q.get("연결품의번호")]
+            if conv:
+                raise ValueError(f"품의로 전환된 신청({', '.join(conv)})이 있어 주문을 취소할 수 없습니다. 연결 품의를 먼저 삭제하세요.")
+            for q in linked:
+                q["주문번호"] = ""
+                _write_row(ws_rq, REQUEST_COLS, q["_row"], q)
+            ws_d = wb[SHEET_DEP]
+            dep = next((x for x in _rows(ws_d, DEP_COLS) if x["구분"] == "사용" and x.get("증빙번호") == no), None)
+            if dep is not None:
+                _delete_row(ws_d, dep["_row"])
+            _delete_row(ws, row)
+            result.update({"cancelled": True, "deposit_removed": dep is not None, "released": [q["신청번호"] for q in linked]})
+        else:
+            raise ValueError(f"알 수 없는 동작: {action}")
+        _save(wb)
+        return result
+
+
+def order_sheet(row: int) -> dict:
+    """발주서용: 주문 행 + 묶인 신청 줄 (순번·온라인코드·상품코드·품목·규격·수량·단가·금액·신청번호·신청인·상품링크·관련과제)."""
+    with _lock:
+        wb = _load()
+        _ensure_structure(wb)
+        order = _find_row(wb[SHEET_ORDER], ORDER_COLS, row, "주문")
+        listed = [n.strip() for n in str(order.get("신청번호목록") or "").split(",") if n.strip()]
+        reqs = [q for q in _rows(wb[SHEET_RQ], REQUEST_COLS) if q.get("주문번호") == order["주문번호"]]
+        reqs.sort(key=lambda q: listed.index(q["신청번호"]) if q["신청번호"] in listed else len(listed))
+        lines = [{"순번": i, **{c: q.get(c) for c in ("온라인코드", "상품코드", "품목", "규격", "수량", "단가", "금액",
+                                                   "신청번호", "신청인", "상품링크", "관련과제")}}
+                 for i, q in enumerate(reqs, 1)]
+        return {"order": order, "lines": lines, "total": sum(_to_num(x["금액"]) for x in lines)}
+
+
+def ratt_for(number: str) -> list[dict]:
+    with _lock:
+        wb = _load()
+        _ensure_structure(wb)
+        return [r for r in _rows(wb[SHEET_RATT], RATT_COLS) if r["신청번호"] == number]
+
+
+def ratt_names(number: str) -> list[str]:
+    """같은 신청의 기존 파일명 (중복 번호 부여용)."""
+    return [e["파일명"] for e in ratt_for(number)]
+
+
+def _sync_request_attach(wb, number: str, folder_url: str | None = None):
+    """신청의 첨부목록(원본 파일명 나열)·첨부폴더 열을 신청첨부 시트 기준으로 갱신."""
+    ws = wb[SHEET_RQ]
+    rec = next((x for x in _rows(ws, REQUEST_COLS) if x["신청번호"] == number), None)
+    if rec is None:
+        return
+    names = [a["원본파일명"] or a["파일명"] for a in _rows(wb[SHEET_RATT], RATT_COLS) if a["신청번호"] == number]
+    rec["첨부목록"] = ", ".join(names)[:32000]
+    if folder_url:
+        rec["첨부폴더"] = folder_url
+    _write_row(ws, REQUEST_COLS, rec["_row"], rec)
+
+
+def ratt_add(items: list[dict], folder_url: str | None = None) -> list[dict]:
+    """신청첨부 시트에 여러 행 추가 후 신청 요약 갱신. items 는 RATT_COLS 키를 가진 dict 목록."""
+    with _write_session() as wb:
+        ws = wb[SHEET_RATT]
+        known = {q["신청번호"] for q in _rows(wb[SHEET_RQ], REQUEST_COLS)}
+        out = []
+        for it in items:
+            _validate("ratt", it)
+            if it["신청번호"] not in known:
+                raise NotFound(f"신청 {it['신청번호']} 을(를) 찾을 수 없습니다.")
+            r = _next_row(ws)
+            _write_row(ws, RATT_COLS, r, it)
+            it["_row"] = r
+            out.append(it)
+        for number in {it["신청번호"] for it in items}:
+            _sync_request_attach(wb, number, folder_url)
+        _save(wb)
+        return out
+
+
+def ratt_delete(row: int, expect: dict | None = None) -> dict:
+    """신청첨부 행 삭제 후 신청 요약 갱신. 삭제된 행(드라이브파일ID 포함) 반환."""
+    with _write_session() as wb:
+        ws = wb[SHEET_RATT]
+        rec = _find_row(ws, RATT_COLS, row, "첨부")
+        _check_expect("ratt", rec, expect)
+        _delete_row(ws, row)
+        _sync_request_attach(wb, rec["신청번호"])
+        _save(wb)
+        return rec

@@ -62,6 +62,12 @@ def labor_page():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/request")
+def request_page():
+    """신청 화면: 같은 페이지, 주소로 모드 전환 (직접 접속은 연구원 화면)."""
+    return FileResponse(STATIC / "index.html")
+
+
 @app.post("/api/undo")
 def undo_last(body: dict | None = None):
     """직전 저장을 되돌림 (삭제·확정 취소·상태 변경 토스트의 '되돌리기'). body.write_id 가 직전 쓰기와 다르면 거부."""
@@ -179,9 +185,106 @@ def build_dashboard(data: dict) -> dict:
     }
 
 
+# ---------- 신청 / 주문 / 신청 첨부 ----------
+@app.post("/api/request/convert")
+def request_convert(body: dict):
+    """body: {rows: [신청 _row...], expects: [{신청번호, _snapshot?}...], extra: {품의 열...}} → {req, numbers, 품의번호}"""
+    return store.request_convert(body.get("rows") or [], body.get("extra") or {}, body.get("expects"))
+
+
+@app.post("/api/request/{row}/action")
+def request_action(row: int, body: dict):
+    """body: {action: approve|reject|unapprove|reopen, extra: {결재인?, 결재일?, 사유?}, expect}"""
+    return store.request_action(row, body.get("action") or "", body.get("extra") or {}, body.get("expect"))
+
+
+@app.get("/api/request/order-sheet/{order_row}")
+def request_order_sheet(order_row: int):
+    """발주서 데이터: {order, lines, total, settings: {구매처, 배송지, 담당자}}"""
+    data = store.order_sheet(order_row)
+    data["settings"] = {"구매처": settings.get("REQUEST_BUYER"), "배송지": settings.get("REQUEST_SHIP_TO"),
+                        "담당자": settings.get("REQUEST_CONTACT")}
+    return data
+
+
+@app.post("/api/order/create")
+def order_create(body: dict):
+    """body: {rows: [소모품 신청 _row...], expects: [...], extra: {주문일?, 거래처?, 결제금액?, 적립금사용?, 사용자?, 태그?, 비고?}}"""
+    return store.order_create(body.get("rows") or [], body.get("extra") or {}, body.get("expects"))
+
+
+@app.post("/api/order/{row}/action")
+def order_action(row: int, body: dict):
+    """body: {action: deliver|undeliver|cancel, extra: {배송일?}, expect}"""
+    return store.order_action(row, body.get("action") or "", body.get("extra") or {}, body.get("expect"))
+
+
+@app.get("/api/ratt/thumb/{file_id:path}")
+def ratt_thumb(file_id: str):
+    return evidence_thumb(file_id)
+
+
+@app.get("/api/ratt/{number}")
+def ratt_list(number: str):
+    items = store.ratt_for(number)
+    for it in items:
+        it["url"] = drive.file_url(it["드라이브파일ID"]) if it.get("드라이브파일ID") else ""
+    return {"items": items, "drive": drive.status()}
+
+
+@app.post("/api/ratt/{number}")
+async def ratt_upload(number: str, files: list[UploadFile] = File(...), note: str = Form("")):
+    """여러 파일을 드라이브 신청/YYYY/신청번호 에 올리고 신청첨부 시트에 기록 (실패 시 올린 파일은 휴지통)."""
+    rec = next((r for r in store.read_all()["request"] if r["신청번호"] == number), None)
+    if rec is None:
+        raise HTTPException(404, "신청 행을 찾을 수 없습니다.")
+    year = (rec.get("신청일") or dt.date.today().isoformat())[:4]
+    blobs = []
+    for f in files:  # 크기 검사를 먼저 전부 수행 (중간 실패로 고아 파일이 생기지 않도록)
+        data = await f.read()
+        if len(data) > 25 * 1024 * 1024:
+            raise HTTPException(413, f"{f.filename}: 25MB 를 넘습니다. 아무것도 올리지 않았습니다.")
+        if not data:
+            raise HTTPException(400, f"{f.filename}: 빈 파일입니다.")
+        blobs.append((f, data))
+    folder = drive.ensure_folder([year, number], root=drive.REQUEST_ROOT)
+    existing = store.ratt_names(number)
+    items, uploaded = [], []
+    try:
+        for f, data in blobs:
+            name = drive.build_request_filename(number, rec.get("품목") or "", f.filename or "", existing)
+            existing.append(name)
+            up = drive.upload(folder, name, data, f.content_type or "")
+            uploaded.append(up["id"])
+            items.append({"신청번호": number, "파일명": name, "원본파일명": f.filename or "", "드라이브파일ID": up["id"],
+                          "크기": up["size"], "업로드일": dt.date.today().isoformat(), "비고": note})
+        saved = store.ratt_add(items, folder["url"])
+    except Exception:
+        for fid in uploaded:  # 이번 요청에서 올린 파일은 되돌림(휴지통)
+            try:
+                drive.trash(fid)
+            except Exception:
+                pass
+        raise
+    for it in saved:
+        it["url"] = drive.file_url(it["드라이브파일ID"])
+    return {"items": saved, "folder": folder}
+
+
+def ratt_delete(row: int, body: dict | None = None):
+    rec = store.ratt_delete(row, (body or {}).get("expect"))
+    try:
+        drive.trash(rec.get("드라이브파일ID") or "")
+    except drive.DriveError as e:
+        return {"ok": True, "warning": f"장부에서는 지웠지만 드라이브 휴지통 이동 실패: {e}"}
+    return {"ok": True}
+
+
 @app.post("/api/{kind}")
 def create(kind: str, rec: dict):
     _kind(kind)
+    if kind in ("order", "ratt"):
+        raise HTTPException(400, "주문은 '주문 생성'(/api/order/create), 첨부는 파일 업로드로 추가하세요.")
     return store.create(kind, rec)
 
 
@@ -198,9 +301,19 @@ def update(kind: str, row: int, body: dict):
 def delete(kind: str, row: int, body: dict | None = None):
     if kind == "evidence":  # 경로 매칭 순서상 여기로 먼저 들어오므로 전용 처리(드라이브 휴지통 이동)로 위임
         return evidence_delete(row, body)
+    if kind == "ratt":  # 신청 첨부도 같은 방식
+        return ratt_delete(row, body)
     _kind(kind)
     body = body or {}
-    store.delete(kind, row, body.get("expect"), bool(body.get("cascade")))
+    res = store.delete(kind, row, body.get("expect"), bool(body.get("cascade"))) or {}
+    failed = 0
+    for fid in res.get("trash") or []:  # 신청을 첨부와 함께 지운 경우 드라이브 파일도 휴지통으로
+        try:
+            drive.trash(fid)
+        except Exception:
+            failed += 1
+    if failed:
+        return {"ok": True, "warning": f"장부에서는 지웠지만 첨부 {failed}건의 드라이브 휴지통 이동 실패"}
     return {"ok": True}
 
 

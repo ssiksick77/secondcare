@@ -17,6 +17,10 @@ FIELDS = {
     "OPENAI_BASE_URL": ("", False),               # 비우면 api.openai.com. OpenAI 호환 서버(Ollama, vLLM 등) 주소 가능
     "OPENAI_MODEL": ("gpt-4.1", False),
     "OPENAI_REASONING_EFFORT": ("", False),       # 비우면 미전송. 추론 모델(o-시리즈 등)에서만 low/medium/high
+    # 신청 화면 발주서 (소모품 주문)
+    "REQUEST_BUYER": ("", False),                  # 구매처 (예: 의료인공지능센터)
+    "REQUEST_SHIP_TO": ("", False),                # 배송지
+    "REQUEST_CONTACT": ("", False),                # 담당자 (이름·연락처)
 }
 
 
