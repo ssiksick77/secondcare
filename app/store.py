@@ -55,9 +55,9 @@ LABOR_KINDS = ["내부", "외부"]
 LABOR_STATUS = ["예정", "확정"]
 LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(공통)"}
 MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
-EXEC_COLS = ["거래번호", "관리번호", "원인발생일", "지급청구일", "지출완료일", "재원", "예산목", "세목",
+EXEC_COLS = ["거래번호", "관리번호", "원인발생일", "지급청구일", "결의일", "지출완료일", "재원", "예산목", "세목", "결제수단",
              "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록"]
-EXEC_STATUS = ["발생", "청구", "보완", "완료"]  # 날짜에서 계산, '보완'만 수동
+EXEC_STATUS = ["발생", "청구", "보완", "결의", "완료"]  # 날짜에서 계산, '보완'만 수동 (2026-10-14: 결의 단계 추가)
 LINKED_LOCKED = ["재원", "예산목", "금액", "거래처", "원인발생일"]  # 인건비·적립 연결 집행에서 잠그는 열
 REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예산목", "세목", "세세목", "거래처",
             "결제수단", "적요", "금액", "태그", "품의자", "비고", "상태"]
@@ -68,7 +68,7 @@ DEP_TYPES = ["적립", "사용"]
 BUDGET_HEAD_ROW = 8
 BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS  # A~D + E~M
 
-DATE_COLS = {"원인발생일", "지급청구일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일"}
+DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일"}
 NUM_COLS = {"금액", "인건비예산", "월액", "이월선급"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
 IDENT_COLS = {
@@ -334,7 +334,8 @@ def _ensure_structure(wb) -> bool:
             changed = True
 
     for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_FUND, "인건비예산", 16),
-                                   (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30)):
+                                   (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
+                                   (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12)):
         ws = wb[sheet]
         heads = _headers(ws)
         if col_name not in heads:
@@ -553,9 +554,11 @@ _SHEETS = {
 
 
 def exec_status(rec: dict) -> str:
-    """발생(청구일 없음) → 청구(지급청구일) → 보완(수동) → 완료(지출완료일). 날짜가 우선."""
+    """발생(청구일 없음) → 청구(지급청구일) → 보완(수동) → 결의(결의일) → 완료(지출완료일). 날짜가 우선."""
     if rec.get("지출완료일"):
         return "완료"
+    if rec.get("결의일"):
+        return "결의"
     if rec.get("지급청구일"):
         return "보완" if str(rec.get("상태") or "") == "보완" else "청구"
     return "발생"
@@ -689,9 +692,9 @@ def _validate(kind: str, rec: dict):
             raise ValueError("원인발생일은 필수입니다.")
         if _to_num(rec.get("금액")) == 0:
             raise ValueError("금액은 0이 될 수 없습니다.")
+        if rec.get("결제수단") and rec["결제수단"] not in PAY_METHODS:
+            raise ValueError("결제수단이 올바르지 않습니다.")
         if kind == "req":
-            if rec.get("결제수단") and rec["결제수단"] not in PAY_METHODS:
-                raise ValueError("결제수단이 올바르지 않습니다.")
             rec["상태"] = rec.get("상태") or "대기"
             if rec["상태"] not in REQ_STATUS:
                 raise ValueError("상태가 올바르지 않습니다.")
@@ -954,7 +957,7 @@ def req_to_exec(row: int, extra: dict, expect: dict | None = None) -> dict:
         if req["상태"] != "대기":
             raise ValueError(f"상태가 '{req['상태']}' 인 품의는 전환할 수 없습니다 (대기만 가능).")
         rec = {c: "" for c in EXEC_COLS}
-        for c in ("원인발생일", "재원", "예산목", "세목", "세세목", "거래처", "적요", "금액", "태그"):
+        for c in ("원인발생일", "재원", "예산목", "세목", "세세목", "거래처", "적요", "금액", "태그", "결제수단"):
             rec[c] = req.get(c)
         rec["사용자"] = req.get("품의자")
         rec["비고"] = f"품의 {req['품의번호']}" + (f" / {req['비고']}" if req.get("비고") else "")
@@ -1007,7 +1010,7 @@ def labor_action(row: int, action: str, pay_date: str | None = None, expect: dic
                 raise ValueError(f"지급일이 올바르지 않습니다: {pay_date}")
             p = _person(wb, rec["이름"])
             ex = {c: "" for c in EXEC_COLS}
-            ex.update({"원인발생일": d, "지급청구일": d, "지출완료일": d, "재원": rec["지급처"],
+            ex.update({"원인발생일": d, "지급청구일": d, "결의일": d, "지출완료일": d, "재원": rec["지급처"], "결제수단": "계좌이체",
                        "예산목": LABOR_ITEM.get(p.get("인건비구분") or "내부", LABOR_ITEM["내부"]),
                        "세목": "인건비", "거래처": rec["이름"], "금액": rec["금액"],
                        "적요": f"인건비 {rec['이름']} {int(rec['귀속월'][5:])}월분" + (f" (지급월 {rec['지급월']})" if rec["지급월"] != rec["귀속월"] else ""),
@@ -1119,7 +1122,7 @@ def _refresh_budget_summary(wb):
 
 # ---------- 증빙 / 상태 ----------
 def exec_action(row: int, action: str, expect: dict | None = None) -> dict:
-    """집행 행의 단계 처리. action: claim(지급청구일=오늘) | complete(지출완료일=오늘) | fix(보완) | unfix(보완 해제)"""
+    """집행 행의 단계 처리. action: claim(지급청구일=오늘) | resolve(결의일=오늘) | unresolve | complete(지출완료일=오늘) | uncomplete | fix(보완) | unfix"""
     with _write_session() as wb:
         ws = wb[SHEET_EXEC]
         rec = next((x for x in _rows(ws, EXEC_COLS) if x["_row"] == row), None)
@@ -1137,6 +1140,18 @@ def exec_action(row: int, action: str, expect: dict | None = None) -> dict:
             rec["지출완료일"] = today
             if not rec.get("지급청구일"):
                 rec["지급청구일"] = today
+            if not rec.get("결의일"):
+                rec["결의일"] = today
+        elif action == "resolve":  # 지출결의
+            if rec.get("지출완료일"):
+                raise ValueError("이미 지출완료된 건입니다.")
+            rec["결의일"] = today
+            if not rec.get("지급청구일"):
+                rec["지급청구일"] = today
+        elif action == "unresolve":
+            if rec.get("지출완료일"):
+                raise ValueError("지출완료된 건은 먼저 완료를 취소하세요.")
+            rec["결의일"] = ""
         elif action == "fix":
             if not rec.get("지급청구일"):
                 raise ValueError("지급청구일이 등록된 뒤에 보완을 표시할 수 있습니다.")

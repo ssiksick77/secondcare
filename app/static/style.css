@@ -403,3 +403,12 @@ body:not([data-tab="exec"]) #alert.formula, body.labor-mode #alert.formula { dis
 .file-pick input[type="file"]:focus-visible + .file-btn { outline: 2px solid var(--primary); outline-offset: 1px; }
 .file-pick input[type="file"]:disabled + .file-btn { background: var(--bg-head); color: var(--ink-3); }
 .file-names { font-size: 12px; color: var(--ink-2); }
+
+/* 집행내역: 적요+거래처 두 줄, 40px 행, 결의 상태 */
+#exec-table tbody td { height: 40px; }
+table.grid td.tit { line-height: 1.25; padding-top: 4px; padding-bottom: 4px; max-width: 320px; min-width: 160px; }
+table.grid td.tit .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.grid td.tit .s { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+table.grid td.tit:hover .t, table.grid td.tit:hover .s { white-space: normal; }
+.badge.결의::before { background: var(--margin); } .badge.결의 { color: var(--margin); }
+body.drawer-open #exec-table [data-col="결의일"], body.drawer-open #exec-table [data-col="결제수단"] { display: none; }
