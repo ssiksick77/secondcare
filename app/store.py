@@ -55,9 +55,9 @@ LABOR_KINDS = ["내부", "외부"]
 LABOR_STATUS = ["예정", "확정"]
 LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(공통)"}
 MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
-EXEC_COLS = ["거래번호", "관리번호", "원인발생일", "지급청구일", "결의일", "지출완료일", "재원", "예산목", "세목", "결제수단",
+EXEC_COLS = ["거래번호", "관리번호", "원인발생일", "지급청구일", "지출완료일", "결의일", "재원", "예산목", "세목", "결제수단",
              "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록"]
-EXEC_STATUS = ["발생", "청구", "보완", "결의", "완료"]  # 날짜에서 계산, '보완'만 수동 (2026-10-14: 결의 단계 추가)
+EXEC_STATUS = ["발생", "청구", "보완", "완료", "결의"]  # 날짜에서 계산, '보완'만 수동. 순서: 발생→요구→(보완)→완료→결의 (2026-10-14)
 LINKED_LOCKED = ["재원", "예산목", "금액", "거래처", "원인발생일"]  # 인건비·적립 연결 집행에서 잠그는 열
 REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예산목", "세목", "세세목", "거래처",
             "결제수단", "적요", "금액", "태그", "품의자", "비고", "상태"]
@@ -554,11 +554,11 @@ _SHEETS = {
 
 
 def exec_status(rec: dict) -> str:
-    """발생(청구일 없음) → 청구(지급청구일) → 보완(수동) → 결의(결의일) → 완료(지출완료일). 날짜가 우선."""
-    if rec.get("지출완료일"):
-        return "완료"
+    """발생(청구일 없음) → 청구(지급청구일) → 보완(수동) → 완료(지출완료일) → 결의(결의일). 날짜가 우선."""
     if rec.get("결의일"):
         return "결의"
+    if rec.get("지출완료일"):
+        return "완료"
     if rec.get("지급청구일"):
         return "보완" if str(rec.get("상태") or "") == "보완" else "청구"
     return "발생"
@@ -1131,26 +1131,26 @@ def exec_action(row: int, action: str, expect: dict | None = None) -> dict:
         _check_expect("exec", rec, expect)
         today = dt.date.today().isoformat()
         if action == "claim":
-            if rec.get("지출완료일"):
-                raise ValueError("이미 지출완료된 건입니다. 완료를 취소한 뒤 청구일을 바꾸세요.")
+            if rec.get("지출완료일") or rec.get("결의일"):
+                raise ValueError("이미 완료·결의된 건입니다. 뒤 단계를 취소한 뒤 청구일을 바꾸세요.")
             rec["지급청구일"] = today
         elif action == "uncomplete":
+            if rec.get("결의일"):
+                raise ValueError("결의된 건은 먼저 결의를 취소하세요.")
             rec["지출완료일"] = ""
         elif action == "complete":
+            if rec.get("결의일"):
+                raise ValueError("이미 결의된 건입니다.")
             rec["지출완료일"] = today
             if not rec.get("지급청구일"):
                 rec["지급청구일"] = today
-            if not rec.get("결의일"):
-                rec["결의일"] = today
-        elif action == "resolve":  # 지출결의
-            if rec.get("지출완료일"):
-                raise ValueError("이미 지출완료된 건입니다.")
+        elif action == "resolve":  # 결의 (마지막 단계). 비어 있는 앞 단계 날짜는 같은 날로 채움
             rec["결의일"] = today
             if not rec.get("지급청구일"):
                 rec["지급청구일"] = today
+            if not rec.get("지출완료일"):
+                rec["지출완료일"] = today
         elif action == "unresolve":
-            if rec.get("지출완료일"):
-                raise ValueError("지출완료된 건은 먼저 완료를 취소하세요.")
             rec["결의일"] = ""
         elif action == "fix":
             if not rec.get("지급청구일"):

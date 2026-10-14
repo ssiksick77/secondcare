@@ -13,7 +13,7 @@ const mmdd = d => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d.s
 const IDENT = { funds: ["재원코드"], exec: ["거래번호"], req: ["품의번호"], tags: ["태그명"], budget: ["재원", "변경회차", "신청일자"], deposit: ["일자", "거래처", "구분", "금액"] };
 const F = k => document.getElementById("f-" + k);
 const STATUS_LABEL = { 발생: "발생", 청구: "요구", 보완: "보완요청", 결의: "결의", 완료: "완료" };
-const STATUS_HELP = { 발생: "사용은 했고 지급청구(요구)는 아직", 청구: "지급청구일 등록됨, 결의 대기", 보완: "서류·증빙 보완이 필요하다고 표시한 건", 결의: "결의일 등록됨, 지출완료 대기", 완료: "지출완료일 등록됨" };  // 폼 필드 (예산목 이름에 괄호·점이 있어 CSS 선택자 불가)
+const STATUS_HELP = { 발생: "사용은 했고 지급청구(요구)는 아직", 청구: "지급청구일 등록됨, 지출완료 대기", 보완: "서류·증빙 보완이 필요하다고 표시한 건", 완료: "지출완료일 등록됨, 결의 대기", 결의: "결의일 등록됨 (마지막 단계)" };  // 폼 필드 (예산목 이름에 괄호·점이 있어 CSS 선택자 불가)
 const expectOf = (kind, r) => r ? Object.fromEntries((IDENT[kind] || []).map(c => [c, r[c]])) : undefined;
 
 let DATA = null;
@@ -23,7 +23,7 @@ const FILTERS = { exec: {}, req: {}, budget: {}, deposit: {} };
 const COLS = {
   exec: [
     { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "원인발생일", t: "date" }, { k: "지급청구일", t: "date" },
-    { k: "결의일", t: "date" }, { k: "지출완료일", t: "date" }, { k: "재원" }, { k: "예산목" }, { k: "세목" }, { k: "세세목", minor: true },
+    { k: "지출완료일", t: "date" }, { k: "결의일", t: "date" }, { k: "재원" }, { k: "예산목" }, { k: "세목" }, { k: "세세목", minor: true },
     { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => availableBudget(r["재원"], r["예산목"]), title: "이 건의 재원·예산목 가용잔액 (예산현액 − 집행 − 품의대기)" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 파일 수" }, { k: "비고", wrap: true, minor: true },
   ],
   req: [
@@ -68,7 +68,7 @@ function formFields(kind) {
     { k: "거래번호", type: "ro" },
     ...common,
     { k: "결제수단", type: "select", opts: ["", ...DATA.meta.pay_methods] }, { k: "사용자", type: "datalist" }, { k: "관리번호", type: "text", hint: "ERP/전자결재 문서번호 (선택)" },
-    { k: "지급청구일", type: "date" }, { k: "결의일", type: "date", hint: "지출결의" }, { k: "지출완료일", type: "date", hint: "비우면 미완료" }, { k: "비고", type: "text" },
+    { k: "지급청구일", type: "date" }, { k: "지출완료일", type: "date", hint: "비우면 미완료" }, { k: "결의일", type: "date", hint: "마지막 단계" }, { k: "비고", type: "text" },
   ];
   if (kind === "req") return [
     { k: "품의번호", type: "ro" },
@@ -276,16 +276,14 @@ function renderList(kind) {
       if (c.t === "badge") return `<td><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span></td>`;
       if (c.t === "title") return `<td class="tit" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}"><div class="t">${esc(v || "")}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`;
       if (kind === "exec" && c.k === "결의일" && !v) {
-        if (r["지출완료일"]) return `<td title="완료된 건 (결의일 미기록)">-</td>`;
-        return r["지급청구일"] ? `<td><button type="button" class="btn btn-inline" data-act="xact" data-action="resolve" data-row="${r._row}" title="오늘 날짜로 결의일 등록 (지출결의)">결의일=오늘</button></td>` : `<td class="muted">-</td>`;
+        return r["지출완료일"] ? `<td><button type="button" class="btn btn-inline" data-act="xact" data-action="resolve" data-row="${r._row}" title="오늘 날짜로 결의일 등록 (마지막 단계)">등록</button></td>` : `<td class="muted" title="지출완료 뒤에 등록">-</td>`;
       }
       if (kind === "exec" && (c.k === "지급청구일" || c.k === "지출완료일") && !v) {
-        if (c.k === "지급청구일") return r["지출완료일"] ? `<td title="완료된 건 (청구일 미기록)">-</td>` : `<td><button type="button" class="btn btn-inline" data-act="xact" data-action="claim" data-row="${r._row}" title="오늘 날짜로 지급청구일 등록">청구일=오늘</button></td>`;
+        if (c.k === "지급청구일") return r["지출완료일"] ? `<td title="완료된 건 (청구일 미기록)">-</td>` : `<td><button type="button" class="btn btn-inline" data-act="xact" data-action="claim" data-row="${r._row}" title="오늘 날짜로 지급청구일 등록 (요구)">등록</button></td>`;
         const fix = r["지급청구일"] ? (r["상태"] === "보완"
           ? `<button type="button" class="btn btn-inline" data-act="xact" data-action="unfix" data-row="${r._row}" title="보완 표시 해제">보완해제</button>`
           : `<button type="button" class="btn btn-inline" data-act="xact" data-action="fix" data-row="${r._row}" title="보완 필요로 표시">보완</button>`) : "";
-        const lbl = r["상태"] === "결의" ? '<span class="muted" title="결의했고 지출완료 대기 중">지급대기</span>' : "";
-        return `<td>${lbl}${fix}<button type="button" class="btn btn-inline" data-act="xact" data-action="complete" data-row="${r._row}" title="오늘 날짜로 지출완료일 등록">완료일=오늘</button></td>`;
+        return `<td>${fix}<button type="button" class="btn btn-inline" data-act="xact" data-action="complete" data-row="${r._row}" title="오늘 날짜로 지출완료일 등록">등록</button></td>`;
       }
       if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap">${esc(v)}${originBadge(r)}</td>`;
       return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}"${c.wrap && v ? ` title="${esc(v)}"` : ""}>${esc(v)}</td>`;
@@ -1207,9 +1205,9 @@ function renderExecTiles() {
   const tiles = [
     ["unclaimed", "발생 (미청구)", n(r => r["상태"] === "발생")],
     ["fix", "보완요청", n(r => r["상태"] === "보완")],
-    ["resolved", "결의 (지급대기)", n(r => r["상태"] === "결의")],
+    ["done", "완료 (결의 대기)", n(r => r["상태"] === "완료")],
     ["noevid", "증빙 없음", n(r => !hasEvidence(r))],
-    ["done", "완료", n(r => r["상태"] === "완료")],
+    ["resolved", "결의", n(r => r["상태"] === "결의")],
   ];
   $("#exec-tiles").innerHTML = tiles.map(([k, l, c]) => `<div class="card ${QUICK === k ? "on" : ""}" role="button" tabindex="0" data-quick="${k}" aria-pressed="${QUICK === k}"><div class="k">${l}</div><div class="v">${c}건</div></div>`).join("");
 }
@@ -1252,9 +1250,10 @@ async function renderExecDrawer(fetchEvid) {
   const st = r["상태"];
   const acts = [];
   if (st === "발생") acts.push(["claim", "지급청구일 등록 (요구)", true]);
-  if (st === "청구") { acts.push(["resolve", "결의일 등록 (오늘)", true]); acts.push(["complete", "지출완료 등록 (오늘)", false]); acts.push(["fix", "보완요청으로 표시", false]); }
-  if (st === "보완") { acts.push(["resolve", "결의일 등록 (오늘)", true]); acts.push(["unfix", "보완 해제", false]); }
-  if (st === "결의") { acts.push(["complete", "지출완료 등록 (오늘)", true]); acts.push(["unresolve", "결의 취소", false]); }
+  if (st === "청구") { acts.push(["complete", "지출완료 등록 (오늘)", true]); acts.push(["fix", "보완요청으로 표시", false]); }
+  if (st === "보완") { acts.push(["complete", "지출완료 등록 (오늘)", true]); acts.push(["unfix", "보완 해제", false]); }
+  if (st === "완료") { acts.push(["resolve", "결의일 등록 (오늘)", true]); acts.push(["uncomplete", "완료 취소", false]); }
+  if (st === "결의") { acts.push(["unresolve", "결의 취소", false]); }
   const evid = XD.evid || [];
   const kinds = [...new Set(evid.map(e => e["증빙종류"]).filter(Boolean))];
   const drive = XD.drive || {};
@@ -1265,8 +1264,8 @@ async function renderExecDrawer(fetchEvid) {
         <b>상태</b><span><span class="badge ${esc(st)}">${esc(STATUS_LABEL[st] || st)}</span> <span class="toolbar-note">${esc(STATUS_HELP[st] || "")}</span></span>
         <b>원인발생일</b><span>${esc(r["원인발생일"] || "-")}</span>
         <b>지급청구일</b><span>${esc(r["지급청구일"] || "-")}</span>
-        <b>결의일</b><span>${esc(r["결의일"] || "-")}</span>
         <b>지출완료일</b><span>${esc(r["지출완료일"] || "-")}</span>
+        <b>결의일</b><span>${esc(r["결의일"] || "-")}</span>
         <b>결제수단</b><span>${esc(r["결제수단"] || "-")}</span>
         <b>거래처</b><span>${esc(r["거래처"] || "-")}</span>
         <b>적요</b><span>${esc(r["적요"] || "-")}</span>
