@@ -278,8 +278,12 @@ function renderList(kind) {
       }
       if (c.t === "badge") {
         const nx = kind === "exec" ? NEXT_STEP[v] : null;
-        const fixBtn = kind === "exec" && (v === "청구" || v === "보완") ? `<button type="button" class="fixtg${v === "보완" ? " on" : ""}" data-act="xact" data-action="${v === "보완" ? "unfix" : "fix"}" data-row="${r._row}" title="${v === "보완" ? "보완 해제" : "보완 필요로 표시"}" aria-label="${v === "보완" ? "보완 해제" : "보완 필요로 표시"}" aria-pressed="${v === "보완"}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M6 2.2v4.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="6" cy="9.4" r="1" fill="currentColor"/></svg></button>` : "";
-        return `<td class="st-cell"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${fixBtn}${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</td>`;
+        // 두 줄: 윗줄 상태 + 다음 단계 체크, 아랫줄 그 단계의 날짜(+ 청구 단계에서는 보완 표시/해제 링크)
+        const stDate = kind === "exec" ? { 청구: r["지급청구일"], 보완: r["지급청구일"], 완료: r["지출완료일"], 결의: r["결의일"] }[v] : null;
+        const fixLink = kind === "exec" && v === "청구" ? `<button type="button" class="lnk" data-act="xact" data-action="fix" data-row="${r._row}" title="서류·증빙 보완 필요로 표시">보완 표시</button>`
+          : kind === "exec" && v === "보완" ? `<button type="button" class="lnk fix" data-act="xact" data-action="unfix" data-row="${r._row}" title="보완 표시 해제">해제</button>` : "";
+        const sub = kind === "exec" && (stDate || fixLink) ? `<div class="s">${stDate ? `<span title="${esc(stDate)}">${esc(mmdd(stDate))}</span>` : ""}${stDate && fixLink ? " · " : ""}${fixLink}</div>` : "";
+        return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</div>${sub}</td>`;
       }
       if (c.t === "title") return `<td class="tit" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}"><div class="t">${esc(v || "")}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`;
       if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap">${esc(v)}${originBadge(r)}</td>`;
