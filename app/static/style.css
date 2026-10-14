@@ -22,7 +22,7 @@
   --warn: #8A5A00;
   --warn-bg: #FFF4D6;
   --radius: 2px;
-  --row: 30px;
+  --row: 28px;
   --font: "Pretendard GOV", "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
   --shadow: 0 8px 24px -8px rgba(30,33,36,.28);
   /* 레거시 변수 (기존 규칙 호환) */
@@ -129,7 +129,7 @@ table.grid td.actions .btn + .btn { margin-left: 4px; }
 table.grid td .btn-inline { padding: 0 7px; min-height: 22px; font-size: 12px; margin-left: 6px; }
 table.grid .empty { text-align: center; color: var(--ink-2); padding: 26px; height: auto; white-space: normal; line-height: 1.6; }
 table.grid.compact { font-size: 12px; }
-table.grid.compact th, table.grid.compact td { height: 26px; }
+table.grid.compact th, table.grid.compact td { height: 24px; }
 table.grid th.sortable { cursor: pointer; user-select: none; }
 table.grid th.sortable:hover { color: var(--ink); }
 table.grid th .sort-ind { display: inline-block; width: 10px; height: 10px; margin-left: 3px; vertical-align: -1px; color: var(--ink); }
@@ -405,8 +405,8 @@ body:not([data-tab="exec"]) #alert.formula, body.labor-mode #alert.formula { dis
 .file-names { font-size: 12px; color: var(--ink-2); }
 
 /* 집행내역: 적요+거래처 두 줄, 40px 행, 결의 상태 */
-#exec-table tbody td { height: 40px; }
-table.grid td.tit { line-height: 1.25; padding-top: 4px; padding-bottom: 4px; max-width: 320px; min-width: 140px; }
+#exec-table tbody td { height: 36px; }
+table.grid td.tit { line-height: 1.2; padding-top: 2px; padding-bottom: 2px; max-width: 320px; min-width: 140px; }
 table.grid td.tit .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 table.grid td.tit .s { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 table.grid td.tit:hover .t, table.grid td.tit:hover .s { white-space: normal; }
@@ -420,8 +420,8 @@ table.grid td.st-cell .next svg { width: 12px; height: 12px; }
 table.grid td.st-cell .next:hover, table.grid td.st-cell .next:focus-visible { color: #fff; background: var(--primary); border-color: var(--primary); outline: none; }
 
 /* 상태 칸 두 줄: 윗줄 상태+체크, 아랫줄 단계 날짜·보완 링크 */
-table.grid td.st-cell { white-space: nowrap; line-height: 1.25; padding-top: 4px; padding-bottom: 4px; }
-table.grid td.st-cell .t { display: flex; align-items: center; }
+table.grid td.st-cell { white-space: nowrap; line-height: 1.2; padding-top: 2px; padding-bottom: 2px; }
+table.grid td.st-cell .t { display: flex; align-items: center; justify-content: center; }
 table.grid td.st-cell .s { font-size: 12px; color: var(--ink-2); margin-top: 1px; }
 table.grid td.st-cell .lnk { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 table.grid td.st-cell .lnk:hover { color: var(--ink); }
@@ -429,3 +429,13 @@ table.grid td.st-cell .lnk.fix, table.grid td.st-cell.fix .s { color: var(--aler
 
 /* 금액 열 강조 */
 table.grid td.amt { font-weight: 600; }
+
+/* 정렬 규칙: 글자 왼쪽 · 숫자 오른쪽 · 날짜·상태·구분·작업 가운데 */
+table.grid th.ctr, table.grid td.ctr { text-align: center; }
+table.grid th.actions, table.grid td.actions { text-align: center; }
+table.grid td.st-cell .s { text-align: center; }
+
+/* 상태 칸 폭·높이 고정: 버튼이 없어도 같은 자리 차지, 아랫줄도 항상 한 줄 */
+table.grid td.st-cell .next.ph { visibility: hidden; border-color: transparent; }
+table.grid td.st-cell .badge { min-width: 34px; justify-content: flex-start; }
+table.grid td.tit .t .origin { margin-left: 6px; vertical-align: 0; }

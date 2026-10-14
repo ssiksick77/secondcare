@@ -261,12 +261,14 @@ function renderList(kind) {
   const showMinor = kind === "exec" && localStorage.getItem("ledger-exec-minor") === "1";
   table.classList.toggle("show-minor", showMinor);
   const minorCls = c => c.minor ? " col-minor" : "";
+  const CENTER = new Set(["구분", "결제수단", "지급월", "귀속월", "월", "시작월", "종료월", "인건비구분", "변경회차", "상태", "증빙", "태그"]);
+  const ctrCls = c => (c.t === "date" || c.t === "badge" || CENTER.has(c.k)) ? " ctr" : "";
   const SORT_SVG = d => `<span class="sort-ind" aria-hidden="true"><svg viewBox="0 0 10 10"><path d="${d > 0 ? "M2 7l3-4 3 4" : "M2 3l3 4 3-4"}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
-  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</th>`).join("")}<th class="actions">작업</th></tr></thead>`;
+  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</th>`).join("")}<th class="actions">작업</th></tr></thead>`;
   const body = rows.length ? rows.map(r => {
     const tds = cols.map(c => {
       const v = c.calc ? c.calc(r) : r[c.k];
-      const td = html => html.replace(/^<td(?=[\s>])/, `<td data-col="${esc(c.k)}"`);
+      const td = html => { let h = html.replace(/^<td(?=[\s>])/, `<td data-col="${esc(c.k)}"`); if (ctrCls(c)) h = /^<td[^>]*\sclass="/.test(h) ? h.replace(/^(<td[^>]*\sclass=")/, "$1ctr ") : h.replace(/^<td/, '<td class="ctr"'); return h; };
       return td(cellHtml(c, r, v));
     }).join("");
     return rowHtml(r, tds);
@@ -283,10 +285,10 @@ function renderList(kind) {
         const fixLink = kind === "exec" && v === "청구" ? `<button type="button" class="lnk" data-act="xact" data-action="fix" data-row="${r._row}" title="서류·증빙 보완 필요로 표시">보완</button>`
           : kind === "exec" && v === "보완" ? `<button type="button" class="lnk fix" data-act="xact" data-action="unfix" data-row="${r._row}" title="보완 표시 해제">해제</button>` : "";
         const sub = kind === "exec" && (stDate || fixLink) ? `<div class="s">${stDate ? `<span title="${esc(stDate)}">${esc(mmdd(stDate))}</span>` : ""}${stDate && fixLink ? " · " : ""}${fixLink}</div>` : "";
-        return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : ""}</div>${sub}</td>`;
+        return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : (kind === "exec" ? '<span class="next ph" aria-hidden="true"></span>' : "")}</div>${sub || (kind === "exec" ? '<div class="s">&nbsp;</div>' : "")}</td>`;
       }
-      if (c.t === "title") return `<td class="tit" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}"><div class="t">${esc(v || "")}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`;
-      if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap">${esc(v)}${originBadge(r)}</td>`;
+      if (c.t === "title") return `<td class="tit" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}"><div class="t">${esc(v || "")}${kind === "exec" ? originBadge(r) : ""}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`;
+      if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap">${esc(v)}</td>`;
       return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}"${c.wrap && v ? ` title="${esc(v)}"` : ""}>${esc(v)}</td>`;
   }
   function rowHtml(r, tds) {
