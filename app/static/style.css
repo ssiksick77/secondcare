@@ -457,7 +457,7 @@ table.grid td.tit .t .origin { margin-left: 6px; vertical-align: 0; }
 #exec-table th[data-col="태그"] { width: 72px; }
 #exec-table th[data-col="증빙"] { width: 44px; }
 #exec-table th[data-col="비고"] { width: 140px; }
-#exec-table th.actions { width: 112px; }
+#exec-table th.sel, #exec-table td.sel { width: 32px; text-align: center; padding: 0; }
 #exec-table td { overflow: hidden; text-overflow: ellipsis; }
 #exec-table td.tit { max-width: none; min-width: 0; }
 
@@ -511,3 +511,9 @@ table.grid td.tit.memo:hover .memo-mark { border-top-color: var(--ink); }
 .memo-tip { position: fixed; z-index: 400; max-width: 360px; padding: 6px 9px; background: #FFFBE6; color: var(--ink); border: 1px solid #E3D9A6; border-radius: 2px; box-shadow: var(--shadow); font-size: 12px; line-height: 1.5; white-space: pre-wrap; pointer-events: none; }
 .memo-tip[hidden] { display: none; }
 @media print { .memo-tip { display: none !important; } }
+
+/* 집행내역 삭제 모드 */
+.del-bar { display: inline-flex; align-items: center; gap: 8px; }
+.del-bar .toolbar-note { flex: none; }
+#exec-table.delmode tbody tr { cursor: pointer; }
+.xd-foot { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--rule-2); }

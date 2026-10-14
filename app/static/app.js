@@ -266,11 +266,14 @@ function renderList(kind) {
   const table = $(`#${kind}-table`);
   let showMinor = false; try { showMinor = kind === "exec" && localStorage.getItem("ledger-exec-minor") === "1"; } catch { }
   table.classList.toggle("show-minor", showMinor);
+  if (kind === "exec") table.classList.toggle("delmode", DELMODE);
   const minorCls = c => c.minor ? " col-minor" : "";
   const CENTER = new Set(["구분", "결제수단", "지급월", "귀속월", "월", "시작월", "종료월", "인건비구분", "변경회차", "상태", "증빙", "태그"]);
   const ctrCls = c => (c.t === "date" || c.t === "badge" || CENTER.has(c.k)) ? " ctr" : "";
   const SORT_SVG = d => `<span class="sort-ind" aria-hidden="true"><svg viewBox="0 0 10 10"><path d="${d > 0 ? "M2 7l3-4 3 4" : "M2 3l3 4 3-4"}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
-  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="sortbtn">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</button></th>`).join("")}<th class="actions">작업</th></tr></thead>`;
+  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="sortbtn">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</button></th>`).join("")}${kind === "exec" ? "" : '<th class="actions">작업</th>'}</tr></thead>`;
+  const selHead = kind === "exec" && DELMODE ? `<th class="sel"><input type="checkbox" id="exec-sel-all" aria-label="표시된 행 모두 선택"></th>` : "";
+  const headFinal = selHead ? head.replace("<thead><tr>", "<thead><tr>" + selHead) : head;
   const body = rows.length ? rows.map(r => {
     const tds = cols.map(c => {
       const v = c.calc ? c.calc(r) : r[c.k];
@@ -278,7 +281,7 @@ function renderList(kind) {
       return td(cellHtml(c, r, v));
     }).join("");
     return rowHtml(r, tds);
-  }).join("") : `<tr><td class="empty" colspan="${cols.length + 1}">표시할 항목이 없습니다.</td></tr>`;
+  }).join("") : `<tr><td class="empty" colspan="${cols.length + (kind === "exec" ? (DELMODE ? 1 : 0) : 1)}">표시할 항목이 없습니다.</td></tr>`;
   function cellHtml(c, r, v) {
       if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미입력">-</span>' : fmt(v)}</td>`;
       if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit")) {
@@ -302,14 +305,14 @@ function renderList(kind) {
       ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}">집행전환</button>`
       : kind === "labor" ? (r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
     const editBtn = kind === "labor" && r["상태"] === "확정" ? "" : `<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button>`;
-    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === "exec" && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}">${tds}<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td></tr>`;
+    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === "exec" && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}">${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${kind === "exec" ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;
   }
   let foot = "";
   if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor")) {
     const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
-    foot = `<tfoot><tr class="total">${cols.map(c => c.k === "금액" ? `<td class="num amt${minorCls(c)}">${fmt(sum)}</td>` : `<td class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}<td class="actions"></td></tr></tfoot>`;
+    foot = `<tfoot><tr class="total">${cols.map(c => c.k === "금액" ? `<td class="num amt${minorCls(c)}">${fmt(sum)}</td>` : `<td class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}${kind === "exec" ? "" : '<td class="actions"></td>'}</tr></tfoot>`;
   }
-  table.innerHTML = head + `<tbody>${body}</tbody>` + foot;
+  table.innerHTML = headFinal + `<tbody>${body}</tbody>` + foot;
   table.querySelectorAll("th.sortable").forEach(th => th.addEventListener("click", () => {
     const k = th.dataset.sort; const cur = SORT[kind] || (defKey ? { k: defKey, dir: -1 } : null);
     SORT[kind] = cur && cur.k === k ? { k, dir: -cur.dir } : { k, dir: 1 }; renderList(kind);
@@ -921,6 +924,33 @@ function rovingTabs(list) {
 }
 ["#main-tabs", "#labor-tabs", ".subtabs"].forEach(sel => $$(sel).forEach(rovingTabs));
 
+// 집행내역 삭제 모드: [삭제] → 체크 열 표시 → [선택 n건 삭제] 한 번에 (서버 일괄 저장, 되돌리기 가능)
+let DELMODE = false; const DELSEL = new Set();
+function setDelMode(on) {
+  DELMODE = on; DELSEL.clear();
+  $("#exec-del-bar").hidden = !on; $("#btn-del-mode").hidden = on; $("#btn-edit-mode").hidden = on; $("button[data-add=exec]").hidden = on;
+  if (on) closeExecDrawer();
+  renderList("exec"); updateDelBar();
+  if (on) $("#exec-sel-all")?.focus(); else $("#btn-del-mode").focus();
+}
+function updateDelBar() { const n = DELSEL.size; $("#exec-del-run").disabled = !n; $("#exec-del-run").textContent = n ? `선택 ${n}건 삭제` : "선택 삭제"; const all = $("#exec-sel-all"); if (all) { const boxes = $$("#exec-table input[data-selrow]"); all.checked = boxes.length > 0 && boxes.every(b => b.checked); all.indeterminate = boxes.some(b => b.checked) && !all.checked; } }
+document.addEventListener("change", e => {
+  if (e.target.id === "exec-sel-all") { $$("#exec-table input[data-selrow]").forEach(b => { b.checked = e.target.checked; const r = Number(b.dataset.selrow); e.target.checked ? DELSEL.add(r) : DELSEL.delete(r); }); updateDelBar(); }
+  else if (e.target.dataset.selrow !== undefined) { const r = Number(e.target.dataset.selrow); e.target.checked ? DELSEL.add(r) : DELSEL.delete(r); updateDelBar(); }
+});
+$("#btn-del-mode").addEventListener("click", () => setDelMode(true));
+$("#exec-del-cancel").addEventListener("click", () => setDelMode(false));
+$("#exec-del-run").addEventListener("click", async () => {
+  const rows = [...DELSEL].map(r => DATA.exec.find(x => x._row === r)).filter(Boolean); if (!rows.length) return;
+  const ev = rows.filter(r => evidCount(r) > 0);
+  if (ev.length) { showAlert(`증빙이 등록된 ${ev.length}건(${ev.slice(0, 3).map(r => r["거래번호"]).join(", ")}${ev.length > 3 ? " …" : ""})은 증빙을 먼저 지워야 삭제할 수 있습니다.`, "warn"); return; }
+  const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
+  const body = rows.slice(0, 6).map(r => `${r["거래번호"]} · ${r["거래처"] || "-"} · ${fmt(r["금액"])}원`).join("\n") + (rows.length > 6 ? `\n… 외 ${rows.length - 6}건` : "") + `\n\n합계 ${fmt(sum)}원. 삭제 직후 알림의 [되돌리기]로 복구할 수 있습니다.`;
+  if (!await confirmDlg({ title: `집행 ${rows.length}건 삭제`, body, verb: `${rows.length}건 삭제`, danger: true })) return;
+  const btn = $("#exec-del-run"); btn.disabled = true;
+  try { const res = await api("POST", "/api/exec/batch", { deletes: rows.map(r => ({ row: r._row, expect: expectOf("exec", r) })) }); setDelMode(false); showAlert(`${res.deleted}건 삭제했습니다.`, "ok", { undo: true }); await load(); }
+  catch (e) { showAlert("삭제 실패: " + e.message, "error"); btn.disabled = false; }
+});
 let EXEC_CLICK_T = null;
 $("#exec-table").addEventListener("keydown", e => {
   const btn = e.target.closest(".rowbtn"); if (!btn) return;
@@ -934,6 +964,7 @@ document.addEventListener("click", e => {
   if (!b) {
     const tr = e.target.closest("#exec-table tbody tr[data-row]");
     // 한 번 클릭 = 상세 패널(잠깐 기다렸다가 열어 두 번째 클릭이 밀린 버튼 위에 떨어지지 않게), 두 번 클릭 = 수정 창
+    if (tr && DELMODE && !e.target.closest("input, button, a")) { const cb = tr.querySelector("input[data-selrow]"); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event("change", { bubbles: true })); } return; }
     if (tr && !e.target.closest("a, input, select")) {
       const row = Number(tr.dataset.row);
       if (e.detail >= 2) { clearTimeout(EXEC_CLICK_T); EXEC_CLICK_T = null; window.getSelection()?.removeAllRanges(); openForm("exec", row); }
@@ -1417,7 +1448,8 @@ async function renderExecDrawer(fetchEvid) {
         <div class="drop wide" id="evid-drop"><b>파일을 여기로 끌어다 놓으세요</b><br>이름은 재원_적요_증빙종류_금액_YYMMDD 로 자동 변환되어 드라이브 증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])} 에 저장됩니다.</div>
         <div class="wide" style="display:flex;justify-content:flex-end"><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
       </form>
-    </section>`;
+    </section>
+    <section class="xd-sec xd-foot">${(() => { const o = execOrigin(r), ev = evid.length; const dis = o?.locked || ev; return `<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${o?.locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${o?.locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
   bindEvidForm(r);
   XD.formRow = r._row;
   if (keep) { const f = $("#evid-form"); f.kind.value = keep.kind; if (keep.date) f.date.value = keep.date; f.note.value = keep.note; try { if (keep.files?.length && !f.files.disabled) f.files.files = keep.files; } catch { } }

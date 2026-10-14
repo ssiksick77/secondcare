@@ -170,9 +170,11 @@
       <span class="toolbar-sum" id="exec-sum"></span>
       <button type="button" class="btn" data-csv="exec" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn" id="btn-edit-mode" title="현재 필터의 집행을 팝업 격자에서 엑셀처럼 한꺼번에 편집">편집 모드</button>
+      <button type="button" class="btn" id="btn-del-mode" title="체크한 집행을 한 번에 삭제">삭제</button>
+      <span id="exec-del-bar" class="del-bar" hidden><span class="toolbar-note">삭제할 행을 체크하세요 (행 클릭으로도 선택)</span><button type="button" class="btn btn-danger-solid btn-sm" id="exec-del-run" disabled>선택 삭제</button><button type="button" class="btn btn-ghost btn-sm" id="exec-del-cancel">취소</button></span>
       <button type="button" class="btn btn-primary" data-add="exec">집행 추가</button>
     </div>
-    <p class="toolbar-note" style="margin:0 0 6px">행을 클릭하면 상세·증빙 패널, 두 번 클릭하면 수정 창이 열립니다.</p>
+    <p class="toolbar-note" style="margin:0 0 6px">행을 클릭하면 상세·증빙 패널, 두 번 클릭하면 수정 창이 열립니다. 삭제는 [삭제]를 누른 뒤 체크해서 진행합니다.</p>
     <div class="table-wrap"><table class="grid clickable" id="exec-table"></table></div>
   </section>
 
