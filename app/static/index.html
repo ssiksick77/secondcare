@@ -263,7 +263,7 @@
   </form>
 </dialog>
 
-<aside id="exec-drawer" class="drawer" aria-label="집행 상세" hidden>
+<aside id="exec-drawer" class="drawer" role="dialog" aria-labelledby="xd-title" aria-modal="false" hidden>
   <div class="drawer-head">
     <strong id="xd-title">집행 상세</strong>
     <span class="drawer-model" id="xd-sub"></span>
@@ -322,7 +322,7 @@
     <button type="button" class="btn btn-sm btn-primary" id="edit-save" disabled>저장</button>
     <button type="button" class="btn btn-sm btn-x" id="edit-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
   </div>
-  <div class="edit-wrap"><table class="grid edit" id="edit-grid"></table></div>
+  <div class="edit-wrap"><table class="grid edit" id="edit-grid" role="grid" aria-labelledby="edit-title"></table></div>
   <p class="toolbar-note edit-legend"><span class="lg chg">수정됨</span> <span class="lg new">새 행</span> <span class="lg del">삭제 표시</span> <span class="lg ro">편집 불가(자동·연결 행 잠금)</span> <span class="lg err">오류</span> · 저장은 전부 성공 또는 전부 취소이며, 저장 직후 토스트의 '되돌리기'로 복구할 수 있습니다.</p>
 </dialog>
 

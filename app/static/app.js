@@ -270,7 +270,7 @@ function renderList(kind) {
   const CENTER = new Set(["구분", "결제수단", "지급월", "귀속월", "월", "시작월", "종료월", "인건비구분", "변경회차", "상태", "증빙", "태그"]);
   const ctrCls = c => (c.t === "date" || c.t === "badge" || CENTER.has(c.k)) ? " ctr" : "";
   const SORT_SVG = d => `<span class="sort-ind" aria-hidden="true"><svg viewBox="0 0 10 10"><path d="${d > 0 ? "M2 7l3-4 3 4" : "M2 3l3 4 3-4"}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
-  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</th>`).join("")}<th class="actions">작업</th></tr></thead>`;
+  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="sortbtn">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</button></th>`).join("")}<th class="actions">작업</th></tr></thead>`;
   const body = rows.length ? rows.map(r => {
     const tds = cols.map(c => {
       const v = c.calc ? c.calc(r) : r[c.k];
@@ -294,7 +294,7 @@ function renderList(kind) {
         return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : (kind === "exec" ? '<span class="next ph" aria-hidden="true"></span>' : "")}</div>${sub || (kind === "exec" ? '<div class="s">&nbsp;</div>' : "")}</td>`;
       }
       if (c.t === "title") return `<td class="tit" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}"><div class="t">${esc(v || "")}${kind === "exec" ? originBadge(r) : ""}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`;
-      if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap">${esc(v)}</td>`;
+      if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap"><button type="button" class="rowbtn" aria-label="${esc(v)} 상세 열기 (Shift+Enter 수정)">${esc(v)}</button></td>`;
       return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}"${c.wrap && v ? ` title="${esc(v)}"` : ""}>${esc(v)}</td>`;
   }
   function rowHtml(r, tds) {
@@ -313,6 +313,7 @@ function renderList(kind) {
   table.querySelectorAll("th.sortable").forEach(th => th.addEventListener("click", () => {
     const k = th.dataset.sort; const cur = SORT[kind] || (defKey ? { k: defKey, dir: -1 } : null);
     SORT[kind] = cur && cur.k === k ? { k, dir: -cur.dir } : { k, dir: 1 }; renderList(kind);
+    table.querySelector(`th[data-sort="${CSS.escape(k)}"] .sortbtn`)?.focus();  // 다시 그린 뒤 같은 머리글에 포커스 유지
   }));
   const wrap = table.closest(".table-wrap"); if (wrap) { wrap.classList.toggle("empty", rows.length === 0); wrap.classList.toggle("scrollable", table.scrollWidth > wrap.clientWidth + 4); }
 
@@ -552,7 +553,9 @@ function renderChart(execs, allFunds, year, budget) {
   }
   svg += "</svg>";
   const legend = `<div class="legend">${funds.map((f, i) => `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>${esc(f)}</span>`).join("")}<span><i style="background:#1F3A93;height:2px;vertical-align:3px"></i>누적 집행</span>${showBudget ? `<span><i style="background:#B3261E;height:2px;vertical-align:3px"></i>예산현액</span>` : ""}</div>`;
-  $("#dash-chart").innerHTML = svg + legend;
+  const mlabel = mo => year ? parseInt(mo.slice(5)) + "월" : mo;
+  const srTable = `<table class="sr-only"><caption>월별 집행 추이 표</caption><thead><tr><th scope="col">월</th>${funds.map(f => `<th scope="col">${esc(f)}</th>`).join("")}<th scope="col">합계</th><th scope="col">누적</th></tr></thead><tbody>${months.map((mo, i) => `<tr><th scope="row">${esc(mlabel(mo))}</th>${series.map(s => `<td>${fmt(s[i])}원</td>`).join("")}<td>${fmt(totals[i])}원</td><td>${fmt(cum[i])}원</td></tr>`).join("")}</tbody></table>`;
+  $("#dash-chart").innerHTML = svg + legend + srTable;
 }
 
 // ---------- 입력 대화상자 ----------
@@ -878,8 +881,16 @@ function showBanner(msg) {
   a.textContent = msg; a.className = "alert error formula"; a.hidden = false;
 }
 
-function closeExecDrawer() { $("#exec-drawer").hidden = true; document.body.classList.remove("drawer-open"); if (XD.row != null) { XD.row = null; if (DATA) renderList("exec"); } }
-document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("#exec-drawer").hidden && !$("#dlg").open && !$("#dlg-settings").open) closeExecDrawer(); });
+function closeExecDrawer() {
+  const dr = $("#exec-drawer"), wasOpen = !dr.hidden, row = XD.row;
+  // 포커스가 드로어 안(또는 body)에 있을 때만 연 행으로 되돌림 — 탭 전환 등으로 닫힐 때는 건드리지 않음
+  const ae = document.activeElement, restore = wasOpen && (!ae || ae === document.body || dr.contains(ae));
+  dr.hidden = true; document.body.classList.remove("drawer-open");
+  if (XD.row != null) { XD.row = null; if (DATA) renderList("exec"); }
+  if (restore && row != null) $(`#exec-table tbody tr[data-row="${row}"] .rowbtn`)?.focus();
+}
+// Esc: 열린 대화상자가 있으면 그 대화상자가 먼저 처리 (드로어는 닫지 않음)
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !e.defaultPrevented && !$("#exec-drawer").hidden && !document.querySelector("dialog[open]")) closeExecDrawer(); });
 function switchTab(name) {
   document.body.dataset.tab = name;
   if (name !== "exec") closeExecDrawer();
@@ -891,8 +902,28 @@ function switchTab(name) {
   try { localStorage.setItem("ledger-tab", name); } catch { }
 }
 $$("#main-tabs [role=tab]").forEach(b => b.addEventListener("click", () => switchTab(b.id.replace("tab-", ""))));
+// 탭 목록: 선택된 탭만 Tab 순서에 두고(roving tabindex), 좌우 화살표·Home·End 로 이동하며 바로 선택
+function rovingTabs(list) {
+  const tabs = () => [...list.querySelectorAll("[role=tab]")];
+  const sync = () => tabs().forEach(t => t.tabIndex = t.getAttribute("aria-selected") === "true" ? 0 : -1);
+  sync();
+  new MutationObserver(sync).observe(list, { subtree: true, attributes: true, attributeFilter: ["aria-selected"] });
+  list.addEventListener("keydown", e => {
+    const ts = tabs(), i = ts.indexOf(e.target.closest("[role=tab]")); if (i < 0) return;
+    const j = { ArrowLeft: i - 1, ArrowRight: i + 1, Home: 0, End: ts.length - 1 }[e.key]; if (j == null) return;
+    e.preventDefault(); const t = ts[(j + ts.length) % ts.length]; t.click(); t.focus();
+  });
+}
+["#main-tabs", "#labor-tabs", ".subtabs"].forEach(sel => $$(sel).forEach(rovingTabs));
 
 let EXEC_CLICK_T = null;
+$("#exec-table").addEventListener("keydown", e => {
+  const btn = e.target.closest(".rowbtn"); if (!btn) return;
+  const tr = btn.closest("tr[data-row]"); if (!tr) return;
+  const row = Number(tr.dataset.row);
+  if ((e.key === "Enter" && e.shiftKey) || e.key === "F2") { e.preventDefault(); clearTimeout(EXEC_CLICK_T); EXEC_CLICK_T = null; openForm("exec", row); }
+  else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); clearTimeout(EXEC_CLICK_T); EXEC_CLICK_T = null; openExecDrawer(row); }
+});
 document.addEventListener("click", e => {
   const b = e.target.closest("button[data-act], button[data-add]");
   if (!b) {
@@ -1299,6 +1330,7 @@ function openExecDrawer(row) {
   $("#exec-drawer").hidden = false; document.body.classList.add("drawer-open");
   renderList("exec");
   renderExecDrawer(true);
+  $("#xd-close").focus();
 }
 $("#xd-close").addEventListener("click", closeExecDrawer);
 

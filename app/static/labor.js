@@ -164,7 +164,9 @@ function renderLaborPlan() {
       else if (sum > sal) { cls += " over"; sub = `초과 ${fmt(sum - sal)}`; }
       else { cls += " ok"; sub = "소요 일치"; }
       if (rows.some(r => r["상태"] === "확정")) cls += " has-done";
-      return `<td class="num ${cls}${i === 0 ? " amt" : ""}" data-name="${esc(p["이름"])}" data-month="${m}" title="${esc(p["이름"])} ${m} · 클릭하여 배분 편집">${rows.length ? fmt(sum) : '<span class="muted">—</span>'}<small>${esc(sub)}</small></td>`;
+      const stTxt = sub || (rows.length ? "배분 있음" : "미배정");
+      const aria = `${p["이름"]} ${i + 1}월 배분 편집, ${rows.length ? fmt(sum) + "원" : "배분 없음"}, ${stTxt}${rows.some(r => r["상태"] === "확정") ? ", 확정 포함" : ""}`;
+      return `<td class="num ${cls}${i === 0 ? " amt" : ""}" data-name="${esc(p["이름"])}" data-month="${m}" tabindex="0" role="button" aria-label="${esc(aria)}" title="${esc(p["이름"])} ${m} · 클릭하여 배분 편집">${rows.length ? fmt(sum) : '<span class="muted">—</span>'}<small>${esc(sub)}</small></td>`;
     }).join("");
     const pp = prepaid(p, y, through);
     const ppTxt = pp.balance > 0 ? `<span class="muted">선급</span> ${fmt(pp.balance)}` : pp.balance < 0 ? `<span class="warn">미지급</span> ${fmt(-pp.balance)}` : "-";
@@ -250,6 +252,12 @@ $("#dlg-cell").addEventListener("click", async e => {
 $("#dlg-cell").addEventListener("close", () => { if (!$("#dlg").open) CELL.name = null; });
 document.addEventListener("click", e => {
   const td = e.target.closest("#labor-plan td.cell"); if (td) openCellDialog(td.dataset.name, td.dataset.month);
+});
+// 키보드: 계획표 칸에서 Enter/Space → 배분 편집
+$("#labor-plan").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const td = e.target.closest("td.cell"); if (!td) return;
+  e.preventDefault(); openCellDialog(td.dataset.name, td.dataset.month);
 });
 
 // ---------- 기간 일괄 생성 ----------
