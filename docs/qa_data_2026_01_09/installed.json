@@ -1,0 +1,31 @@
+{
+  "run_id": "QA26JANSEP_V1",
+  "target": "C:\\Users\\parkj\\Desktop\\Project\\01 in progress\\CAIH_회계장부_2026\\의료인공지능센터_지출장부_2026.xlsx",
+  "original_backup": "C:\\Users\\parkj\\Desktop\\Project\\01 in progress\\CAIH_회계장부_2026\\app\\backup\\QA_ORIGINAL_QA26JANSEP_V1\\original_ledger.xlsx",
+  "env_backup": "C:\\Users\\parkj\\Desktop\\Project\\01 in progress\\CAIH_회계장부_2026\\app\\backup\\QA_ORIGINAL_QA26JANSEP_V1\\original.env",
+  "original_sha256": "699bb9da0ead83649e32824ef8f1da73f342c58ee984d012d949b40797a3c7b8",
+  "baseline": "C:\\Users\\parkj\\Desktop\\Project\\01 in progress\\CAIH_회계장부_2026\\docs\\qa_data_2026_01_09\\synthetic_baseline.xlsx",
+  "installed_sha256": "8fabdc865602bf5aa35d9b8f878cc66da700f43e80d7cf15b383345b44912100",
+  "counts": {
+    "funds": 10,
+    "budget": 11,
+    "exec": 147,
+    "req": 8,
+    "deposit": 6,
+    "tags": 3,
+    "evidence": 0,
+    "people": 2,
+    "salary": 2,
+    "payee": 0,
+    "labor": 18,
+    "ladj": 0,
+    "request": 16,
+    "order": 2,
+    "ratt": 0
+  },
+  "delivery": "Application POST handlers wrote isolated native workbook; verified workbook installed at active configured path; GET /api/all readback verified. No browser input claimed.",
+  "supplier_setting_change": "Append fictional suppliers; preserve existing suppliers. Other settings unchanged.",
+  "env_original_sha256": "ac479745bf14da682cb1dd8df0ddd599d0c287392f31f59fa9e760b4ed40fdda",
+  "readback_verified": true,
+  "env_installed_sha256": "a28b7b0a16b02eabba6067ad806004d25714a1641e0fcbc202abb9553228577f"
+}
