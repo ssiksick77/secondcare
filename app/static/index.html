@@ -15,6 +15,7 @@
   <button type="button" class="btn btn-ghost" id="btn-reload">새로고침</button>
   <span class="top-sep" aria-hidden="true"></span>
   <button type="button" class="btn btn-ghost btn-mode" id="btn-mode" title="인건비 관리 화면으로 전환">인건비</button>
+  <button type="button" class="btn btn-ghost btn-mode" id="btn-request" title="지출 신청 화면으로 전환 (담당자)">신청</button>
 <button type="button" class="btn btn-ghost btn-icon" id="btn-settings" aria-label="설정" title="설정 (구글 드라이브 연결 · AI)">
   <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="3"/>
@@ -45,6 +46,18 @@
     <li><button role="tab" id="ltab-payee" aria-controls="lpanel-payee" aria-selected="false">지급처</button></li>
   </ul>
   <label class="tabs-year">연도 <select id="labor-year"></select></label>
+</nav>
+
+<nav class="tabs request" id="request-tabs" aria-label="신청 메뉴" hidden>
+  <span class="tabs-label">지출 신청</span>
+  <ul role="tablist">
+    <li><button role="tab" id="rtab-장비" data-rtype="장비" aria-controls="rpanel" aria-selected="true">장비</button></li>
+    <li><button role="tab" id="rtab-소모품" data-rtype="소모품" aria-controls="rpanel" aria-selected="false">소모품</button></li>
+    <li><button role="tab" id="rtab-학회" data-rtype="학회" aria-controls="rpanel" aria-selected="false">학회</button></li>
+    <li><button role="tab" id="rtab-기타" data-rtype="기타" aria-controls="rpanel" aria-selected="false">기타</button></li>
+  </ul>
+  <span class="req-role req-admin-only" title="회계대장에서 들어와 승인·반려·품의 전환·주문을 처리할 수 있습니다">담당자</span>
+  <label class="tabs-year">연도 <select id="request-year"></select></label>
 </nav>
 
 <main id="main" tabindex="-1">
@@ -113,6 +126,36 @@
       <button type="button" class="btn btn-primary" data-add="payee">외부 지급처 추가</button>
     </div>
     <div class="table-wrap"><table class="grid" id="payee-table"></table></div>
+  </section>
+
+  <!-- 신청: 하위 탭(구분)마다 같은 목록을 걸러 보여 줌 -->
+  <section id="rpanel" role="tabpanel" aria-labelledby="rtab-장비" hidden>
+    <div class="toolbar">
+      <label>상태 <select data-filter="상태" data-kind="request"><option value="">전체</option><option>신청</option><option>승인</option><option>반려</option><option>품의전환</option><option>완료</option></select></label>
+      <label>신청인 <select data-filter="신청인" data-kind="request"><option value="">전체</option></select></label>
+      <label>관련과제 <select data-filter="관련과제" data-kind="request"><option value="">전체</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="request" placeholder="품목, 규격, 사유, 번호"></label>
+      <span class="toolbar-sum" id="request-sum"></span>
+      <button type="button" class="btn req-admin-only" data-csv="request" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
+      <button type="button" class="btn btn-primary" data-add="request">신청 추가</button>
+    </div>
+    <div class="req-selbar req-admin-only" id="req-selbar" role="group" aria-label="선택한 신청 처리">
+      <span class="req-sel-n" id="req-sel-n" aria-live="polite">선택 없음</span>
+      <button type="button" class="btn btn-sm" data-rq="approve" disabled>승인</button>
+      <button type="button" class="btn btn-sm" data-rq="reject" disabled>반려</button>
+      <button type="button" class="btn btn-sm" data-rq="convert" disabled title="승인된 신청을 품의 1건으로">품의 전환</button>
+      <button type="button" class="btn btn-sm" data-rq="order" id="rq-order-btn" disabled title="승인된 소모품 신청을 주문 1건으로 묶음">주문 생성</button>
+      <button type="button" class="btn btn-sm btn-danger" data-rq="delete" disabled>삭제</button>
+      <button type="button" class="btn btn-sm btn-ghost" data-rq="clear" disabled>선택 해제</button>
+      <span class="toolbar-note">체크한 신청에 한꺼번에 적용합니다. 행을 누르면 상세 패널이 열립니다.</span>
+    </div>
+    <p class="toolbar-note req-researcher-note">신청을 추가하면 담당자가 승인 또는 반려합니다. 신청 상태일 때만 수정·삭제할 수 있습니다. 행을 누르면 상세 패널(첨부 업로드)이, 두 번 누르면 수정 창이 열립니다.</p>
+    <div class="table-wrap"><table class="grid clickable" id="request-table"></table></div>
+    <section id="order-section" class="req-admin-only" aria-labelledby="order-h" hidden>
+      <h2 id="order-h">주문 <span class="muted" style="font-weight:400">(소모품 묶음 · 적립금 사용)</span></h2>
+      <p class="toolbar-note" style="margin:0 0 6px">승인된 소모품 신청을 체크하고 [주문 생성]을 누르면 주문 1건으로 묶입니다. 배송일을 등록하면 배송 완료, 배송 전에는 취소할 수 있습니다(연결 신청은 주문 해제, 적립금 사용 기록은 삭제).</p>
+      <div class="table-wrap"><table class="grid compact" id="order-table"></table></div>
+    </section>
   </section>
 
   <!-- 대시보드 -->
@@ -281,6 +324,22 @@
   <div class="drawer-body" id="xd-body"></div>
 </aside>
 
+<aside id="req-drawer" class="drawer" role="dialog" aria-labelledby="rd-title" aria-modal="false" tabindex="-1" hidden>
+  <div class="drawer-head xd-head">
+    <div class="xd-headtxt">
+      <strong id="rd-title">신청 상세</strong>
+      <span class="drawer-model" id="rd-sub"></span>
+    </div>
+    <div class="xd-nav" role="group" aria-label="신청 건 이동 (↑↓ 키)">
+      <button type="button" class="btn btn-sm btn-icon" id="rd-prev" aria-label="이전 건" title="이전 건 (↑)"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 7.5L6 4l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <span class="xd-pos" id="rd-pos" aria-live="polite"></span>
+      <button type="button" class="btn btn-sm btn-icon" id="rd-next" aria-label="다음 건" title="다음 건 (↓)"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <button type="button" class="btn btn-sm btn-x" id="rd-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="drawer-body" id="rd-body"></div>
+</aside>
+
 <aside id="ai-drawer" class="drawer" aria-label="AI 도우미" hidden>
   <div class="drawer-head">
     <strong>AI 도우미</strong>
@@ -385,6 +444,42 @@
   </form>
 </dialog>
 
+<!-- 신청: 소모품 주문 생성 -->
+<dialog id="dlg-order" aria-labelledby="order-title">
+  <form id="dlg-order-form" method="dialog" novalidate>
+    <h2 id="order-title">주문 생성</h2>
+    <div class="table-wrap"><table class="grid compact" id="order-lines"></table></div>
+    <div class="fields" style="margin-top:12px">
+      <label for="ord-date">주문일<input type="date" id="ord-date" required></label>
+      <label for="ord-vendor">거래처<input type="text" id="ord-vendor" list="dl-거래처" autocomplete="off"></label>
+      <label for="ord-pay">결제금액 <small>(비우면 주문금액)</small><input type="text" id="ord-pay" inputmode="numeric" class="num-input" placeholder="0"></label>
+      <label class="chk wide" for="ord-dep"><input type="checkbox" id="ord-dep" checked> 적립금 사용으로 기록 (적립금 탭에 거래처 '사용' 1건, 증빙번호 = 주문번호)</label>
+      <label for="ord-user">사용자<input type="text" id="ord-user" list="dl-사용자" autocomplete="off"></label>
+      <label class="mid" for="ord-memo">비고<input type="text" id="ord-memo"></label>
+    </div>
+    <p class="toolbar-note" id="ord-note" style="margin:10px 0 0"></p>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="ord-cancel">취소</button><button type="submit" class="btn btn-primary" id="ord-save">주문 생성</button></div>
+  </form>
+</dialog>
+
+<!-- 신청: 발주서 (인쇄용) -->
+<dialog id="dlg-order-sheet" class="dlg-sheet" aria-labelledby="sheet-title">
+  <form method="dialog">
+    <div id="order-sheet" class="order-sheet"></div>
+    <p class="toolbar-note" id="sheet-note" hidden></p>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="sheet-close">닫기</button><button type="button" class="btn btn-primary" id="sheet-print">인쇄</button></div>
+  </form>
+</dialog>
+
+<!-- 신청: 학회 여비 계산기 (다음 단계에서 구현). 훅: request.js openConfCalc() → 계산 결과를 상세 JSON(합계 포함)과 금액에 채움 -->
+<dialog id="dlg-conf" aria-labelledby="conf-title" class="dlg-small">
+  <form method="dialog">
+    <h2 id="conf-title">학회 여비 계산기</h2>
+    <p class="toolbar-note" id="conf-body">계산기는 다음 단계에서 추가됩니다. 지금은 신청 폼의 금액 칸에 예상 여비 합계를 직접 입력하세요.</p>
+    <div class="dlg-actions"><span class="sp"></span><button type="submit" class="btn btn-primary">닫기</button></div>
+  </form>
+</dialog>
+
 <!-- 관리 패널 -->
 
 <dialog id="dlg-settings" aria-labelledby="settings-title">
@@ -401,6 +496,14 @@
         <span class="toolbar-note" id="drive-why"></span>
       </div>
       <p class="toolbar-note" style="margin:8px 0 0">버튼을 누르면 바로 적용됩니다(아래 저장 버튼과 무관). 앱이 만든 '증빙관리' 폴더만 접근합니다. 발급 절차: <a href="/readme#drive" target="_blank" rel="noopener">사용 안내 열기</a></p>
+    </fieldset>
+    <fieldset class="wide s-group" id="s-request" style="margin:0 0 14px">
+      <legend>신청 · 발주서 (소모품 주문 발주서 머리글)</legend>
+      <div class="fields">
+        <label for="s-rq-buyer">구매처<input id="s-rq-buyer" name="REQUEST_BUYER" type="text" autocomplete="off" placeholder="예: 의료인공지능센터"></label>
+        <label class="mid" for="s-rq-ship">배송지<input id="s-rq-ship" name="REQUEST_SHIP_TO" type="text" autocomplete="off" placeholder="주소 · 호실"></label>
+        <label class="wide" for="s-rq-contact">담당자 <small>(이름 · 연락처)</small><input id="s-rq-contact" name="REQUEST_CONTACT" type="text" autocomplete="off"></label>
+      </div>
     </fieldset>
     <p class="toolbar-note" style="margin:0 0 8px"><b>AI 도우미 (선택 · 유료)</b> — 장부 데이터가 선택한 AI 서버로 전송되며 사용량에 따라 과금됩니다. 저장하면 <code>app/.env</code>에 기록되고 즉시 적용됩니다. 키는 이 PC에만 저장됩니다.</p>
     <div class="fields">
@@ -453,7 +556,7 @@
       <span class="sp"></span>
       <button type="button" class="btn" id="s-test" title="입력한 값으로 짧은 호출을 보내 확인하고, 성공하면 저장합니다">연결 확인 후 저장</button>
       <button type="button" class="btn btn-ghost" id="s-cancel">닫기</button>
-      <button type="submit" class="btn btn-primary" id="s-save" title="AI 설정 저장">AI 설정 저장</button>
+      <button type="submit" class="btn btn-primary" id="s-save" title="신청·발주서와 AI 설정 저장">설정 저장</button>
     </div>
   </form>
 </dialog>
@@ -467,5 +570,7 @@
 <script src="/static/app.js"></script>
 <script src="/static/labor.js"></script>
 <script src="/static/edit.js"></script>
+<script src="/static/request.js"></script>
+<div id="print-sheet" class="print-root" aria-hidden="true"></div>
 </body>
 </html>

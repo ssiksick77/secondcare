@@ -56,6 +56,7 @@ function tagField(extra = {}) {
 // 입력 폼 필드 정의 (type: text|date|num|select|datalist|textarea)
 function formFields(kind) {
   if (typeof LABOR_FORMS !== "undefined" && LABOR_FORMS[kind]) return LABOR_FORMS[kind]();
+  if (typeof REQUEST_FORMS !== "undefined" && REQUEST_FORMS[kind]) return REQUEST_FORMS[kind]();
   const funds = fundOptions();
   const items = DATA.meta.budget_items;
   // 실무 입력 순서: 날짜 → 재원 → 예산목 → 거래처 → 금액 → 적요 → 세목 → 태그 → (부가 정보)
@@ -175,6 +176,7 @@ function fillSelects() {
   setOptions($("#rep-fund"), ["", ...funds], ["전체", ...funds]);
   setOptions($("#rep-year"), ["", ...ys], ["전체", ...ys]);
   if (typeof fillLaborSelects === "function") fillLaborSelects();
+  if (typeof fillRequestSelects === "function") fillRequestSelects();
   if (!$("#dash-year").dataset.init) {
     // 올해 데이터가 없으면 데이터가 있는 가장 최근 연도
     const thisYear = String(new Date().getFullYear());
@@ -221,9 +223,12 @@ function renderAll() {
   renderList("exec"); renderList("req"); renderList("budget"); renderList("funds"); renderList("deposit"); renderList("tags");
   renderBudgetSummary(); renderDepositSummary();
   if (typeof renderLabor === "function") renderLabor();
+  if (typeof renderRequest === "function") renderRequest();
 }
 
 const SORT = {};  // kind -> {k, dir}
+// 목록별 선택 열·행 표시 훅 (신청 화면: request.js 가 채움). {head(), cell(r), rowCls(r), after()}
+const SEL_HOOK = {};
 // 행이 많으면 처음 LIST_LIMIT 건만 그리고 '더 보기'로 나머지 (합계·CSV 는 항상 전체 기준). 필터가 바뀌면 다시 접힘
 const LIST_LIMIT = 400, LIST_MORE = {};
 const norm = s => String(s ?? "").toLowerCase().replace(/,/g, "");
@@ -238,7 +243,9 @@ function filtered(kind) {
     if (f["구분"] && r["구분"] !== f["구분"]) return false;
     if (f["이름"] && r["이름"] !== f["이름"]) return false;
     if (f["지급처"] && r["지급처"] !== f["지급처"]) return false;
-    const d = r["원인발생일"] || r["일자"] || r["지급월"] || "";
+    if (f["신청인"] && r["신청인"] !== f["신청인"]) return false;
+    if (f["관련과제"] && r["관련과제"] !== f["관련과제"]) return false;
+    const d = r["원인발생일"] || r["일자"] || r["지급월"] || r["신청일"] || "";
     if (f.year && d.slice(0, 4) !== f.year) return false;
     if (f.month && d.slice(5, 7) !== f.month) return false;
     if (f.unpaid && r["지출완료일"]) return false;
@@ -258,7 +265,8 @@ function filtered(kind) {
 function renderList(kind) {
   const cols = COLS[kind].filter(c => !c.hide);  // hide: CSV 에는 포함, 화면에서는 생략
   const rows = (kind === "funds" || kind === "tags") ? [...DATA[kind]] : filtered(kind);
-  const defKey = { exec: "원인발생일", req: "원인발생일", deposit: "일자", labor: "지급월", salary: "시작월", ladj: "월" }[kind];
+  const defKey = { exec: "원인발생일", req: "원인발생일", deposit: "일자", labor: "지급월", salary: "시작월", ladj: "월", request: "신청일" }[kind];
+  const noAct = kind === "exec" || kind === "request";  // 작업 열 없음: 행 클릭 = 상세 패널, 두 번 클릭 = 수정
   const sort = SORT[kind] || (defKey ? { k: defKey, dir: -1 } : null);
   if (sort) {
     const col = cols.find(c => c.k === sort.k);
@@ -273,11 +281,11 @@ function renderList(kind) {
   const CENTER = new Set(["구분", "결제수단", "지급월", "귀속월", "월", "시작월", "종료월", "인건비구분", "변경회차", "상태", "증빙", "태그"]);
   const ctrCls = c => (c.t === "date" || c.t === "badge" || CENTER.has(c.k)) ? " ctr" : "";
   const SORT_SVG = d => `<span class="sort-ind" aria-hidden="true"><svg viewBox="0 0 10 10"><path d="${d > 0 ? "M2 7l3-4 3 4" : "M2 3l3 4 3-4"}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
-  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="sortbtn">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</button></th>`).join("")}${kind === "exec" ? "" : '<th class="actions">작업</th>'}</tr></thead>`;
-  const selHead = kind === "exec" && DELMODE ? `<th class="sel"><input type="checkbox" id="exec-sel-all" aria-label="표시된 행 모두 선택"></th>` : "";
+  const head = `<thead><tr>${cols.map(c => `<th class="sortable${c.t === "num" ? " num" : ""}${c.amt ? " amt" : ""}${minorCls(c)}${ctrCls(c)}" data-col="${esc(c.k)}" data-sort="${esc(c.k)}" title="${esc(c.title || "클릭하여 정렬")}" aria-sort="${sort && sort.k === c.k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}"><button type="button" class="sortbtn">${esc(c.label || c.k)}${sort && sort.k === c.k ? SORT_SVG(sort.dir) : ""}</button></th>`).join("")}${noAct ? "" : '<th class="actions">작업</th>'}</tr></thead>`;
+  const selHead = kind === "exec" && DELMODE ? `<th class="sel"><input type="checkbox" id="exec-sel-all" aria-label="표시된 행 모두 선택"></th>` : (SEL_HOOK[kind]?.head() || "");
   const headFinal = selHead ? head.replace("<thead><tr>", "<thead><tr>" + selHead) : head;
   const shown = rows.length > LIST_LIMIT && !LIST_MORE[kind] ? rows.slice(0, LIST_LIMIT) : rows;
-  const span = cols.length + (kind === "exec" ? (DELMODE ? 1 : 0) : 1);
+  const span = cols.length + (noAct ? 0 : 1) + (selHead ? 1 : 0);
   const more = shown.length < rows.length ? `<tr class="more-row"><td colspan="${span}"><button type="button" class="btn btn-sm" data-more="${kind}">더 보기 (${(rows.length - shown.length).toLocaleString("ko-KR")}건 남음)</button></td></tr>` : "";
   const body = rows.length ? shown.map(r => {
     const tds = cols.map(c => {
@@ -288,8 +296,9 @@ function renderList(kind) {
     return rowHtml(r, tds);
   }).join("") + more : `<tr><td class="empty" colspan="${span}">표시할 항목이 없습니다.</td></tr>`;
   function cellHtml(c, r, v) {
+      if (c.html) return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}">${c.html(r)}</td>`;  // 열 정의가 직접 그리는 칸 (값은 함수 안에서 esc)
       if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미입력">-</span>' : fmt(v)}</td>`;
-      if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit")) {
+      if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit" || kind === "request")) {
         return `<td title="${esc(v)}">${esc(mmdd(v))}</td>`;  // 내역 탭은 MM/DD, 전체 날짜는 툴팁
       }
       if (c.t === "badge") {
@@ -299,10 +308,10 @@ function renderList(kind) {
         const fixLink = kind === "exec" && v === "청구" ? `<button type="button" class="lnk" data-act="xact" data-action="fix" data-row="${r._row}" title="서류·증빙 보완 필요로 표시">보완</button>`
           : kind === "exec" && v === "보완" ? `<button type="button" class="lnk fix" data-act="xact" data-action="unfix" data-row="${r._row}" title="보완 표시 해제" aria-label="보완 해제">해제</button>` : "";
         const sub = kind === "exec" && (stDate || fixLink) ? `<div class="s">${stDate ? `<span title="${esc(stDate)}">${esc(mmdd(stDate))}</span>` : ""}${stDate && fixLink ? " · " : ""}${fixLink}</div>` : "";
-        return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(STATUS_HELP[v] || "")}">${esc(STATUS_LABEL[v] || v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : (kind === "exec" ? '<span class="next ph" aria-hidden="true"></span>' : "")}</div>${sub || (kind === "exec" ? '<div class="s">&nbsp;</div>' : "")}</td>`;
+        return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(kind === "exec" ? STATUS_HELP[v] || "" : "")}">${esc(kind === "exec" ? STATUS_LABEL[v] || v : v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : (kind === "exec" ? '<span class="next ph" aria-hidden="true"></span>' : "")}</div>${sub || (kind === "exec" ? '<div class="s">&nbsp;</div>' : "")}</td>`;
       }
-      if (c.t === "title") { const memo = String(r["비고"] || "").trim(); return `<td class="tit${memo ? " memo" : ""}" title="${esc([v, r[c.sub]].filter(Boolean).join(" · "))}${memo ? esc("\n비고: " + memo) : ""}"${memo ? ` data-memo="${esc(memo)}"` : ""}>${memo ? '<i class="memo-mark" aria-hidden="true"></i>' : ""}<div class="t">${esc(v || "")}${kind === "exec" ? originBadge(r) : ""}</div>${r[c.sub] ? `<div class="s">${esc(r[c.sub])}</div>` : ""}</td>`; }
-      if (kind === "exec" && c.k === "거래번호") return `<td class="nowrap"><button type="button" class="rowbtn" aria-label="${esc(v)} 상세 열기 (Shift+Enter 수정)">${esc(v)}</button></td>`;
+      if (c.t === "title") { const memo = String(r["비고"] || "").trim(), sub = c.subCalc ? c.subCalc(r) : r[c.sub]; return `<td class="tit${memo ? " memo" : ""}" title="${esc([v, sub].filter(Boolean).join(" · "))}${memo ? esc("\n비고: " + memo) : ""}"${memo ? ` data-memo="${esc(memo)}"` : ""}>${memo ? '<i class="memo-mark" aria-hidden="true"></i>' : ""}<div class="t">${esc(v || "")}${kind === "exec" ? originBadge(r) : ""}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</td>`; }
+      if ((kind === "exec" && c.k === "거래번호") || c.rowbtn) return `<td class="nowrap"><button type="button" class="rowbtn" aria-label="${esc(v)} 상세 열기 (Shift+Enter 수정)">${esc(v)}</button></td>`;
       return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}"${c.wrap && v ? ` title="${esc(v)}"` : ""}>${esc(v)}</td>`;
   }
   function rowHtml(r, tds) {
@@ -310,12 +319,12 @@ function renderList(kind) {
       ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}">집행전환</button>`
       : kind === "labor" ? (r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
     const editBtn = kind === "labor" && r["상태"] === "확정" ? "" : `<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button>`;
-    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === "exec" && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}">${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${kind === "exec" ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;
+    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === "exec" && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}${SEL_HOOK[kind]?.rowCls(r) || ""}">${SEL_HOOK[kind]?.cell(r) || ""}${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${noAct ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;
   }
   let foot = "";
-  if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor")) {
+  if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor" || kind === "request")) {
     const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
-    foot = `<tfoot><tr class="total">${cols.map(c => c.k === "금액" ? `<td data-col="${esc(c.k)}" class="num amt${minorCls(c)}">${fmt(sum)}</td>` : `<td data-col="${esc(c.k)}" class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}${kind === "exec" ? "" : '<td class="actions"></td>'}</tr></tfoot>`;
+    foot = `<tfoot><tr class="total">${selHead ? '<td class="sel"></td>' : ""}${cols.map(c => c.k === "금액" ? `<td data-col="${esc(c.k)}" class="num amt${minorCls(c)}">${fmt(sum)}</td>` : `<td data-col="${esc(c.k)}" class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}${noAct ? "" : '<td class="actions"></td>'}</tr></tfoot>`;
   }
   table.innerHTML = headFinal + `<tbody>${body}</tbody>` + foot;
   table.querySelectorAll("th.sortable").forEach(th => th.addEventListener("click", () => {
@@ -325,8 +334,9 @@ function renderList(kind) {
   }));
   const wrap = table.closest(".table-wrap"); if (wrap) { wrap.classList.toggle("empty", rows.length === 0); wrap.classList.toggle("scrollable", table.scrollWidth > wrap.clientWidth + 4); }
   if (kind === "exec") updateXdNav();  // 필터·정렬이 바뀌면 상세 패널의 n / N 도 갱신
+  SEL_HOOK[kind]?.after?.();
 
-  if (kind === "exec" || kind === "req" || kind === "labor") {
+  if (kind === "exec" || kind === "req" || kind === "labor" || kind === "request") {
     const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
     $(`#${kind}-sum`).textContent = `${rows.length}건 · 합계 ${fmt(sum)}원`;
   }
@@ -517,6 +527,7 @@ window.addEventListener("beforeprint", () => {
   const month = dash ? $("#dash-month").value : val('[data-filter="month"]');
   const period = year ? `${year}년${month ? " " + parseInt(month) + "월" : ""}` : month ? `${parseInt(month)}월` : "전체 기간";
   let name = (labor ? "인건비 " : "") + (tab?.textContent.trim() || "");
+  if (document.body.classList.contains("request-mode")) name = "지출 신청 " + ($("#request-tabs [aria-selected=true]")?.dataset.rtype || "");
   if (dash) name += ` (${$(".subtabs [aria-selected=true]")?.textContent.trim() || ""})`;
   const note = dash ? $("#dash-note").textContent.trim() : "";
   $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
@@ -527,9 +538,9 @@ window.addEventListener("afterprint", () => {
 });
 $("#dash-month").addEventListener("change", renderDashboard);
 $$("[data-csv]").forEach(b => b.addEventListener("click", () => {
-  const kind = b.dataset.csv; const cols = COLS[kind].filter(c => !c.calc).map(c => c.k); const rows = filtered(kind).map(r => cols.map(k => k === "상태" ? (STATUS_LABEL[r[k]] || r[k]) : r[k]));
+  const kind = b.dataset.csv; const cols = COLS[kind].filter(c => !c.calc).map(c => c.k); const rows = filtered(kind).map(r => cols.map(k => k === "상태" && kind === "exec" ? (STATUS_LABEL[r[k]] || r[k]) : r[k]));
   if (!rows.length) { showAlert("저장할 행이 없습니다.", "warn"); return; }
-  downloadCSV(`${{ exec: "집행내역", req: "품의내역", labor: "인건비지급" }[kind] || kind}_${today()}.csv`, cols, rows);
+  downloadCSV(`${{ exec: "집행내역", req: "품의내역", labor: "인건비지급", request: "지출신청" }[kind] || kind}_${today()}.csv`, cols, rows);
 }));
 $("#exec-cols-all").addEventListener("change", e => { try { localStorage.setItem("ledger-exec-minor", e.target.checked ? "1" : "0"); } catch { } renderList("exec"); });
 try { $("#exec-cols-all").checked = localStorage.getItem("ledger-exec-minor") === "1"; } catch { }
@@ -596,19 +607,19 @@ function lastDefaults(kind) {
   try { return JSON.parse(sessionStorage.getItem("ledger-last-" + kind) || "{}"); } catch { return {}; }
 }
 function rememberLast(kind, rec) {
-  const keep = { exec: ["재원", "예산목", "사용자"], req: ["재원", "예산목", "품의자", "결제수단"], deposit: ["거래처", "사용자"], budget: ["재원"] }[kind] || [];  // 날짜는 '저장 후 계속' 안에서만 유지
+  const keep = { exec: ["재원", "예산목", "사용자"], req: ["재원", "예산목", "품의자", "결제수단"], deposit: ["거래처", "사용자"], budget: ["재원"], request: ["관련과제"] }[kind] || [];  // 날짜는 '저장 후 계속' 안에서만 유지
   const o = {}; keep.forEach(k => { if (rec[k]) o[k] = rec[k]; });
   try { sessionStorage.setItem("ledger-last-" + kind, JSON.stringify(o)); } catch { }
 }
 function openForm(kind, row, preset, opts = {}) {
   const rec = row != null ? DATA[kind].find(r => r._row === row) : null;
   const fields = formFields(kind).filter(f => !(f.onlyNew && rec));
-  const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
+  const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}), ...(typeof REQUEST_TITLES !== "undefined" ? REQUEST_TITLES : {}) };
   $("#dlg-title").textContent = opts.title || (titles[kind] + (rec ? " 수정" + (IDENT_LABEL(kind, rec) ? " · " + IDENT_LABEL(kind, rec) : "") : " 추가"));
   $("#dlg-error").hidden = true; $("#dlg-error").classList.remove("info");
-  $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !["exec", "req", "deposit", "budget", "tags", "labor", "salary", "people"].includes(kind);
+  $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !!opts.convertRequests || !["exec", "req", "deposit", "budget", "tags", "labor", "salary", "people", "request"].includes(kind);
   const tagDefault = DATA.tags.some(t => t["태그명"] === "적립금") ? "적립금" : "";
-  const defaults = { 원인발생일: today(), 일자: today(), 상태: "대기", 구분: "적립", _태그: tagDefault, 재원: FILTERS[kind]?.["재원"] || "", ...(typeof laborDefaults === "function" ? laborDefaults(kind) : {}), ...lastDefaults(kind), ...(preset || {}) };
+  const defaults = { 원인발생일: today(), 일자: today(), 상태: "대기", 구분: "적립", _태그: tagDefault, 재원: FILTERS[kind]?.["재원"] || "", ...(typeof laborDefaults === "function" ? laborDefaults(kind) : {}), ...(typeof requestDefaults === "function" ? requestDefaults(kind) : {}), ...lastDefaults(kind), ...(preset || {}) };
   $("#dlg-fields").innerHTML = fields.map(f => {
     const v = rec ? (rec[f.k] ?? "") : (defaults[f.k] ?? "");
     const id = "f-" + f.k;
@@ -633,6 +644,7 @@ function openForm(kind, row, preset, opts = {}) {
   if (kind === "exec" && rec) { const o = execOrigin(rec); if (o?.locked) { LOCKED_COLS.forEach(k => { const el = F(k); if (el) { el.readOnly = true; el.setAttribute("aria-readonly", "true"); if (el.tagName === "SELECT") el.dataset.lock = el.value; el.classList.add("locked"); el.title = `${o.kind} 연결 행: 원본에서만 변경`; } }); $("#dlg-error").textContent = `${o.label} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리하고, 여기서는 세목·태그·관리번호·청구·승인·결의일·비고만 바꿀 수 있습니다.`; $("#dlg-error").hidden = false; $("#dlg-error").classList.add("info"); } }
   const dlg = $("#dlg");
   dlg.dataset.kind = kind; dlg.dataset.row = row ?? ""; dlg.dataset.convert = opts.convertRow ?? "";
+  dlg.dataset.convertReq = opts.convertRequests ? JSON.stringify(opts.convertRequests) : "";  // 신청 → 품의 전환 (request.js)
   if (kind === "budget" && !rec && !preset?.["변경회차"]) {  // 다음 회차 자동 제안
     const sel = F("재원"); const fill = async () => { if (!sel.value) return; try { const r = await api("GET", `/api/budget/next-round?fund=${encodeURIComponent(sel.value)}`); if (!F("변경회차").value) F("변경회차").value = r.round; } catch { } };
     sel.addEventListener("change", () => { F("변경회차").value = ""; fill(); }); fill();
@@ -670,11 +682,11 @@ function syncDepFields() {
   const chk = $("#f-_record_exec");
   $$("#dlg-fields label[data-dep]").forEach(l => {
     if (!l.dataset.dep) return;
-    const show = sel.value === l.dataset.dep && (l.classList.contains("chk") || (chk && chk.checked));
+    const show = l.dataset.dep.split("|").includes(sel.value) && (!chk || l.classList.contains("chk") || chk.checked);
     l.hidden = !show;
   });
 }
-$("#dlg-fields").addEventListener("change", e => { if (e.target.dataset.lock !== undefined && e.target.value !== e.target.dataset.lock) { e.target.value = e.target.dataset.lock; showAlert("연결된 집행이라 이 값은 원본 화면에서만 바꿀 수 있습니다.", "warn"); } if (e.target.id === "f-구분" || e.target.id === "f-_record_exec") syncDepFields(); });
+$("#dlg-fields").addEventListener("change", e => { if (e.target.dataset.lock !== undefined && e.target.value !== e.target.dataset.lock) { e.target.value = e.target.dataset.lock; showAlert("연결된 집행이라 이 값은 원본 화면에서만 바꿀 수 있습니다.", "warn"); } if (e.target.id === "f-구분" || e.target.id === "f-_record_exec") syncDepFields(); if (e.target.id === "f-구분" && typeof requestFormSync === "function") requestFormSync(); });
 
 $("#dlg-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -729,14 +741,20 @@ $("#dlg-form").addEventListener("submit", async e => {
     if (warns.length && !await confirmDlg({ title: "저장 전 확인", body: warns.join("\n\n"), verb: "그래도 저장" })) return;
   }
   if (kind === "exec" && row) { const cur = DATA.exec.find(x => x._row === Number(row)); if (cur) ["상태", "증빙폴더", "증빙목록"].forEach(k => { rec[k] = cur[k]; }); }
+  if (kind === "request" && typeof requestPrepare === "function") { const err = requestPrepare(rec, row ? Number(row) : null); if (err) { showFormError(err); return; } }
   const more = dlg.dataset.saveMore === "1"; dlg.dataset.saveMore = "";
   const convertRow = dlg.dataset.convert ? Number(dlg.dataset.convert) : null;
+  const convertReq = dlg.dataset.convertReq ? JSON.parse(dlg.dataset.convertReq) : null;
+  let doneMsg = null;
   const saveBtn = $("#dlg-save"), moreBtn = $("#dlg-save-more");
   dlg.dataset.busy = "1";
   try {
     saveBtn.disabled = true; moreBtn.disabled = true; saveBtn.textContent = "저장 중…";
     let saved;
-    if (convertRow != null) {
+    if (convertReq) {  // 신청 여러 건 → 품의 1건 (서버가 품의 생성 + 신청 품의전환을 한 번에)
+      const res = await api("POST", "/api/request/convert", { rows: convertReq, expects: convertReq.map(n => expectOf("request", DATA.request.find(x => x._row === n))), extra: rec });
+      saved = { ...res.req }; doneMsg = `품의 ${res["품의번호"]} 를 만들고 신청 ${res.numbers.join(", ")} 을(를) 품의전환으로 바꿨습니다.`;
+    } else if (convertRow != null) {
       const req = DATA.req.find(x => x._row === convertRow);
       saved = await api("POST", `/api/req/${convertRow}/to-exec`, { extra: rec, expect: expectOf("req", req) });
     } else {
@@ -744,9 +762,10 @@ $("#dlg-form").addEventListener("submit", async e => {
     }
     const cb = DLG_ON_SAVED; DLG_ON_SAVED = null;
     if (!row) rememberLast(kind, rec);
-    const no = saved["거래번호"] || saved["품의번호"] || saved["재원코드"] || saved["태그명"] || "";
+    const no = saved["거래번호"] || saved["품의번호"] || saved["신청번호"] || saved["재원코드"] || saved["태그명"] || "";
     dlg.dataset.initial = ""; dlg.close();
-    showAlert(`${no ? no + " " : ""}저장했습니다.` + (convertRow != null ? " (품의 → 집행 전환 완료)" : ""), "ok");
+    if (doneMsg) showAlert(doneMsg, "ok", { undo: true });
+    else showAlert(`${no ? no + " " : ""}저장했습니다.` + (convertRow != null ? " (품의 → 집행 전환 완료)" : ""), "ok");
     await load();
     if (cb) cb(saved);
     if (more) { const carry = {}; ["원인발생일", "일자", "귀속월", "지급월", "이름"].forEach(k => { if (rec[k]) carry[k] = rec[k]; }); openForm(kind, null, { ...carry, 거래처: "", 금액: "", 적요: "", 세목: "", 세세목: "", 관리번호: "", 비고: "", 증빙번호: "", 결의일: "", 지출완료일: "", 지급청구일: "" }); }
@@ -838,7 +857,7 @@ async function setDateToday(row, col, btn) {
 
 // ---------- 삭제 ----------
 const DEL_KIND = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
-function IDENT_LABEL(kind, r) { return r?.["거래번호"] || r?.["품의번호"] || r?.["재원코드"] || r?.["태그명"] || (typeof laborIdent === "function" ? laborIdent(kind, r) : ""); }
+function IDENT_LABEL(kind, r) { return r?.["거래번호"] || r?.["품의번호"] || r?.["신청번호"] || r?.["재원코드"] || r?.["태그명"] || (typeof laborIdent === "function" ? laborIdent(kind, r) : ""); }
 async function del(kind, row) {
   const r = DATA[kind].find(x => x._row === row);
   if (kind === "exec" && r) { const o = execOrigin(r); if (o?.locked) { showAlert(`${o.label} 에서 생긴 집행이라 여기서 지울 수 없습니다. ${o.kind === "인건비" ? "인건비 원장에서 '확정 취소' 또는 삭제" : "적립금 탭에서 해당 적립 행 삭제"}로 처리하세요.`, "warn"); return; } }
@@ -1033,7 +1052,7 @@ document.addEventListener("dblclick", e => {
   if (e.target.closest("button, a, input, select, label")) return;
   const tr = e.target.closest("table.grid tbody tr[data-kind][data-row]"); if (!tr) return;
   const kind = tr.dataset.kind, row = Number(tr.dataset.row);
-  if (kind === "exec") return;  // 집행내역은 click 핸들러에서 처리
+  if (kind === "exec" || kind === "request") return;  // 집행내역·신청은 click 핸들러에서 처리
   if (!COLS[kind]) return;
   if (kind === "labor") { const r = DATA.labor.find(x => x._row === row); if (r && r["상태"] === "확정") { showAlert("확정된 지급 건은 '확정 취소' 뒤에 수정할 수 있습니다.", "warn"); return; } }
   window.getSelection()?.removeAllRanges();
@@ -1298,7 +1317,7 @@ $("#rep-copy").addEventListener("click", async () => {
 aiInit();
 
 // ================= 설정 (관리 패널) =================
-const SET_FIELDS = ["LEDGER_PROVIDER", "ANTHROPIC_API_KEY", "LEDGER_MODEL", "LEDGER_EFFORT", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENAI_REASONING_EFFORT"];
+const SET_FIELDS = ["REQUEST_BUYER", "REQUEST_SHIP_TO", "REQUEST_CONTACT", "LEDGER_PROVIDER", "ANTHROPIC_API_KEY", "LEDGER_MODEL", "LEDGER_EFFORT", "OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "OPENAI_REASONING_EFFORT"];
 function setMsg(text, warn) { const m = $("#settings-msg"); m.textContent = text; m.classList.toggle("warn", !!warn); }
 function syncProviderGroups() {
   const p = $("#s-provider").value;

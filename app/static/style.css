@@ -1,7 +1,7 @@
 /* 센터 회계대장 — 컬럼너 패드(회계 괘선지) 세계
    서체 하나, 표형 숫자, 회색 괘선 위 남색 마진선. 붉은색은 보완필요·음수·오류에만.
    구성: 토큰 · 리셋 → 상단·탭 → 툴바 → 컨트롤·버튼 → 표 → 상태 점 → 집행내역 → 요약 띠·대시보드
-         → 대화상자 → 드로어 → AI → 토스트 → 설정 → 인건비 → 편집 모드 → 메모 → 인쇄 */
+         → 대화상자 → 드로어 → AI → 토스트 → 설정 → 인건비 → 신청 → 편집 모드 → 메모 → 인쇄 */
 
 /* ---------- 토큰 ---------- */
 :root {
@@ -84,7 +84,7 @@ main { flex: 1; padding: 12px 20px 90px; width: 100%; margin: 0 auto; }
 .alert { padding: 8px 12px; border-radius: var(--radius); margin-bottom: 8px; border: 1px solid; font-size: 12px; }
 .alert.error { background: var(--alert-bg); border-color: var(--alert); color: var(--alert-deep); }
 .alert.ok { background: var(--ok-bg); border-color: var(--ok); color: var(--ok-deep); }
-body:not([data-tab="exec"]) #alert.formula, body.labor-mode #alert.formula { display: none; }
+body:not([data-tab="exec"]) #alert.formula, body.labor-mode #alert.formula, body.request-mode #alert.formula { display: none; }
 
 /* ---------- 툴바 ---------- */
 /* 툴바는 컨트롤 아랫선(align-items: end)에 맞춘다. 레이블 없는 글자·합계·서브탭도 32px 컨트롤 높이 안에서 가운데 */
@@ -213,6 +213,11 @@ table.grid.clickable tbody tr { cursor: pointer; }
 .badge.적립::before, .badge.결의::before { background: var(--margin); }
 .badge.적립, .badge.결의 { color: var(--margin); }
 .badge.사용::before { background: #B86A00; } .badge.사용 { color: #8A4F00; }
+/* 신청 상태: 신청(회색) → 승인(초록) / 반려(붉은색) → 품의전환(남색) → 완료(초록) */
+.badge.신청 { color: var(--ink-2); }
+.badge.승인::before { background: var(--ok); } .badge.승인 { color: var(--ok); }
+.badge.반려::before { background: var(--alert); } .badge.반려 { color: var(--alert); }
+.badge.품의전환::before { background: var(--margin); } .badge.품의전환 { color: var(--margin); }
 
 /* ---------- 집행내역 ---------- */
 /* 열 폭 고정: 필터·상태 변경으로 행이 바뀌어도 열 폭 유지 (적요만 남는 폭을 차지) */
@@ -514,6 +519,58 @@ table.grid.plan td.cell:focus-visible { outline: 2px solid var(--primary); outli
 .bulk-row { display: grid; grid-template-columns: 1fr 160px auto; gap: 8px; align-items: center; }
 .bulk-row input { text-align: right; }
 
+/* ---------- 신청 화면 ---------- */
+body.request-mode .top { border-bottom-color: var(--margin); }
+.tabs.request { background: var(--bg-head); display: flex; align-items: center; gap: 8px; padding-right: 20px; }
+.tabs.request .tabs-label { font-size: 12px; font-weight: 700; color: var(--margin); padding: 0 6px 0 20px; letter-spacing: .02em; white-space: nowrap; }
+.tabs.request ul { padding: 0; }
+.tabs.request button[aria-selected="true"] { border-bottom-color: var(--margin); }
+.tabs.request .tabs-year { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.tabs.request .tabs-year select { min-height: 28px; }
+.tabs .tab-n { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 4px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg); text-align: center; }
+.req-role { margin-left: 8px; padding: 0 6px; font-size: 12px; line-height: 20px; font-weight: 700; color: var(--margin); border: 1px solid var(--margin); border-radius: var(--radius); background: var(--bg); white-space: nowrap; }
+/* 담당자 전용 요소 / 연구원 화면 (직접 접속): 회계대장 이동·설정·AI 버튼 숨김 */
+body:not(.req-admin) .req-admin-only { display: none !important; }
+body.req-admin .req-researcher-note { display: none; }
+body.request-mode:not(.req-admin) #btn-mode, body.request-mode:not(.req-admin) #btn-request,
+body.request-mode:not(.req-admin) #btn-settings, body.request-mode:not(.req-admin) #btn-ai, body.request-mode:not(.req-admin) .top-sep { display: none !important; }
+.req-researcher-note { margin: 0 0 8px; }
+.req-selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 0 8px; margin: -2px 0 8px; border-bottom: 1px solid var(--rule-2); }
+.req-selbar .req-sel-n { font-size: 12px; font-weight: 700; min-width: 132px; }
+.req-selbar .toolbar-note { margin-left: 6px; }
+table.grid th.sel, table.grid td.sel { width: 32px; text-align: center; padding: 0; }
+table.grid .rej, .xd-info .rej { color: var(--alert); }
+#request-table td.tit { min-width: 180px; }
+#order-section { margin-top: 16px; }
+#order-table td .lnk, .xd-info .lnk { border: 0; background: none; padding: 0 2px; font: inherit; font-size: 12px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+#order-table td .lnk:hover, .xd-info .lnk:hover { color: var(--ink); }
+#req-drawer { width: min(560px, 100vw); }
+#req-drawer:focus { outline: none; }
+#rd-title { display: flex; align-items: center; gap: 8px; }
+#rd-title .badge { font-size: 12px; }
+#rd-sub b { color: var(--ink); font-weight: 700; }
+.rd-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+#ratt-form { margin-top: 10px; }
+.req-calc { display: flex; align-items: center; gap: 8px; min-height: 32px; }
+.req-calc .toolbar-note { flex: 1; }
+/* 발주서 (대화상자 미리보기 + 인쇄 전용 사본) */
+dialog.dlg-sheet { width: min(820px, 95vw); }
+.order-sheet { color: var(--ink); }
+.os-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-bottom: 2px solid var(--ink); padding-bottom: 6px; margin-bottom: 10px; }
+.os-head h2 { margin: 0; font-size: 15px; letter-spacing: .3em; }
+.os-no { font-size: 12px; color: var(--ink-2); }
+.os-no b { color: var(--ink); }
+.os-meta, .os-lines { width: 100%; border-collapse: collapse; font-size: 12px; margin: 0 0 10px; }
+.os-meta th, .os-meta td, .os-lines th, .os-lines td { border: 1px solid var(--rule); padding: 4px 8px; text-align: left; vertical-align: middle; }
+.os-meta th, .os-lines thead th { background: var(--bg-head); color: var(--ink-2); font-weight: 600; white-space: nowrap; }
+.os-meta th { width: 72px; }
+.os-lines .num { text-align: right; white-space: nowrap; }
+.os-lines tfoot td { font-weight: 700; border-top: 1px solid var(--ink); }
+.os-spec { color: var(--ink-2); }
+.os-total { text-align: right; font-size: 13px; margin: 4px 0; }
+.os-foot { text-align: right; font-size: 12px; color: var(--ink-2); margin: 12px 0 0; }
+.print-root { display: none; }
+
 /* ---------- 편집 모드 팝업 격자 ---------- */
 dialog.dlg-edit { width: min(96vw, 1800px); max-width: none; padding: 0; height: 92vh; display: none; flex-direction: column; }
 dialog.dlg-edit[open] { display: flex; }
@@ -546,6 +603,7 @@ table.grid.edit td.num .cell-input { text-align: right; }
 
 /* ---------- 인쇄 ---------- */
 @page { size: A4 landscape; margin: 12mm; }
+@page order-sheet { size: A4 portrait; margin: 15mm; }
 @media print {
   .top, .tabs, .toolbar, .drawer, .toasts, .memo-tip, #alert, .cards.quick, .actions, #dash-csv, #dash-print, .foot,
   .table-wrap.scrollable::after, .next, .origin, .memo-mark, .defs-box > summary, .edit-legend, .del-bar, table.grid .sel { display: none !important; }
@@ -566,4 +624,9 @@ table.grid.edit td.num .cell-input { text-align: right; }
   body.drawer-open #exec-table [data-col="결제수단"], body.drawer-open #exec-table [data-col="결의일"],
   body.drawer-open #exec-table.show-minor [data-col="사용자"], body.drawer-open #exec-table.show-minor [data-col="비고"] { display: table-cell; }
   body.drawer-open #exec-table { min-width: 0; }
+  /* 발주서 인쇄: 인쇄 전용 사본만 (화면·대화상자는 숨김) */
+  body.printing-sheet > :not(#print-sheet) { display: none !important; }
+  body.printing-sheet #print-sheet { display: block; page: order-sheet; }
+  body.printing-sheet .os-meta th, body.printing-sheet .os-meta td, body.printing-sheet .os-lines th, body.printing-sheet .os-lines td { border-color: var(--ink); }
+  .req-selbar, .req-role, table.grid th.sel, table.grid td.sel { display: none !important; }
 }

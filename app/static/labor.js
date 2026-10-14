@@ -96,27 +96,38 @@ function prepaid(p, year, through) {
   return { opening: p["이월선급"] || 0, accrued, paid, adj, balance: (p["이월선급"] || 0) + paid - accrued + adj };
 }
 
-// ---------- 화면 전환 ----------
-function setMode(labor, push = true) {
+// ---------- 화면 전환 (회계대장 / 인건비 / 신청: 서로 배타) ----------
+const MODE_PATH = { main: "/", labor: "/labor", request: "/request" };
+const pathMode = () => location.pathname === "/labor" ? "labor" : location.pathname === "/request" ? "request" : "main";
+function setMode(mode, push = true) {
+  if (mode === true) mode = "labor"; else if (!MODE_PATH[mode]) mode = "main";  // 예전 호출 setMode(true/false) 호환
+  const labor = mode === "labor", req = mode === "request";
   document.body.classList.toggle("labor-mode", labor);
-  $("#labor-tabs").hidden = !labor; $("#main-tabs").hidden = labor;
-  $$("#main-tabs [role=tab]").forEach(b => { $("#" + b.getAttribute("aria-controls")).hidden = labor || b.getAttribute("aria-selected") !== "true"; });
+  document.body.classList.toggle("request-mode", req);
+  $("#labor-tabs").hidden = !labor; $("#main-tabs").hidden = labor || req;
+  const rt = $("#request-tabs"); if (rt) rt.hidden = !req;
+  const rp = $("#rpanel"); if (rp) rp.hidden = !req;
+  $$("#main-tabs [role=tab]").forEach(b => { $("#" + b.getAttribute("aria-controls")).hidden = labor || req || b.getAttribute("aria-selected") !== "true"; });
   $$("#labor-tabs [role=tab]").forEach(b => { $("#" + b.getAttribute("aria-controls")).hidden = !labor || b.getAttribute("aria-selected") !== "true"; });
   $("#btn-mode").textContent = labor ? "회계대장으로" : "인건비";
   $("#btn-mode").title = labor ? "회계대장 화면으로 돌아가기" : "인건비 관리 화면으로 전환";
-  document.title = labor ? "센터 회계대장 · 인건비" : "센터 회계대장";
-  if (labor) closeExecDrawer();
-  if (push) history.pushState({}, "", labor ? "/labor" : "/");
+  const br = $("#btn-request");
+  if (br) { br.textContent = req ? "회계대장으로" : "신청"; br.title = req ? "회계대장 화면으로 돌아가기" : "지출 신청 화면으로 전환 (담당자)"; }
+  document.title = labor ? "센터 회계대장 · 인건비" : req ? "센터 회계대장 · 지출 신청" : "센터 회계대장";
+  if (labor || req) closeExecDrawer();
+  if (!req && typeof closeReqDrawer === "function") closeReqDrawer();
+  if (req && $("#ai-drawer") && !$("#ai-drawer").hidden && typeof toggleDrawer === "function") toggleDrawer(false);
+  if (push && location.pathname !== MODE_PATH[mode]) history.pushState({}, "", MODE_PATH[mode]);
 }
 function switchLaborTab(name) {
   $$("#labor-tabs [role=tab]").forEach(b => { const on = b.id === "ltab-" + name; b.setAttribute("aria-selected", on); $("#" + b.getAttribute("aria-controls")).hidden = !on; });
   try { localStorage.setItem("ledger-ltab", name); } catch { }
 }
 $$("#labor-tabs [role=tab]").forEach(b => b.addEventListener("click", () => switchLaborTab(b.id.replace("ltab-", ""))));
-$("#btn-mode").addEventListener("click", () => setMode(!document.body.classList.contains("labor-mode")));
-window.addEventListener("popstate", () => setMode(location.pathname === "/labor", false));
+$("#btn-mode").addEventListener("click", () => setMode(document.body.classList.contains("labor-mode") ? "main" : "labor"));
+window.addEventListener("popstate", () => setMode(pathMode(), false));
 try { const t = localStorage.getItem("ledger-ltab"); if (t && $("#ltab-" + t)) switchLaborTab(t); } catch { }
-setMode(location.pathname === "/labor", false);
+setMode(pathMode(), false);
 
 // ---------- 렌더 ----------
 function fillLaborSelects() {
