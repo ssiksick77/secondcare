@@ -628,7 +628,7 @@ function openForm(kind, row, preset, opts = {}) {
   $("#dlg-error").hidden = true; $("#dlg-error").classList.remove("info");
   $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !!opts.convertRequests || !["exec", "req", "deposit", "budget", "tags", "labor", "salary", "people", "request"].includes(kind);
   const tagDefault = DATA.tags.some(t => t["태그명"] === "적립금") ? "적립금" : "";
-  const defaults = { 원인발생일: today(), 일자: today(), 상태: "대기", 구분: "적립", _태그: tagDefault, 재원: FILTERS[kind]?.["재원"] || "", ...(typeof laborDefaults === "function" ? laborDefaults(kind) : {}), ...(typeof requestDefaults === "function" ? requestDefaults(kind) : {}), ...lastDefaults(kind), ...(preset || {}) };
+  const defaults = { 원인발생일: today(), 일자: today(), 상태: "대기", 구분: "적립", _태그: tagDefault, 재원: FILTERS[kind]?.["재원"] || "", ...(typeof laborDefaults === "function" ? laborDefaults(kind) : {}), ...(typeof requestDefaults === "function" ? requestDefaults(kind) : {}), ...lastDefaults(kind), ...(FILTERS[kind]?.["재원"] ? { 재원: FILTERS[kind]["재원"] } : {}), ...(preset || {}) };  // 필터 재원이 있으면 직전 입력값보다 우선
   $("#dlg-fields").innerHTML = fields.map(f => {
     const v = rec ? (rec[f.k] ?? "") : (defaults[f.k] ?? "");
     const id = "f-" + f.k;
