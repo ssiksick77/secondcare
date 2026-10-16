@@ -4,10 +4,11 @@ Updated: 2026-10-16
 
 ## Goal
 
-재원 종류 and 공금 balance are done. Next task not defined.
+Calculator: only 기본 정보 required, separate trip period, 공제일수 on 일비·식비. Next task not defined.
 
 ## Done
 
+- 학회 여비 계산기: 출장 시작일·종료일 칸(학회 기간과 분리, 비우면 구간 → 학회 기간), 이동 구간·금액 선택 사항, 학회 전후 각 1일 초과분 = 공제일수 → 일비·식비에서 제외 + 주의 문구 (commit: `git log --grep 'deduction days'`). calc tests 32.
 - 재원 종류 column + 공금 single-balance rule (store/main/mcp/app.js), README section, API 12 + UI 5 new test cases (commit: `git log --grep 'fund type'`).
 - 지출결의서: 결재란 4칸(담당·매니저·선임연구원·센터장, 위 직책·아래 서명), 제목 아래 이중선 제거, 행 6.5mm, 거래번호·담당자 상자 제거(거래번호는 결의 내역 첫 줄). Verified with a screenshot and a 1-page PDF on the QA ledger (commit: see `git log --grep voucher`).
 - 596f351: tests/ added (calc node test, API test, Playwright UI test, runner, server helper) and registered in `scripts/check.sh`; `main.py` honors `LEDGER_NO_BROWSER`. CLAUDE.md and README document the tests.
@@ -33,6 +34,7 @@ Updated: 2026-10-16
 
 ## Decisions
 
+- 2026-10-16 (user) 여비 계산기: 기본 정보 외 필수 없음; 출장 기간과 학회 기간 별도 입력; 학회 전후 각 1일만 인정, 초과 출장일은 공제일수로 일비·식비에서 자동 제외(숙박은 그대로, my choice since the user named 일비/식비 only).
 - 2026-10-16 (user) 재원 종류: list 국책/원내/위탁/교육/공금/기타; 공금 deposits go through 예산변동 (no per-예산목 split), 예산목 stays required on 집행/품의/신청, existing funds default to 국책 and the user edits them later.
 - 2026-10-16 (user) 지출결의서 결재란: 담당 / 매니저 / 선임연구원 / 센터장 4칸, 위 직책·아래 서명. Row height 6.5mm and blank name cells were my choice (user did not answer).
 - 2026-10-16 (user) request types: 장비 = 전자제품, 소모품 = 알파몰·드림디포 purchases, 학회, everything else = 기타. D2-D6 of the 기타 review were taken as proposed because the user gave no answer.
