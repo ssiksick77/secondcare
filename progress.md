@@ -4,10 +4,11 @@ Updated: 2026-10-16
 
 ## Goal
 
-Session of 2026-10-16 is wrapped up. All four 신청 tabs are reviewed and fixed. The next task is not defined.
+Real checks are in place: `scripts/check.sh` runs smoke + `tests/run.py` (calc 19, API 17, UI 25 cases) against a QA ledger copy. Next task not defined.
 
 ## Done
 
+- 596f351: tests/ added (calc node test, API test, Playwright UI test, runner, server helper) and registered in `scripts/check.sh`; `main.py` honors `LEDGER_NO_BROWSER`. CLAUDE.md and README document the tests.
 - 66cde60 / 9a91f0b / d1d1d91: 기타 tab review (2 agents), report, fixes (type hint line, 기타 labels, 구분 change re-approves, server drops shop codes on non-소모품 rows, integer won for 단가·부가세액).
 - b6a813f / bac1758 / 515b121 / 6eed4ff: 학회 tab review (4 agents), report, fixes (server enforces calculator total, calculator keyboard/print/toggle/checklist, local-date transit nights, form order and required 출장 구분, 품의 preset).
 - 2e20707 / 69b851b: travel calculator accepts 12 currencies with one rate per currency; detail JSON v:2 reads v:1.
@@ -20,7 +21,7 @@ Session of 2026-10-16 is wrapped up. All four 신청 tabs are reviewed and fixed
 
 ## Open issues
 
-- checks: configured, pass. Only one step exists: `smoke` (dependency import check). The project has no test, lint or typecheck command. The verification scripts of this session live only in the session scratchpad (`fix/api_test.py`, `fix/ui_test.py`, `fix/etc_test.py`, `test_currency.js`, `test_lax.js`); they are lost when the scratchpad is cleaned.
+- checks: configured, pass (smoke, test). The test step needs node and Playwright chromium on the machine; it takes about 1 minute. No lint or typecheck yet.
 - Uncommitted before adoption and untouched: `QA set/` (untracked) and `memo.md` (deleted in the working tree, was an empty file). Decide whether to commit or restore them.
 - 학회 review leftovers: form conflict [새로 불러오기] button, leg Tab order, P3 list in docs/점검_2026-10-16_신청_학회.md.
 - 기타 review leftovers: P3 list in docs/점검_2026-10-16_신청_기타.md.
@@ -37,4 +38,4 @@ Session of 2026-10-16 is wrapped up. All four 신청 tabs are reviewed and fixed
 
 ## Next action
 
-Add a real check to `scripts/check.sh`: copy the session's API and Playwright scripts into `tests/`, make them run against a scratch copy of the QA ledger on a free port, and register `run_step test`. Then pick the next feature with the user (LEDGER_HOST + role check, or the review leftovers).
+Pick the next feature with the user: LEDGER_HOST + server role check (연구원/담당자), or the 학회·기타 review leftovers. Extend tests/ with each change.
