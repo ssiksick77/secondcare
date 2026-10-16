@@ -4,10 +4,11 @@ Updated: 2026-10-16
 
 ## Goal
 
-Calculator: only 기본 정보 required, separate trip period, 공제일수 on 일비·식비. Next task not defined.
+Funds can be marked 잔액 미관리 (source-only). Next task not defined.
 
 ## Done
 
+- 재원 '잔액 미관리' 체크 (store/main/mcp/app.js, README, API +4, UI +4 tests) (commit: `git log --grep '잔액 미관리'`).
 - 학회 여비 계산기: 출장 시작일·종료일 칸(학회 기간과 분리, 비우면 구간 → 학회 기간), 이동 구간·금액 선택 사항, 학회 전후 각 1일 초과분 = 공제일수 → 일비·식비에서 제외 + 주의 문구 (commit: `git log --grep 'deduction days'`). calc tests 32.
 - 재원 종류 column + 공금 single-balance rule (store/main/mcp/app.js), README section, API 12 + UI 5 new test cases (commit: `git log --grep 'fund type'`).
 - 지출결의서: 결재란 4칸(담당·매니저·선임연구원·센터장, 위 직책·아래 서명), 제목 아래 이중선 제거, 행 6.5mm, 거래번호·담당자 상자 제거(거래번호는 결의 내역 첫 줄). Verified with a screenshot and a 1-page PDF on the QA ledger (commit: see `git log --grep voucher`).
