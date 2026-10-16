@@ -1878,6 +1878,7 @@ function korWon(n) {
   });
   return `금 ${neg ? "마이너스 " : ""}${words.join("")} 원정`;
 }
+const VOUCHER_SIGNERS = ["담당", "매니저", "선임연구원", "센터장"];  // 결재란 칸 (사용자 결정 2026-10-16). 이름은 미리 인쇄하지 않음
 const ymdKo = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ""); return m ? `${m[1]}년 ${m[2]}월 ${m[3]}일` : ""; };
 const vcNum = n => n < 0 ? "−" + fmt(-n) : fmt(n);   // 음수는 U+2212
 // 재원 현황: 이 행 위치(원인발생일 순, 같은 날은 행 순 = 집행 표 '예산목 잔액'의 runningBalance 와 같은 순서)까지 누적한 예산목 묶음별 잔액
@@ -1909,11 +1910,14 @@ function voucherHtml(v, withIds) {
   const full = (a, b, cls = "") => `<tr><th scope="row">${a}</th><td colspan="3"${cls}>${b}</td></tr>`;
   return `<article class="voucher">
   <header class="vc-head">
-    <p class="vc-inst">${t(v.org)}</p>
-    <table class="vc-box"><tbody><tr><th scope="row">거래번호</th><td class="vc-no">${t(r["거래번호"])}</td></tr><tr><th scope="row">담당자</th><td>${t(v.contact)}</td></tr></tbody></table>
+    <div class="vc-left">
+      <p class="vc-inst">${t(v.org)}</p>
+      <table class="vc-box"><tbody><tr><th scope="row">거래번호</th><td class="vc-no">${t(r["거래번호"])}</td></tr><tr><th scope="row">담당자</th><td>${t(v.contact)}</td></tr></tbody></table>
+    </div>
+    <table class="vc-sign" aria-label="결재란"><tbody><tr><th scope="row" rowspan="2" class="vc-sign-k">결재</th>${VOUCHER_SIGNERS.map(x => `<th scope="col" class="vc-sign-t">${x}</th>`).join("")}</tr>
+      <tr>${VOUCHER_SIGNERS.map(() => "<td></td>").join("")}</tr></tbody></table>
     <div class="vc-band"><h2 class="vc-title"${withIds ? ' id="voucher-title"' : ""}>지출결의서</h2></div>
   </header>
-  <hr class="vc-rule">
   <h3>결의 내역</h3>
   <table class="vc-t vc-kv"><colgroup><col class="l"><col><col class="l"><col></colgroup><tbody>
     ${kv("재원코드", r["재원"], "예산목", r["예산목"])}
