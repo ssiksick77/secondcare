@@ -4,7 +4,7 @@ Updated: 2026-10-16
 
 ## Goal
 
-Real checks are in place: `scripts/check.sh` runs smoke + `tests/run.py` (calc 19, API 17, UI 25 cases) against a QA ledger copy. Next task not defined.
+지출결의서 print form: add a 결재란 (approval signature block), remove the rule under the title, tighten table row heights. Checked by: the printed A5 form shows the approval block and fits one page with the QA data.
 
 ## Done
 
@@ -38,4 +38,4 @@ Real checks are in place: `scripts/check.sh` runs smoke + `tests/run.py` (calc 1
 
 ## Next action
 
-Pick the next feature with the user: LEDGER_HOST + server role check (연구원/담당자), or the 학회·기타 review leftovers. Extend tests/ with each change.
+Clarify the 결재란 layout with the user, then edit the 결의서 template and verify with a print screenshot.
