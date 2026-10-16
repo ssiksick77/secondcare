@@ -8,7 +8,7 @@ Updated: 2026-10-16
 
 ## Done
 
-- 지출결의서: 결재란 4칸(담당·매니저·선임연구원·센터장, 위 직책·아래 서명), 제목 아래 이중선 제거, 행 6.5mm. Verified with a screenshot and a 1-page PDF on the QA ledger (commit: see `git log --grep voucher`).
+- 지출결의서: 결재란 4칸(담당·매니저·선임연구원·센터장, 위 직책·아래 서명), 제목 아래 이중선 제거, 행 6.5mm, 거래번호·담당자 상자 제거(거래번호는 결의 내역 첫 줄). Verified with a screenshot and a 1-page PDF on the QA ledger (commit: see `git log --grep voucher`).
 - 596f351: tests/ added (calc node test, API test, Playwright UI test, runner, server helper) and registered in `scripts/check.sh`; `main.py` honors `LEDGER_NO_BROWSER`. CLAUDE.md and README document the tests.
 - 66cde60 / 9a91f0b / d1d1d91: 기타 tab review (2 agents), report, fixes (type hint line, 기타 labels, 구분 change re-approves, server drops shop codes on non-소모품 rows, integer won for 단가·부가세액).
 - b6a813f / bac1758 / 515b121 / 6eed4ff: 학회 tab review (4 agents), report, fixes (server enforces calculator total, calculator keyboard/print/toggle/checklist, local-date transit nights, form order and required 출장 구분, 품의 preset).
