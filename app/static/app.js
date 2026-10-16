@@ -39,7 +39,7 @@ const COLS = {
   budget: null, // meta 로드 후 생성
   deposit: [{ k: "일자", t: "date" }, { k: "거래처" }, { k: "구분", t: "badge" }, { k: "금액", t: "num", amt: true }, { k: "적요", wrap: true },
     { k: "사용자" }, { k: "증빙번호" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
-  funds: [{ k: "재원코드" }, { k: "종류" }, { k: "과제명", wrap: true }, { k: "시작일", t: "date" }, { k: "종료일", t: "date" }, { k: "비고", wrap: true }, { k: "인건비예산", t: "num", title: "인건비 화면의 지급처 예산 (비우면 예산목 합계)" }],
+  funds: [{ k: "재원코드" }, { k: "종류" }, { k: "잔액미관리", label: "잔액", ctr: true, html: r => r["잔액미관리"] === "Y" ? '<span class="muted" title="재원 출처로만 쓰고 예산·잔액을 관리하지 않음">미관리</span>' : "관리" }, { k: "과제명", wrap: true }, { k: "시작일", t: "date" }, { k: "종료일", t: "date" }, { k: "비고", wrap: true }, { k: "인건비예산", t: "num", title: "인건비 화면의 지급처 예산 (비우면 예산목 합계)" }],
   tags: [{ k: "태그명" }, { k: "분류" }, { k: "설명", wrap: true }, { k: "사용건수", t: "num", calc: r => tagUsage(r["태그명"]) }],
 };
 function tagUsage(name) { return ["exec", "req", "deposit"].reduce((a, k) => a + DATA[k].filter(r => r["태그"] === name).length, 0); }
@@ -83,7 +83,7 @@ function formFields(kind) {
     { k: "상태", type: "select", opts: DATA.meta.req_status, req: true }, { k: "비고", type: "text" },
   ];
   if (kind === "budget") return [
-    { k: "재원", type: "select", opts: funds, req: true },
+    { k: "재원", type: "select", opts: funds.filter(f => !isUntrackedFund(f)), req: true, hint: "잔액 미관리 재원은 예산변동을 적지 않습니다" },
     { k: "변경회차", type: "text", req: true, hint: "이월 / 당초 / 1, 2, 3…" },
     { k: "신청일자", type: "date" },
     { k: "변경사유", type: "text", cls: "wide" },
@@ -110,6 +110,7 @@ function formFields(kind) {
     { k: "재원코드", type: "text", req: true, hint: "'-' 없이, 예: AI01" },
     { k: "종류", type: "select", opts: DATA.meta.fund_types || ["국책", "원내", "위탁", "교육", "공금", "기타"], req: true, hint: "공금은 예산목 없이 잔액만 관리" },
     { k: "과제명", type: "text", cls: "mid" },
+    { k: "잔액미관리", type: "check", cls: "wide", label: "잔액 미관리 — 재원 출처로만 쓰고 예산·잔액을 관리하지 않음 (예산변동 불가, 대시보드·가용잔액·결의서 재원 현황 제외)" },
     { k: "시작일", type: "date" }, { k: "종료일", type: "date" }, { k: "비고", type: "text", cls: "wide" },
     { k: "인건비예산", type: "num", hint: "비우면 예산변동의 내부·외부인건비 합계를 사용 (인건비 화면)" },
   ];
@@ -118,6 +119,7 @@ function formFields(kind) {
 // 재원 종류: 비어 있으면 국책. 공금은 예산목별 예산 없이 재원 잔액(예산변동 '입금' 합계 − 집행 − 대기 품의)만 관리
 const fundType = code => (DATA.funds.find(f => f["재원코드"] === code)?.["종류"]) || "국책";
 const isPoolFund = code => !!code && fundType(code) === (DATA.meta.fund_type_pool || "공금");
+const isUntrackedFund = code => !!code && DATA.funds.find(f => f["재원코드"] === code)?.["잔액미관리"] === "Y";  // 재원 출처로만: 예산·잔액 관리 안 함
 const poolDeposit = code => DATA.budget.filter(r => r["재원"] === code).reduce((a, r) => a + (r["입금"] || 0), 0);
 // 예산변동 폼: 공금 재원이면 예산목 칸을 숨기고 입금 칸만, 아니면 반대
 function budgetFormSync() {
@@ -463,8 +465,9 @@ function renderDashboard() {
   renderTagDashboard(fund, year);
   const items = DATA.meta.budget_items;
   // 집계 범위 = 재원 시트의 재원 × 예산목 목록 (isExcludedExec · 서버 build_dashboard 와 같은 규칙). 목록 밖은 '집계 제외'로 따로 표시
-  const funds = (fund ? [fund] : fundOptions()).filter(f => DATA.funds.some(x => x["재원코드"] === f) && !isPoolFund(f));
-  const poolFunds = (fund ? [fund] : fundOptions()).filter(f => isPoolFund(f));  // 공금: 예산목 없이 재원 잔액 한 줄
+  const funds = (fund ? [fund] : fundOptions()).filter(f => DATA.funds.some(x => x["재원코드"] === f) && !isPoolFund(f) && !isUntrackedFund(f));
+  const poolFunds = (fund ? [fund] : fundOptions()).filter(f => isPoolFund(f) && !isUntrackedFund(f));  // 공금: 예산목 없이 재원 잔액 한 줄
+  const untrackedFunds = (fund ? [fund] : fundOptions()).filter(f => isUntrackedFund(f));  // 잔액 미관리: 집계·집계 제외 목록 모두에서 뺀다
 
   // 연도 필터는 집행·품의에 적용 (예산은 연도 개념 없이 재원 기준). 월을 고르면 '당월'과 '누계(연초~당월)'를 함께 표시
   const inYear = r => !year || (r["원인발생일"] || "").startsWith(year);
@@ -483,8 +486,8 @@ function renderDashboard() {
   const excluded = [];  // 재원 목록 밖(외부 지급처 인건비 등)·예산목 목록 밖 집행: 예산 집계에서 제외
   const pm = {};  // 공금 재원별 셀
   poolFunds.forEach(f => { pm[f] = cell(); pm[f].b = budgets.filter(r => r["재원"] === f).reduce((a, r) => a + (r["입금"] || 0), 0); });
-  execsAll.forEach(r => { if (pm[r["재원"]]) { const c = pm[r["재원"]]; c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } return; } const c = !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]]; if (!c) { if (inYear(r) && upTo(r)) excluded.push(r); return; } c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } });
-  reqs.forEach(r => { if (pm[r["재원"]]) { pm[r["재원"]].p += r["금액"] || 0; return; } !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]] && (m[r["재원"]][r["예산목"]].p += r["금액"] || 0); });
+  execsAll.forEach(r => { if (isUntrackedFund(r["재원"])) return; if (pm[r["재원"]]) { const c = pm[r["재원"]]; c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } return; } const c = !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]]; if (!c) { if (inYear(r) && upTo(r)) excluded.push(r); return; } c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } });
+  reqs.forEach(r => { if (isUntrackedFund(r["재원"])) return; if (pm[r["재원"]]) { pm[r["재원"]].p += r["금액"] || 0; return; } !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]] && (m[r["재원"]][r["예산목"]].p += r["금액"] || 0); });
   const add = (t, c) => { t.b += c.b; t.s += c.s; t.sm += c.sm; t.sa += c.sa; t.p += c.p; };
 
   // 카드
@@ -502,6 +505,7 @@ function renderDashboard() {
   }).join("") : `<div class="card empty-card"><div class="k">예산목별 가용잔액</div><div class="v">-</div><div class="sub"><span>${DATA.funds.length ? "예산·집행 데이터가 없습니다" : "재원을 먼저 등록하세요"}</span></div></div>`;
   const exAmt = excluded.reduce((a, r) => a + (r["금액"] || 0), 0);
   $("#dash-note").innerHTML = esc((year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.sa / tot.b) : "-"} · ${tot.p || reqs.length ? `품의대기 ${fmt(tot.p)} (${reqs.length}건) · ` : ""}가용잔액 ${tot.b ? fmt(tot.b - tot.sa - tot.p) : "예산 미입력"} · 미승인 ${unpaid}건`)
+    + (untrackedFunds.length ? ` · <span class="muted" title="재원 탭에서 '잔액 미관리'로 표시한 재원: 재원 출처로만 쓰고 예산·잔액 집계에 넣지 않음">잔액 미관리 재원 ${untrackedFunds.length}곳 (${untrackedFunds.join(", ")})</span>` : "")
     + (excluded.length ? ` · <button type="button" class="link" data-act="show-excluded" title="재원 목록에 없는 지급처(외부 인건비 등)나 예산목 목록 밖의 집행. 집행내역·태그 집계에는 포함되지만 예산 집계에서는 제외">집계 제외 ${excluded.length}건 ${fmt(exAmt)}원</button>` : "");
   $("#dash-defs").innerHTML = `칸의 큰 숫자 = 가용잔액 = 예산현액 − 집행(파일 전체) − 품의대기(날짜 무관, 선택한 재원 합산) · 막대 = 집행률(회색은 품의대기) · 예산현액 = 재원별 이월+당초+변경 합계 · 집행액 열만 연·월 필터(원인발생일) 적용 · 잔액 = 예산현액 − 집행(전체) · 미승인 = 지출완료일 없는 집행 건 · 공금 재원은 예산목 구분 없이 입금 합계 − 집행으로 잔액 한 줄`;
 
@@ -658,7 +662,7 @@ function openForm(kind, row, preset, opts = {}) {
     const id = "f-" + f.k;
     const lab = `${esc(f.label || f.k)}${f.req === true ? ' <span class="req" aria-hidden="true">*</span>' : ""}`;
     let input;
-    if (f.type === "check") return `<label class="${f.cls || ""} chk" for="${id}" data-dep="${esc(f.dep || "")}"><input id="${id}" name="${esc(f.k)}" type="checkbox"> ${lab}</label>`;
+    if (f.type === "check") return `<label class="${f.cls || ""} chk" for="${id}" data-dep="${esc(f.dep || "")}"><input id="${id}" name="${esc(f.k)}" type="checkbox"${v === true || v === "Y" ? " checked" : ""}> ${lab}</label>`;
     if (f.type === "ro") input = `<input id="${id}" name="${esc(f.k)}" type="text" value="${esc(v || "(자동)")}" readonly tabindex="-1">`;
     else if (f.type === "select" && f.groups) input = `<select id="${id}" name="${esc(f.k)}"><option value="">(선택)</option>${(v && !f.opts.includes(v)) ? `<option value="${esc(v)}" selected>${esc(v)} (목록 외)</option>` : ""}${Object.entries(f.groups).map(([g, names]) => `<optgroup label="${esc(g)}">${names.map(o => `<option value="${esc(o)}"${o === v ? " selected" : ""}>${esc(o)}</option>`).join("")}</optgroup>`).join("")}</select>`;
     else if (f.type === "select") {
@@ -827,7 +831,7 @@ function runningBalance(r) {
     DATA.exec.forEach(x => { const k = x["재원"] + "" + (isPoolFund(x["재원"]) ? "" : x["예산목"]); (groups[k] = groups[k] || []).push(x); });  // 공금은 재원 단위로 누적
     Object.values(groups).forEach(list => {
       const f = list[0]["재원"], i = list[0]["예산목"];
-      const b = isPoolFund(f) ? poolDeposit(f) : DATA.budget.filter(x => x["재원"] === f).reduce((a, x) => a + (x[i] || 0), 0);
+      const b = isUntrackedFund(f) ? 0 : isPoolFund(f) ? poolDeposit(f) : DATA.budget.filter(x => x["재원"] === f).reduce((a, x) => a + (x[i] || 0), 0);
       list.sort((a, c) => (a["원인발생일"] || "").localeCompare(c["원인발생일"] || "") || a._row - c._row);
       let acc = 0; list.forEach(x => { acc += x["금액"] || 0; RUN_BAL.set(x._row, b ? b - acc : null); });
     });
@@ -835,7 +839,7 @@ function runningBalance(r) {
   return RUN_BAL.get(r._row) ?? null;
 }
 function availableBudget(fund, item, opts = {}) {
-  if (!fund || !item) return null;
+  if (!fund || !item || isUntrackedFund(fund)) return null;  // 잔액 미관리 재원: 예산 없음·경고 없음
   if (isPoolFund(fund)) {  // 공금: 예산목과 무관한 재원 잔액
     const b = poolDeposit(fund);
     if (!b) return null;
@@ -1916,6 +1920,7 @@ const vcNum = n => n < 0 ? "−" + fmt(-n) : fmt(n);   // 음수는 U+2212
 function voucherFund(r) {
   const fund = r["재원"], upTo = x => ((x["원인발생일"] || "").localeCompare(r["원인발생일"] || "") || x._row - r._row) <= 0;
   const budget = DATA.budget.filter(x => x["재원"] === fund), execs = DATA.exec.filter(x => x["재원"] === fund && upTo(x));
+  if (isUntrackedFund(fund)) return { rows: [], own: false, before: 0, cur: 0, after: 0, untracked: true };  // 잔액 미관리: 재원 현황 표 대신 안내 한 줄
   if (isPoolFund(fund)) {  // 공금: 예산목 없이 재원 잔액 한 줄 (입금 합계 − 이 거래까지의 집행)
     const cur = r["금액"] || 0, after = poolDeposit(fund) - execs.reduce((a, x) => a + (x["금액"] || 0), 0);
     return { rows: [{ label: "공금 잔액", own: true, cur, after, before: after + cur }], own: true, before: after + cur, cur, after, pool: true };
@@ -1969,11 +1974,11 @@ function voucherHtml(v, withIds) {
   <table class="vc-t vc-g vc-ev"><colgroup><col style="width:14mm"><col style="width:40mm"><col></colgroup>
     <thead><tr><th scope="col">번호</th><th scope="col">증빙종류</th><th scope="col">비고</th></tr></thead>
     <tbody>${v.evid.map((e, i) => `<tr><td class="c">${i + 1}</td><td>${t(e["증빙종류"])}</td><td>${t(e["비고"])}</td></tr>`).join("") || '<tr><td colspan="3" class="c">등록된 증빙 없음</td></tr>'}</tbody></table>
-  <h3>재원 현황 · ${t(r["재원"])} <small>${f.pool ? "공금 · 입금 합계 − 원인발생일 순 누적 집행" : "원인발생일 순 누적"}</small></h3>
-  <table class="vc-t vc-g vc-fund"><colgroup><col class="l"><col><col><col></colgroup>
+  <h3>재원 현황 · ${t(r["재원"])} <small>${f.untracked ? "잔액 미관리 재원" : f.pool ? "공금 · 입금 합계 − 원인발생일 순 누적 집행" : "원인발생일 순 누적"}</small></h3>
+  ${f.untracked ? `<table class="vc-t vc-g vc-fund"><tbody><tr><td class="c">이 재원은 재원 출처로만 쓰며 예산·잔액을 관리하지 않습니다.</td></tr></tbody></table>` : `<table class="vc-t vc-g vc-fund"><colgroup><col class="l"><col><col><col></colgroup>
     <thead><tr><th scope="col">예산목</th><th scope="col">집행 전 잔액</th><th scope="col">금회 집행분</th><th scope="col">집행 후 잔액</th></tr></thead>
     <tbody>${f.rows.map(x => `<tr${x.own ? ' class="vc-own"' : ""}><th scope="row">${x.label}</th><td class="num">${vcNum(x.before)}</td><td class="num">${x.own ? `<b>${cur(x)}</b>` : "-"}</td><td class="num">${x.own ? `<b>${vcNum(x.after)}</b>` : vcNum(x.after)}</td></tr>`).join("")}
-      ${f.pool ? "" : `<tr class="vc-sum"><th scope="row">합계</th><td class="num">${vcNum(f.before)}</td><td class="num">${cur(f)}</td><td class="num">${vcNum(f.after)}</td></tr>`}</tbody></table>
+      ${f.pool ? "" : `<tr class="vc-sum"><th scope="row">합계</th><td class="num">${vcNum(f.before)}</td><td class="num">${cur(f)}</td><td class="num">${vcNum(f.after)}</td></tr>`}</tbody></table>`}
 </article>`;
 }
 let VOUCHER = null, VOUCHER_BTN = null;

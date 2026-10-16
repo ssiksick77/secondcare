@@ -152,8 +152,10 @@ def build_dashboard(data: dict) -> dict:
     목록 밖 집행(전체)과 대기 품의는 excluded.exec / excluded.req 로 따로 돌려주고 합계는 excluded_total.
     monthly·vendors·unpaid_count·tag_table 은 웹과 같이 전체 집행 기준 (예산 집계만 제외)."""
     items = list(store.BUDGET_ITEMS)
-    funds = [f["재원코드"] for f in data["funds"] if f.get("재원코드")]
-    fund_set = set(funds)
+    all_funds = [f["재원코드"] for f in data["funds"] if f.get("재원코드")]
+    fund_set = set(all_funds)  # 재원 시트의 재원이면 '목록 밖'이 아님 (잔액 미관리 재원 포함)
+    untracked = {f["재원코드"] for f in data["funds"] if f.get("재원코드") and (f.get("잔액미관리") or "").upper() == "Y"}
+    funds = [f for f in all_funds if f not in untracked]  # 예산 집계 대상 = 잔액을 관리하는 재원
     pool = {f["재원코드"] for f in data["funds"] if f.get("재원코드") and (f.get("종류") or store.FUND_TYPE_DEFAULT) == store.FUND_TYPE_POOL}
     deposits = {f: 0.0 for f in funds}  # 공금: 예산변동 '입금' 합계 (예산목 구분 없음)
     for r in data["budget"]:
@@ -177,7 +179,7 @@ def build_dashboard(data: dict) -> dict:
         if why:
             excluded["exec"].append({"거래번호": r.get("거래번호"), "원인발생일": r.get("원인발생일"), "재원": f, "예산목": i,
                                      "금액": r["금액"], "거래처": r.get("거래처"), "사유": why, "_row": r.get("_row")})
-        else:
+        elif f in spent:  # 잔액 미관리 재원의 집행은 예산 집계에 넣지 않는다 (집계 제외 목록에도 없음)
             spent[f][i] += r["금액"]
         if r["원인발생일"]:
             monthly[f][r["원인발생일"][:7]] += r["금액"]
@@ -194,7 +196,7 @@ def build_dashboard(data: dict) -> dict:
         if why:
             excluded["req"].append({"품의번호": r.get("품의번호"), "원인발생일": r.get("원인발생일"), "재원": r["재원"], "예산목": r["예산목"],
                                     "금액": r["금액"], "거래처": r.get("거래처"), "사유": why, "_row": r.get("_row")})
-        else:
+        elif r["재원"] in pending:
             pending[r["재원"]][r["예산목"]] += r["금액"]
 
     table = []

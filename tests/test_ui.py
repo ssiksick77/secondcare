@@ -137,6 +137,23 @@ def main() -> int:
             vt = pg.inner_text("#voucher-sheet")
             tail = vt.split("재원 현황")[-1]
             ck("결의서: 공금 잔액 한 줄", "공금 잔액" in tail and "380,000" in tail and "\n합계\t" not in tail)
+        # ---- 잔액 미관리 재원 ----
+        sv.call("POST", "/api/funds", {"재원코드": "SRC1", "과제명": "출처 전용", "잔액미관리": "Y"})
+        s, r = sv.call("POST", "/api/exec", {"재원": "SRC1", "예산목": "연구활동비", "원인발생일": "2026-03-05", "거래처": "검사", "금액": 7000, "적요": "출처 전용", "지출완료일": "2026-03-05"})
+        src_row = r.get("_row")
+        pg.reload(); pg.wait_for_timeout(1200)
+        row = pg.evaluate("(DATA.funds.find(f=>f['재원코드']==='SRC1')||{})._row")
+        pg.evaluate(f"openForm('funds', {row})"); pg.wait_for_timeout(300)
+        ck("재원 폼: 잔액 미관리 체크 복원", pg.evaluate("document.getElementById('f-잔액미관리').checked"))
+        pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
+        pg.evaluate("openForm('budget')"); pg.wait_for_timeout(300)
+        ck("예산변동 폼: 미관리 재원은 목록에 없음", not pg.evaluate("[...document.querySelectorAll('#f-재원 option')].some(o=>o.value==='SRC1')"))
+        pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
+        pg.evaluate("switchTab('dash'); renderDashboard()"); pg.wait_for_timeout(300)
+        ck("대시보드: 미관리 재원 안내, 표에는 없음", "잔액 미관리 재원" in pg.inner_text("#dash-note") and "SRC1" not in pg.inner_text("#dash-table"))
+        if src_row:
+            pg.evaluate(f"openVoucher({src_row})"); pg.wait_for_timeout(1000)
+            ck("결의서: 미관리 재원 안내 한 줄", "예산·잔액을 관리하지 않습니다" in pg.inner_text("#voucher-sheet"))
         ck("페이지 오류 없음", not errs, errs)
         b.close()
     return ck.done("화면")

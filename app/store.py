@@ -52,7 +52,8 @@ PAY_METHODS = ["연구비카드", "계좌이체", "연구자선지출", "공금�
 REQ_STATUS = ["대기", "집행완료", "취소"]
 BUDGET_ROUNDS = ["이월", "당초"]  # 그 외에는 1,2,3... 숫자 회차
 
-FUND_COLS = ["재원코드", "과제명", "시작일", "종료일", "비고", "인건비예산", "종류"]
+FUND_COLS = ["재원코드", "과제명", "시작일", "종료일", "비고", "인건비예산", "종류", "잔액미관리"]
+FUND_UNTRACKED = "잔액미관리"  # "Y" 면 재원 출처로만 쓰고 예산·잔액을 관리하지 않음 (예산변동 불가, 집계·경고·결의서 재원 현황 제외)
 # 재원 종류 (2026-10-16 사용자 결정). 공금은 예산목별 예산 없이 '입금'(예산변동 열)으로 잔액만 관리. 빈 값은 국책으로 읽는다
 FUND_TYPES = ["국책", "원내", "위탁", "교육", "공금", "기타"]
 FUND_TYPE_DEFAULT = "국책"
@@ -423,7 +424,7 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10),
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
                                    (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12)):
         ws = wb[sheet]
@@ -695,6 +696,7 @@ def read_all() -> dict:
         for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력. 종류: 빈 값은 국책
             r["인건비예산"] = None if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산") else r["인건비예산"]
             r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
+            r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
         for r in data["payee"]:
             r["인건비예산"] = None if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산") else r["인건비예산"]
         for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
@@ -1232,6 +1234,7 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
         rec["종류"] = str(rec.get("종류") or "").strip() or FUND_TYPE_DEFAULT
         if rec["종류"] not in FUND_TYPES:
             raise ValueError(f"재원 종류 '{rec['종류']}' 은 목록에 없습니다. 가능한 값: {', '.join(FUND_TYPES)}")
+        rec["잔액미관리"] = "Y" if _yes(rec.get("잔액미관리")) else ""  # 화면 체크(true/false)·API Y/N 모두 받음
     elif kind in ("exec", "req"):
         if not str(rec.get("재원") or "").strip():
             raise ValueError("재원은 필수입니다.")
@@ -1984,14 +1987,25 @@ def tag_usage(tag: str) -> int:
         return _tag_usage(_load(), tag)
 
 
+def _fund_row(wb, code: str) -> dict | None:
+    return next((x for x in _rows(wb[SHEET_FUND], FUND_COLS) if _same_key(x["재원코드"], code)), None)
+
+
 def fund_type(wb, code: str) -> str:
     """재원코드의 종류. 재원 시트에 없으면(외부 지급처 등) 빈 문자열."""
-    f = next((x for x in _rows(wb[SHEET_FUND], FUND_COLS) if _same_key(x["재원코드"], code)), None)
+    f = _fund_row(wb, code)
     return (str(f.get("종류") or "").strip() or FUND_TYPE_DEFAULT) if f else ""
 
 
+def fund_untracked(wb, code: str) -> bool:
+    f = _fund_row(wb, code)
+    return bool(f) and _yes(f.get(FUND_UNTRACKED))
+
+
 def _check_budget_fund(wb, rec: dict):
-    """공금 재원의 예산변동은 '입금'만(예산목 열은 비움), 다른 재원은 예산목만(입금 비움)."""
+    """잔액 미관리 재원은 예산변동 불가. 공금 재원의 예산변동은 '입금'만(예산목 열은 비움), 다른 재원은 예산목만(입금 비움)."""
+    if fund_untracked(wb, rec.get("재원")):
+        raise ValueError(f"'{rec.get('재원')}' 은 잔액을 관리하지 않는 재원입니다 (재원 탭의 '잔액 미관리' 체크). 예산변동을 적을 수 없습니다.")
     pool = fund_type(wb, rec.get("재원")) == FUND_TYPE_POOL
     items_filled = [i for i in BUDGET_ITEMS if _to_num(rec.get(i)) != 0]
     if pool:

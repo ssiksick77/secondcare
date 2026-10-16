@@ -85,6 +85,15 @@ def main() -> int:
         row = next((x for x in r["dashboard"]["table"] if x["재원"] == "GG01"), None)
         ck("대시보드: 공금 잔액 한 줄 = 입금 − 집행 − 대기", row is not None and row["예산목"] == "(공금 잔액)" and row["예산현액"] == 500000 and row["집행액"] == 120000 and row["가용잔액"] == 360000, row)
         ck("대시보드: 공금은 예산목 줄 없음", sum(1 for x in r["dashboard"]["table"] if x["재원"] == "GG01") == 1)
+        # ---- 잔액 미관리 재원 ----
+        s, r = sv.call("POST", "/api/funds", {"재원코드": "SRC1", "과제명": "출처 전용", "잔액미관리": True})
+        ck("잔액 미관리 재원 생성 (체크 true → Y)", s == 200 and r.get("잔액미관리") == "Y", (s, r))
+        s, r = sv.call("POST", "/api/budget", {"재원": "SRC1", "변경회차": "당초", "연구활동비": 1000})
+        ck("미관리 재원 예산변동 → 400", s == 400, (s, r))
+        s, r = sv.call("POST", "/api/exec", {"재원": "SRC1", "예산목": "연구활동비", "원인발생일": "2026-03-05", "거래처": "검사", "금액": 7000, "적요": "출처 전용 집행"})
+        ck("미관리 재원 집행은 저장됨", s == 200, (s, r))
+        s, r = sv.call("GET", "/api/all")
+        ck("대시보드: 미관리 재원 줄·집계 제외 모두 없음", not any(x["재원"] == "SRC1" for x in r["dashboard"]["table"]) and not any(x["재원"] == "SRC1" for x in r["dashboard"]["excluded"]["exec"]))
     return ck.done("API")
 
 
