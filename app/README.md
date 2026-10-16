@@ -304,3 +304,13 @@ claude mcp add ledger -s user -- python "C:/Users/parkj/Desktop/Project/dev/CAIH
 - **드라이브 "인증이 만료"**: 테스트 모드 7일 만료. "다시 연결" 또는 앱 게시(5절).
 - **AI 오류 "크레딧 부족"**: 제공자 콘솔에서 결제를 확인. "모델을 찾을 수 없음": 설정의 모델명 확인.
 - **MCP가 다른 장부를 씀**: `.env`의 `LEDGER_XLSX`는 웹앱과 MCP 모두에 적용됩니다. 두 쪽 모두 재시작하세요. `run_qa.bat`으로 띄운 QA 서버만 QA 장부를 씁니다.
+
+## 검사 (tests/)
+
+`scripts/check.sh` 가 두 단계를 돌립니다: `smoke`(의존성 import)와 `test`(`python -I tests/run.py`). `tests/run.py` 는 세 묶음을 차례로 실행하고 하나라도 실패하면 1을 돌려줍니다.
+
+- `tests/test_calc.js` — 여비 계산기 순수 계산(통화 환산, 기내박·일수, 규정 산식)을 node 로 검사. `node tests/test_calc.js`
+- `tests/test_api.py` — 신청 API 규칙(학회 금액 강제·날짜·재결재·0원 승인 차단, 기타·장비 정규화·정수·시스템 열 보호). `python -I tests/test_api.py`
+- `tests/test_ui.py` — Playwright(chromium 헤드리스)로 신청 폼·여비 계산기·기타 문구·탭 전환·드로어·품의 전환을 검사. `python -I tests/test_ui.py` (playwright 와 chromium 설치 필요: `python -m pip install playwright && python -m playwright install chromium`)
+
+서버가 필요한 검사는 `tests/_env.py` 의 `Server` 가 QA 장부(`docs/qa_data_2026_01_09/qa_ledger.xlsx`)를 `tests/.tmp/<이름>/` 에 복사해 빈 포트로 띄우고(`LEDGER_DRIVE_MOCK=1`, `LEDGER_NO_BROWSER=1`), 끝나면 내립니다. 실제 장부는 건드리지 않습니다. `LEDGER_NO_BROWSER=1` 이면 `main.py` 가 브라우저를 열지 않습니다(2026-10-16 추가).

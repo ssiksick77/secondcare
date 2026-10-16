@@ -15,3 +15,4 @@ app/.impeccable/hook.cache.json
 docs/qa_data_2026_01_09/qa_drive_mock/
 # 검사 실행 중 만드는 장부 복사본·로그 (tests/run.py)
 tests/.tmp/
+tests/__pycache__/

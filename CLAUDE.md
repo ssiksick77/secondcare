@@ -26,7 +26,8 @@ A local, single-user web app for the research-fund accountant of the 분당서�
 
 - Run: `app\run.bat` (runs `python main.py` in `app/`, opens http://127.0.0.1:8791; port from `LEDGER_PORT`)
 - Run against QA data: `app\run_qa.bat` (sets `LEDGER_XLSX`, `LEDGER_ENV`, `LEDGER_DRIVE_MOCK=1`, port 8792)
-- Check: `scripts/check.sh` (runs: smoke — dependency import check from run.bat)
+- Check: `scripts/check.sh` (runs: smoke — dependency import check; test — `tests/run.py`: node calculator test, API test, Playwright UI test, all against a QA ledger copy in `tests/.tmp/`; about 1 minute)
+- Other: `python -I tests/run.py calc` — run one test group (`calc`, `api`, `ui`)
 - Other: `app\run_mcp.bat` — starts `mcp_server.py` for Claude Desktop / Claude Code (not for double-click)
 - Other: `python docs/qa_data_2026_01_09/supplement_v11.py` — idempotent QA fixture supplement; needs `LEDGER_XLSX`, `LEDGER_ENV`, `LEDGER_DRIVE_MOCK=1`
 - Other: `python docs/qa_data_2026_01_09/write_checklist_results.py <runner_output.txt>` — writes QA results into the checklist docs
@@ -46,7 +47,7 @@ Write commit messages in short English. First line: `<type>: <summary>` under 50
 
 - Do not edit or commit `app/.env`, `app/google_client_secret.json`, `app/google_token.json`, `docs/qa_data_2026_01_09/qa.env` — secrets
 - Do not hand-edit `app/drive_folders.json`, `app/backup/`, `app/__pycache__/`, `app/.impeccable/hook.cache.json`, `docs/qa_data_2026_01_09/qa_drive_mock/`, `docs/qa_data_2026_01_09/build_backups/` — local state
-- Do not open or modify `의료인공지능센터_지출장부_2026.xlsx` or any `*.xlsx` from code changes; it is the live ledger and is gitignored. Use `app\run_qa.bat` and the QA dataset for testing
+- Do not open or modify `의료인공지능센터_지출장부_2026.xlsx` or any `*.xlsx` from code changes; it is the live ledger and is gitignored. Use `app\run_qa.bat` and the QA dataset for manual testing. Automated tests use `tests/_env.py` (copies the QA ledger to `tests/.tmp/`, free port, `LEDGER_NO_BROWSER=1`); write new tests the same way
 - Do not run `docs/qa_data_2026_01_09/install_fixture.py` without approval; it writes over the active ledger
 - Do not run `docs/qa_data_2026_01_09/revalidate_fixture.py`; it is a one-time V1 migration
 - Do not call Google Drive or the AI APIs (Anthropic, OpenAI) in checks without approval; use `LEDGER_DRIVE_MOCK=1`
