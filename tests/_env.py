@@ -15,6 +15,13 @@ import time
 import urllib.error
 import urllib.request
 
+# python -I 는 PYTHONIOENCODING 을 무시하므로 출력 인코딩을 직접 고정 (한글·기호가 cp949 콘솔에서 깨지지 않게)
+for _st in (sys.stdout, sys.stderr):
+    try:
+        _st.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "app")
 QA_DIR = os.path.join(ROOT, "docs", "qa_data_2026_01_09")

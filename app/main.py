@@ -154,6 +154,11 @@ def build_dashboard(data: dict) -> dict:
     items = list(store.BUDGET_ITEMS)
     funds = [f["재원코드"] for f in data["funds"] if f.get("재원코드")]
     fund_set = set(funds)
+    pool = {f["재원코드"] for f in data["funds"] if f.get("재원코드") and (f.get("종류") or store.FUND_TYPE_DEFAULT) == store.FUND_TYPE_POOL}
+    deposits = {f: 0.0 for f in funds}  # 공금: 예산변동 '입금' 합계 (예산목 구분 없음)
+    for r in data["budget"]:
+        if r["재원"] in pool:
+            deposits[r["재원"]] += r.get("입금") or 0
 
     budget = {f: {i: 0.0 for i in items} for f in funds}
     for r in data["budget"]:
@@ -194,6 +199,12 @@ def build_dashboard(data: dict) -> dict:
 
     table = []
     for f in funds:
+        if f in pool:  # 공금: 예산목 구분 없이 재원 잔액 한 줄
+            b, s, p = deposits[f], sum(spent[f].values()), sum(pending[f].values())
+            if b or s or p:
+                table.append({"재원": f, "예산목": "(공금 잔액)", "예산현액": b, "집행액": s, "잔액": b - s,
+                              "집행률": (s / b) if b else None, "품의대기": p, "가용잔액": b - s - p})
+            continue
         for i in items:
             b, s, p = budget[f][i], spent[f][i], pending[f][i]
             if b == 0 and s == 0 and p == 0:

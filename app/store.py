@@ -52,7 +52,11 @@ PAY_METHODS = ["연구비카드", "계좌이체", "연구자선지출", "공금�
 REQ_STATUS = ["대기", "집행완료", "취소"]
 BUDGET_ROUNDS = ["이월", "당초"]  # 그 외에는 1,2,3... 숫자 회차
 
-FUND_COLS = ["재원코드", "과제명", "시작일", "종료일", "비고", "인건비예산"]
+FUND_COLS = ["재원코드", "과제명", "시작일", "종료일", "비고", "인건비예산", "종류"]
+# 재원 종류 (2026-10-16 사용자 결정). 공금은 예산목별 예산 없이 '입금'(예산변동 열)으로 잔액만 관리. 빈 값은 국책으로 읽는다
+FUND_TYPES = ["국책", "원내", "위탁", "교육", "공금", "기타"]
+FUND_TYPE_DEFAULT = "국책"
+FUND_TYPE_POOL = "공금"
 # 인건비 (인건비_설계_2026-10-13.md)
 PEOPLE_COLS = ["이름", "인건비구분", "입사일", "퇴사일", "이월선급", "비고"]
 SALARY_COLS = ["이름", "시작월", "종료월", "월액", "비고"]
@@ -116,11 +120,11 @@ DELIVERED_MSG = "배송 완료된 신청입니다 (주문 {no}). 담당자가 �
 LOAD_LOCKED_MSG = "장부 파일을 열 수 없습니다. 다른 프로그램(엑셀·동기화 등)이 파일을 잠갔거나 접근 권한이 없습니다. 파일을 닫은 뒤 다시 시도하세요."
 LINK_RE = re.compile(r"^https?://\S", re.I)
 BUDGET_HEAD_ROW = 8
-BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS  # 새 장부: A~D + E~O. 읽기·쓰기는 8행 머리글 이름 기준 (열 순서 무관)
+BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS + ["입금"]  # 새 장부: A~D + E~O (+ 입금: 공금 재원 전용, 맨 끝 열). 읽기·쓰기는 8행 머리글 이름 기준 (열 순서 무관)
 
 DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일",
              "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일"}
-NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기", "부가세액"} | set(BUDGET_ITEMS)
+NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기", "부가세액", "입금"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
 IDENT_COLS = {
     "funds": ["재원코드"], "exec": ["거래번호"], "req": ["품의번호"], "tags": ["태그명"],
@@ -419,7 +423,7 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_FUND, "인건비예산", 16),
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
                                    (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12)):
         ws = wb[sheet]
@@ -433,6 +437,15 @@ def _ensure_structure(wb) -> bool:
 
     if _ensure_exec_link(wb, head_font):
         changed = True
+
+    ws = wb[SHEET_FUND]  # 재원 종류: 비어 있으면 국책 (2026-10-16, 기존 재원은 모두 국책으로 두고 사용자가 고친다)
+    heads = _headers(ws)
+    if "종류" in heads and "재원코드" in heads:
+        kc, tc = heads.index("재원코드") + 1, heads.index("종류") + 1
+        for rr in range(2, ws.max_row + 1):
+            if ws.cell(rr, kc).value not in (None, "") and ws.cell(rr, tc).value in (None, ""):
+                ws.cell(rr, tc, FUND_TYPE_DEFAULT)
+                changed = True
 
     for name, cols in ((SHEET_RQ, REQUEST_COLS), (SHEET_ORDER, ORDER_COLS), (SHEET_RATT, RATT_COLS)):
         ws = wb[name]  # 신청 계열 시트: 나중에 추가된 열 보정
@@ -679,8 +692,9 @@ def read_all() -> dict:
         for r in data["deposit"]:  # 주문이 남긴 적립금 '사용' 행: 증빙번호·금액·거래처·구분 수정과 삭제 잠금 (화면 표시용)
             if r["_row"] in dep_links:
                 r["_locked_by"] = dep_links[r["_row"]]
-        for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력
+        for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력. 종류: 빈 값은 국책
             r["인건비예산"] = None if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산") else r["인건비예산"]
+            r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
         for r in data["payee"]:
             r["인건비예산"] = None if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산") else r["인건비예산"]
         for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
@@ -691,6 +705,8 @@ def read_all() -> dict:
             "labor_status": LABOR_STATUS,
             "dep_types": DEP_TYPES,
             "budget_items": BUDGET_ITEMS,
+            "fund_types": FUND_TYPES,
+            "fund_type_pool": FUND_TYPE_POOL,
             "pay_methods": PAY_METHODS,
             "req_status": REQ_STATUS,
             "exec_status_labels": EXEC_STATUS_LABEL,
@@ -1213,6 +1229,9 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
             raise ValueError("재원코드는 필수입니다.")
         if "-" in str(rec["재원코드"]):
             raise ValueError("재원코드에는 '-'를 사용할 수 없습니다 (번호 체계와 충돌).")
+        rec["종류"] = str(rec.get("종류") or "").strip() or FUND_TYPE_DEFAULT
+        if rec["종류"] not in FUND_TYPES:
+            raise ValueError(f"재원 종류 '{rec['종류']}' 은 목록에 없습니다. 가능한 값: {', '.join(FUND_TYPES)}")
     elif kind in ("exec", "req"):
         if not str(rec.get("재원") or "").strip():
             raise ValueError("재원은 필수입니다.")
@@ -1522,6 +1541,7 @@ def create(kind: str, rec: dict) -> dict:
                 raise ValueError(f"이미 존재하는 {key}입니다 (대소문자·공백만 다른 값 포함).")
         if kind == "budget":
             _check_budget_round(rec, _rows(ws, cols, head_row))
+            _check_budget_fund(wb, rec)
         if kind == "deposit" and rec.get("구분") == "적립" and rec.pop("_record_exec", False):
             ex = {c: "" for c in EXEC_COLS}
             ex.update({"원인발생일": rec["일자"], "재원": rec.get("_재원"), "예산목": rec.get("_예산목"),
@@ -1590,6 +1610,7 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
             _validate_tag(rec, wb)  # 태그를 바꿀 때만 검증 (기존 미등록 태그는 유지 가능)
         if kind == "budget":
             _check_budget_round(rec, [r for r in cur if r["_row"] != row])
+            _check_budget_fund(wb, rec)
         if kind == "labor":
             if existing["상태"] == "확정":
                 raise ValueError("확정된 지급 건은 수정할 수 없습니다. 먼저 '확정 취소'를 하세요.")
@@ -1961,6 +1982,29 @@ def tag_usage(tag: str) -> int:
     """태그를 쓰는 행 수 (쉼표로 묶인 옛 태그 포함)."""
     with _lock:
         return _tag_usage(_load(), tag)
+
+
+def fund_type(wb, code: str) -> str:
+    """재원코드의 종류. 재원 시트에 없으면(외부 지급처 등) 빈 문자열."""
+    f = next((x for x in _rows(wb[SHEET_FUND], FUND_COLS) if _same_key(x["재원코드"], code)), None)
+    return (str(f.get("종류") or "").strip() or FUND_TYPE_DEFAULT) if f else ""
+
+
+def _check_budget_fund(wb, rec: dict):
+    """공금 재원의 예산변동은 '입금'만(예산목 열은 비움), 다른 재원은 예산목만(입금 비움)."""
+    pool = fund_type(wb, rec.get("재원")) == FUND_TYPE_POOL
+    items_filled = [i for i in BUDGET_ITEMS if _to_num(rec.get(i)) != 0]
+    if pool:
+        if items_filled:
+            raise ValueError(f"공금 재원은 예산목별 예산 없이 '입금'만 적습니다 ({', '.join(items_filled[:3])} 비우기).")
+        if _to_num(rec.get("입금")) == 0:
+            raise ValueError("공금 재원의 예산변동은 입금액이 필요합니다 (0이 아닌 금액).")
+        for i in BUDGET_ITEMS:
+            rec[i] = ""
+    else:
+        if _to_num(rec.get("입금")) != 0:
+            raise ValueError("'입금'은 공금 재원에서만 씁니다. 다른 재원은 예산목별 예산을 적으세요.")
+        rec["입금"] = ""
 
 
 def _fund_usage(wb, code: str) -> int:

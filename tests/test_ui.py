@@ -111,6 +111,32 @@ def main() -> int:
             ck("품의 전환 preset: 적요·지출예정일", pg.evaluate("document.getElementById('f-적요').value") == "검사 구독 (월 3석) × 12" and pg.evaluate("document.getElementById('f-지출예정일')?.value") == "2026-11-01")
         else:
             ck("기타: 저장 행 존재", False)
+        # ---- 재원 종류 · 공금 (회계대장 화면) ----
+        sv.call("POST", "/api/funds", {"재원코드": "GG01", "과제명": "센터 공금", "종류": "공금"})
+        sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "입금": 500000})
+        s, r = sv.call("POST", "/api/exec", {"재원": "GG01", "예산목": "연구활동비", "원인발생일": "2026-03-02", "거래처": "검사", "금액": 120000, "적요": "공금 지출", "지출완료일": "2026-03-02"})
+        pool_row = r.get("_row")
+        pg.goto(sv.base + "/"); pg.wait_for_timeout(1200)
+        pg.evaluate("openForm('funds')"); pg.wait_for_timeout(300)
+        ck("재원 폼: 종류 select, 기본 국책", pg.evaluate("(()=>{const s=document.getElementById('f-종류'); return s && s.tagName==='SELECT' && s.value==='국책' && [...s.options].some(o=>o.value==='공금')})()"))
+        pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
+        pg.evaluate("openForm('budget')"); pg.wait_for_timeout(300)
+        pg.select_option("#f-재원", "GG01"); pg.wait_for_timeout(200)
+        ck("예산변동 폼: 공금이면 예산목 숨김·입금 표시", pg.evaluate("document.getElementById('f-입금').closest('label').hidden === false && document.getElementById('f-연구활동비').closest('label').hidden === true"))
+        other = pg.evaluate("[...document.querySelectorAll('#f-재원 option')].map(o=>o.value).find(v=>v && v!=='GG01')")
+        pg.select_option("#f-재원", other); pg.wait_for_timeout(200)
+        ck("예산변동 폼: 다른 재원이면 반대", pg.evaluate("document.getElementById('f-입금').closest('label').hidden === true && document.getElementById('f-연구활동비').closest('label').hidden === false"))
+        pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
+        if pg.evaluate("document.querySelector('#dlg-confirm').open"):
+            pg.click("#dlg-confirm button:has-text('버리')"); pg.wait_for_timeout(200)
+        pg.evaluate("switchTab('dash'); renderDashboard()"); pg.wait_for_timeout(300)
+        cards = pg.inner_text("#dash-cards"); table = pg.inner_text("#dash-table")
+        ck("대시보드: 공금 카드·줄", "GG01 잔액 (공금)" in cards and "잔액 (공금)" in table and "380,000" in cards)
+        if pool_row:
+            pg.evaluate(f"openVoucher({pool_row})"); pg.wait_for_timeout(1000)
+            vt = pg.inner_text("#voucher-sheet")
+            tail = vt.split("재원 현황")[-1]
+            ck("결의서: 공금 잔액 한 줄", "공금 잔액" in tail and "380,000" in tail and "\n합계\t" not in tail)
         ck("페이지 오류 없음", not errs, errs)
         b.close()
     return ck.done("화면")
