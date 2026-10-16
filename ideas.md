@@ -15,3 +15,4 @@ Who reads what:
 - [later][idea] 2026-10-14: export to CSV — asked for during brainstorming of the report screen; not needed for the first version
 - [later][fix]  2026-10-14: date parser accepts "2026/1/5" but not "2026-1-5" — noticed while editing the report screen
 -->
+- [later][idea] 2026-10-16: 연구원/담당자 역할을 서버가 검사 — 학회 탭 점검 D8, 사용자가 보류. LEDGER_HOST(타 PC 접속) 과제와 함께 다룰 것
