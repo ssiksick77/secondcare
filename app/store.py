@@ -1340,17 +1340,15 @@ def _validate_request(rec: dict, existing: dict | None = None):
             raise ValueError(f"수량이 너무 큽니다 ({QTY_MAX:,} 이하).")
         rec["수량"] = int(qty)
         if rec["구분"] == "학회":
-            price = _to_num(rec.get("단가"), strict=True, label="단가")
-            amt = _to_num(rec.get("금액"), strict=True, label="금액")
-            if price < 0 or amt < 0:
-                raise ValueError("단가·금액은 0 이상이어야 합니다.")
-            if price > UNIT_MAX:
-                raise ValueError("단가가 너무 큽니다 (1조 원 이하).")
-            if rec.get("금액") in (None, "") and rec.get("단가") not in (None, ""):
-                amt = price * qty
-                rec["금액"] = amt
+            # 학회는 금액 직접 입력(여비 계산기 합계). 단가·수량은 쓰지 않으므로 비움·1로 정규화 (화면 requestPrepare 와 동일)
+            amt = _won_int(rec.get("금액"), "금액") if rec.get("금액") not in (None, "") else 0
+            if amt < 0:
+                raise ValueError("금액은 0 이상이어야 합니다.")
             if amt > AMOUNT_MAX:
                 raise ValueError("금액이 너무 큽니다.")
+            rec["금액"] = amt
+            rec["단가"] = ""
+            rec["수량"] = 1
             rec["부가세액"] = ""
         else:
             price = _to_num(rec.get("단가"), strict=True, label="단가")
@@ -1376,17 +1374,66 @@ def _validate_request(rec: dict, existing: dict | None = None):
             if amt > AMOUNT_MAX:
                 raise ValueError("금액이 너무 큽니다 (단가 × 수량을 확인하세요).")
             rec["금액"] = amt
-    d = rec.get("상세")
-    if isinstance(d, (dict, list)):
-        rec["상세"] = json.dumps(d, ensure_ascii=False)
-    elif d not in (None, "") and str(d).strip():
-        try:
-            json.loads(str(d))
-        except ValueError:
-            raise ValueError("상세(JSON) 형식이 올바르지 않습니다.") from None
+    if rec["구분"] != "학회":
+        rec["상세"] = ""  # 상세(JSON)는 학회 전용
+    elif "상세" in rec or existing is None:
+        d = _detail_dict(rec.get("상세"))
+        for k in ("시작일", "종료일"):
+            v = d.get(k)
+            if v not in (None, "") and not _valid_date(_to_date(v) or ""):
+                raise ValueError(f"학회 {k} 형식이 올바르지 않습니다 (YYYY-MM-DD): {v}")
+            if v not in (None, ""):
+                d[k] = _to_date(v)
+        if d.get("시작일") and d.get("종료일") and d["종료일"] < d["시작일"]:
+            raise ValueError("학회 종료일이 시작일보다 빠릅니다.")
+        total = _calc_total(d)
+        if total is not None:
+            rec["금액"] = total  # 계산기 결과가 있으면 금액은 항상 산출 합계 (API·MCP 경로 포함)
+            d["합계"] = total
+        rec["상세"] = json.dumps(d, ensure_ascii=False) if d else ""
     if len(str(rec.get("상세") or "")) > 32000:
         raise ValueError("상세(JSON)가 너무 깁니다 (엑셀 셀 한도 32,000자).")
     _validate_text_len("request", rec, REQUEST_COLS)
+
+
+def _detail_dict(d) -> dict:
+    """신청 상세(JSON) → dict. 객체가 아니면(배열·숫자 등) 오류."""
+    if d in (None, "") or (isinstance(d, str) and not d.strip()):
+        return {}
+    if isinstance(d, str):
+        try:
+            d = json.loads(d)
+        except ValueError:
+            raise ValueError("상세(JSON) 형식이 올바르지 않습니다.") from None
+    if not isinstance(d, dict):
+        raise ValueError("상세(JSON)는 객체({…})여야 합니다.")
+    return d
+
+
+def _calc_total(d: dict):
+    """여비 계산기 결과(v·in·out)가 있으면 산출 합계(원 단위 정수). 없으면 None. 상세.합계와 out.합계가 다르면 오류."""
+    if not all(k in d for k in ("v", "in", "out")):
+        return None
+    out = d.get("out")
+    if not isinstance(out, dict) or out.get("합계") in (None, ""):
+        raise ValueError("여비 계산 결과(out.합계)가 없습니다. 계산기에서 다시 계산하세요.")
+    total = _won_int(out["합계"], "산출 합계")
+    if total < 0:
+        raise ValueError("산출 합계는 0 이상이어야 합니다.")
+    if d.get("합계") not in (None, "") and _won_int(d["합계"], "합계") != total:
+        raise ValueError(f"상세의 합계({d['합계']})와 산출 내역 합계({total})가 다릅니다. 계산기에서 다시 계산하세요.")
+    return total
+
+
+def _detail_cmp(v) -> str:
+    """재결재 판단용 상세 비교 문자열: 계산일처럼 저장마다 바뀌는 값은 뺀다."""
+    try:
+        d = _detail_dict(v)
+    except ValueError:
+        return str(v or "")
+    if isinstance(d.get("out"), dict):
+        d = {**d, "out": {k: x for k, x in d["out"].items() if k != "계산일"}}
+    return json.dumps(d, ensure_ascii=False, sort_keys=True)
 
 
 def _person(wb, name: str) -> dict:
@@ -1597,6 +1644,8 @@ def _prepare_request_update(wb, existing: dict, rec: dict, keep_approval: bool =
     if status != "승인" or keep_approval:
         return False
     changed = [c for c in REAPPROVE_COLS if c in rec and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c))]
+    if existing.get("구분") == "학회" and "상세" in rec and _detail_cmp(rec["상세"]) != _detail_cmp(existing.get("상세")):
+        changed.append("상세")  # 학회: 기간·장소·산출 내역이 결재 근거이므로 바뀌면 다시 승인
     if not changed:
         return False
     if existing.get("주문번호"):
@@ -2131,6 +2180,8 @@ def _apply_request_action(rec: dict, action: str, extra: dict, status: str, stat
     if action == "approve":
         if status not in ("신청", "반려"):
             raise ValueError(f"'{status}' 상태의 신청은 승인할 수 없습니다 (신청·반려만 가능).")
+        if rec.get("구분") == "학회" and _to_num(rec.get("금액")) <= 0:
+            raise ValueError("학회 신청은 금액이 0원이면 승인할 수 없습니다. 여비 계산기로 금액을 산출하거나 직접 입력하세요.")
         rec.update({"상태": "승인", "결재인": who, "결재일": when, "반려사유": ""})
     elif action == "reject":
         reason = str(extra.get("사유") or extra.get("반려사유") or "").strip()
