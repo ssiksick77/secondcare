@@ -8,7 +8,7 @@ Object.assign(IDENT, { request: ["신청번호"], order: ["주문번호"], ratt:
 FILTERS.request = {};
 const REQ_LOCKED = ["품의전환", "완료"];  // 비고만 수정 가능, 삭제 불가
 const REQ_ORDER_LOCK = ["구분", "단가", "수량", "금액", "구매처", "부가세구분", "부가세액"];  // 주문에 묶인 신청
-const REQ_APPROVAL_KEYS = ["품목", "규격", "단가", "수량", "금액", "관련과제", "부가세구분", "부가세액", "상세"];  // 승인된 건에서 바뀌면 다시 결재 (서버도 같은 기준; 상세는 학회의 기간·장소·산출 내역)
+const REQ_APPROVAL_KEYS = ["구분", "품목", "규격", "단가", "수량", "금액", "관련과제", "부가세구분", "부가세액", "상세"];  // 승인된 건에서 바뀌면 다시 결재 (서버도 같은 기준; 상세는 학회의 기간·장소·산출 내역)
 const REQ_CONF_KEYS = [["_시작일", "시작일"], ["_종료일", "종료일"], ["_국내외", "국내외"], ["_장소", "장소"], ["_참가자", "참가자"], ["_등록비", "등록비"]];
 const reqExcerpt = (s, n = 24) => { s = String(s ?? "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n) + "…" : s; };
 const rattCount = r => (DATA.ratt || []).filter(a => a["신청번호"] === r["신청번호"]).length;
@@ -334,6 +334,11 @@ function requestFormAfterOpen(row) {
     calc.innerHTML = `<button type="button" class="btn btn-sm" id="req-calc-btn" aria-haspopup="dialog">여비 계산기</button><span class="toolbar-note">항공·숙박·일비를 계산해 금액과 상세에 채웁니다</span>`;
     amt.after(calc);
   }
+  const typeSel = F("구분");
+  if (typeSel) {  // 구분 안내: 선택값에 따라 바뀜 (requestFormSync)
+    const p = document.createElement("p"); p.className = "mid toolbar-note"; p.id = "req-type-note";
+    typeSel.closest("label").after(p); typeSel.setAttribute("aria-describedby", p.id);
+  }
   const sup = F("구매처");
   if (sup) {  // 이용 불가 구매처 표시 (담당자 목록, 또는 기존 값) + 안내 문구
     [...sup.options].forEach(o => { if (o.value && supOff(o.value)) o.textContent = o.value + OFF_SUFFIX; });
@@ -368,14 +373,33 @@ function requestFormAfterOpen(row) {
   $("#dlg").dataset.initial = formSnapshot();
 }
 const setLab = (el, text) => { const lab = el?.closest("label")?.querySelector(".lab"); if (lab?.firstChild?.nodeType === 3) lab.firstChild.nodeValue = text; };
+const setHint = (el, text) => { const lab = el?.closest("label")?.querySelector(".lab"); if (!lab) return; let sm = lab.querySelector("small"); if (!text) { sm?.remove(); return; } if (!sm) { sm = document.createElement("small"); lab.append(" ", sm); } sm.textContent = `(${text})`; };
+const setChkLab = (el, text) => { const lab = el?.closest("label.chk"); const tn = lab && [...lab.childNodes].reverse().find(n => n.nodeType === 3 && n.nodeValue.trim()); if (tn) tn.nodeValue = " " + text; };
+// 구분 안내 (사용자 결정 2026-10-16): 장비 = 전자제품, 소모품 = 알파몰·드림디포 구매, 학회, 그 밖의 모든 구매·결제 = 기타
+const REQ_TYPE_HINT = {
+  장비: "전자제품 등 장비 구매",
+  소모품: "알파몰·드림디포에서 사는 소모품 (담당자가 모아 주문)",
+  학회: "학회 참가 여비·등록비 (여비 계산기)",
+  기타: "그 밖의 모든 구매·결제 — 소프트웨어 구독, 클라우드, 수리·용역, 회비, 교육, 인쇄, 배송, 쇼핑몰 외 구매",
+};
+// 구분별 폼 문구. 기타는 물건 구매가 아닐 때가 많아 라벨·힌트를 따로 둔다
+const REQ_TYPE_TEXT = {
+  기타: { 규격: "기간·단위·플랜 (예: 월 3석, 1년, 2시간). 외화면 'USD 500 × 1,400'처럼", 수량: "개·월·회·석 — 단위는 규격에", 희망일: "시작·작업 희망일", 단가: "단가 (실제 낼 금액) ", 단가Y: "단가 (공급가, 부가세 별도) ",
+    부가세: "부가세 별도 (견적서가 공급가 기준일 때 · 해외 결제·면세는 체크 안 함)", 첨부: "견적서·인보이스·요금제 안내·청구서를 올리세요." },
+  default: { 규격: "모델·사양", 수량: "", 희망일: "필요한 날짜", 단가: "단가 (부가세 포함) ", 단가Y: "단가 (공급가, 부가세 별도) ", 부가세: "부가세 별도 (쇼핑몰 가격이 공급가일 때)", 첨부: "" },
+};
+const reqText = t => REQ_TYPE_TEXT[t] || REQ_TYPE_TEXT.default;
 function requestFormSync() {
   if ($("#dlg").dataset.kind !== "request") return;
   const t = F("구분")?.value;
   setLab(F("품목"), t === "학회" ? "학회명 " : "품목 ");  // 뒤 공백: 필수 표시(*)와 띄움
+  const tn = $("#req-type-note"); if (tn) { tn.textContent = REQ_TYPE_HINT[t] || ""; tn.hidden = !tn.textContent; }
+  const tx = reqText(t);
+  setHint(F("규격"), tx.규격); setHint(F("수량"), tx.수량); setHint(F("희망일"), tx.희망일); setChkLab(F("부가세구분"), tx.부가세);
   const calc = $("#req-calc-row"); if (calc) calc.hidden = t !== "학회";
   const sn = $("#req-sup-note"); if (sn) { sn.hidden = t !== "소모품" || !sn.textContent; F("구매처")?.[sn.hidden ? "removeAttribute" : "setAttribute"]("aria-describedby", sn.id); }
   const vchk = F("부가세구분"), vat = !!vchk?.checked && !vchk.closest("label").hidden;
-  setLab(F("단가"), vat ? "단가 (공급가, 부가세 별도) " : "단가 (부가세 포함) ");
+  setLab(F("단가"), vat ? tx.단가Y : tx.단가);
   setLab(F("_금액"), vat ? "금액 (단가 × 수량 + 부가세)" : "금액 (단가 × 수량)");
   const vl = F("부가세액")?.closest("label"); if (vl) vl.hidden = !vat;
   updateAmtPreview();
@@ -411,9 +435,11 @@ document.addEventListener("click", e => { if (e.target.closest("#req-calc-btn") 
 // 연구원 안내문은 탭에 맞춰 (학회: 여비 계산기·증빙 종류)
 function reqResearcherNote() {
   const p = $(".req-researcher-note"); if (!p) return;
-  const conf = reqType() === "학회";
-  p.firstChild.nodeValue = conf
+  const t = reqType();
+  p.firstChild.nodeValue = t === "학회"
     ? "① [신청 추가]에서 학회명·기간·장소를 적고 [여비 계산기]로 금액을 산출합니다. ② 행을 눌러 초청장·등록 인보이스·e-티켓을 첨부합니다. 담당자가 승인하면 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다."
+    : t === "기타"
+    ? "장비(전자제품)·소모품(알파몰·드림디포)·학회가 아닌 모든 구매·결제는 여기에 신청합니다(구독·클라우드·수리·용역·회비·교육·인쇄·배송 등). ① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서·인보이스·요금제 안내를 첨부합니다. 담당자가 승인하면 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다."
     : "① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.";
 }
 
@@ -481,12 +507,15 @@ async function requestConfirmSave(rec, row) {
 // 저장 알림 (app.js 제출 처리에서 호출): 연구원 새 신청은 다음 할 일(첨부)까지
 function requestSavedMsg(saved, isNew) {
   const no = saved?.["신청번호"] || "";
-  if (isNew && !isReqAdmin()) showAlert(`${no} 신청했습니다. 견적서는 행을 눌러 첨부하세요.`, "ok");
+  const att = saved?.["구분"] === "학회" ? "초청장·등록 인보이스·e-티켓은" : saved?.["구분"] === "기타" ? "견적서·인보이스·요금제 안내는" : "견적서는";
+  if (isNew && !isReqAdmin()) showAlert(`${no} 신청했습니다. ${att} 행을 눌러 첨부하세요.`, "ok");
   else showAlert(`${no ? no + " " : ""}저장했습니다.`, "ok");
   if (saved?.reapproval) showAlert(`${no} 내용이 바뀌어 승인이 취소되고 '신청'으로 돌아갔습니다. 다시 승인하세요.`, "warn");
 }
 // 저장 뒤: 다른 해의 신청일로 저장했으면 목록 연도를 그 해로 (안 그러면 방금 저장한 행이 안 보임)
 function requestAfterSave(saved) {
+  const t = saved?.["구분"];
+  if (t && t !== reqType() && $(`#request-tabs [data-rtype="${t}"]`)) { switchReqTab(t); showAlert(`구분이 ${t}라 ${t} 탭으로 옮겼습니다.`, "ok"); }
   const y = String(saved?.["신청일"] || "").slice(0, 4), cur = FILTERS.request.year;
   if (/^\d{4}$/.test(y) && cur && cur !== y && setReqYear(y)) { renderRequest(); showAlert(`${y}년 신청이라 목록 연도를 ${y}로 바꿨습니다.`, "ok"); }
 }
@@ -556,7 +585,10 @@ function convertRequests(list) {
     if (missing.length) { showAlert(`주문 ${ordNosIn[0]}의 신청을 모두 함께 전환해야 합니다. 빠진 신청: ${listLabel(missing)}.`, "warn"); return; }
   }
   const confTitle = r => { const d = reqDetail(r), span = [d["시작일"], d["종료일"]].filter(Boolean).join("~"), sub = [d["장소"], span].filter(Boolean).join(", "); return sub ? `${r["품목"]} (${sub})` : r["품목"]; };
-  const items = list.map(r => r["구분"] === "학회" ? confTitle(r) : r["품목"]), names = [...new Set(list.map(r => r["신청인"]).filter(Boolean))];
+  const etcTitle = r => `${r["품목"]}${r["규격"] ? ` (${r["규격"]})` : ""}${Number(r["수량"]) > 1 ? ` × ${r["수량"]}` : ""}`;
+  const items = list.map(r => r["구분"] === "학회" ? confTitle(r) : r["구분"] === "기타" ? etcTitle(r) : r["품목"]), names = [...new Set(list.map(r => r["신청인"]).filter(Boolean))];
+  const wishes = [...new Set(list.map(r => r["희망일"]).filter(Boolean))].sort();
+  const reasons = list.filter(r => r["구분"] === "기타" && r["사유"]).map(r => reqExcerpt(r["사유"], 60));
   const attendees = [...new Set(list.filter(r => r["구분"] === "학회").map(r => reqDetail(r)["참가자"]).filter(Boolean))];
   const tasks = [...new Set(list.map(r => r["관련과제"]).filter(Boolean))];
   const orders = [...new Set(list.map(r => r["주문번호"] || ""))];
@@ -564,9 +596,10 @@ function convertRequests(list) {
   const pay = order && order["결제금액"] !== "" && order["결제금액"] != null ? Number(order["결제금액"]) : null;
   const preset = {
     원인발생일: today(), 적요: items.length <= 3 ? items.join(", ") : `${items.slice(0, 3).join(", ")} 외 ${items.length - 3}건`,
-    금액: pay ?? list.reduce((a, r) => a + (r["금액"] || 0), 0), 품의자: names.join(", "), 거래처: order?.["거래처"] || "", 비고: attendees.length ? `참가자: ${attendees.join(", ")}` : "", 상태: "대기",
+    금액: pay ?? list.reduce((a, r) => a + (r["금액"] || 0), 0), 품의자: names.join(", "), 거래처: order?.["거래처"] || "", 비고: [attendees.length ? `참가자: ${attendees.join(", ")}` : "", ...reasons].filter(Boolean).join(" / "), 상태: "대기",
   };
   if (tasks.length === 1 && fundOptions().includes(tasks[0])) preset["재원"] = tasks[0];
+  if (wishes.length) preset["지출예정일"] = wishes[0];  // 가장 이른 희망일
   openForm("req", null, preset, { convertRequests: list.map(r => r._row), convertPay: pay ?? undefined, title: `품의 전환 - 신청 ${listLabel(list)}` });
   reqFormNote(`저장하면 품의 1건이 만들어지고 신청 ${list.length}건이 '품의전환'으로 바뀝니다 (되돌리기 가능). 비고에는 '신청 ${list.map(r => r["신청번호"]).join(", ")}'가 자동으로 붙습니다.${pay != null ? ` 금액은 주문 ${order["주문번호"]}의 결제금액입니다(할인·배송비 반영).` : ""} 재원·예산목을 고르세요.`);
   $("#dlg").dataset.initial = formSnapshot();
@@ -677,7 +710,7 @@ async function renderReqDrawer(fetchItems) {
       kv("기간", det["시작일"] || det["종료일"] ? `${t(det["시작일"] || "?")} ~ ${t(det["종료일"] || "?")}` : ""), kv("출장 구분", t(det["국내외"])), kv("장소", t(det["장소"])),
       kv("참가자", t(det["참가자"])), kv("등록비", won(det["등록비"])), kv("금액", `<b>${fmt(r["금액"])}원</b>`),
       typeof confDrawerKv === "function" ? confDrawerKv(det, kv) : "",
-    ] : [kv("규격", t(r["규격"])), ...money]),
+    ] : [r["규격"] ? kv(r["구분"] === "기타" ? "규격/단위" : "규격", t(r["규격"])) : "", ...money]),
     kv("사유", t(r["사유"]), " multi"), kv("희망일", t(r["희망일"])),
     ...(sup ? [kv("구매처", r["구매처"] ? `${t(r["구매처"])}${supOff(r["구매처"]) ? ' <span class="muted">(새 신청 불가 · 이 신청은 그대로 진행)</span>' : ""}` : ""), kv("온라인코드", t(r["온라인코드"])), kv("상품코드", t(r["상품코드"])),
       kv("상품링크", link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(reqExcerpt(link, 48))}</a>` : t(r["상품링크"])),
@@ -705,7 +738,7 @@ async function renderReqDrawer(fetchItems) {
   const delWhy = r["주문번호"] && !r["연결품의번호"] ? (admin ? `먼저 주문 ${r["주문번호"]}${josa(r["주문번호"], "을/를")} 취소하세요` : "주문에 묶인 신청은 지울 수 없습니다. 취소가 필요하면 담당자에게 알려 주세요.")
     : reqLocked(r) ? "품의로 전환된 신청은 지울 수 없습니다" : !admin ? `${st === "반려" ? "반려된" : "승인된"} 신청은 지울 수 없습니다. 취소가 필요하면 담당자에게 알려 주세요.` : "신청 상태에서만 삭제할 수 있습니다";
   const delNote = esc(delWhy) + (admin && r["주문번호"] && !r["연결품의번호"] ? ` <button type="button" class="lnk" data-rd="gotoorder">주문 보기</button>` : "");
-  const attHint = r["구분"] === "장비" ? "견적서·사양서를 올리세요." : r["구분"] === "학회" ? "학회 초청 내역·등록비 청구서(인보이스)·e-티켓·영수증을 올리세요." : "견적서·인보이스·요금제 안내 등을 올리세요.";
+  const attHint = r["구분"] === "장비" ? "견적서·사양서를 올리세요." : r["구분"] === "학회" ? "학회 초청 내역·등록비 청구서(인보이스)·e-티켓·영수증을 올리세요." : r["구분"] === "기타" ? reqText("기타").첨부 : "견적서·인보이스·요금제 안내 등을 올리세요.";
   const attState = listErr
     ? `<p class="toolbar-note warn">첨부 목록을 불러오지 못했습니다. <button type="button" class="lnk" data-rd="rattretry">다시 시도</button>${admin ? ` <span class="muted">(${esc(listErr)})</span>` : ""}</p>`
     : !drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않아 첨부를 올릴 수 없습니다. ${admin ? "오른쪽 위 설정(톱니)에서 연결하세요." : "담당자에게 알려 주세요."}${admin && drive.error ? " (" + esc(drive.error) + ")" : ""}</p>`

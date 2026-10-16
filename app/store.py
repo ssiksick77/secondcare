@@ -93,7 +93,7 @@ REQUEST_LOCKED = ("품의전환", "완료")  # 비고만 수정 가능
 # 신청 행에서 화면 수정으로 바꿀 수 없는 열 (동작·주문·첨부로만 바뀜)
 REQUEST_SYSTEM = ["신청번호", "상태", "결재인", "결재일", "반려사유", "주문번호", "연결품의번호", "첨부폴더", "첨부목록"]
 # 승인된 신청에서 이 열이 바뀌면 다시 '신청'으로 (결재인·결재일 비움). extra.keep_approval=true 면 유지
-REAPPROVE_COLS = ["품목", "규격", "단가", "수량", "금액", "관련과제", "부가세구분", "부가세액"]
+REAPPROVE_COLS = ["구분", "품목", "규격", "단가", "수량", "금액", "관련과제", "부가세구분", "부가세액"]
 VAT_RATE = 0.1
 UNIT_MAX = 1e12      # 단가 상한 (1조 원)
 AMOUNT_MAX = 1e15    # 금액·부가세액 상한
@@ -1316,6 +1316,8 @@ def _validate_request(rec: dict, existing: dict | None = None):
             raise ValueError(f"{c}은(는) 필수입니다.")
     if rec["구분"] != "소모품":
         rec["구매처"] = ""
+        for c in ("온라인코드", "상품코드", "상품링크"):  # 쇼핑몰 주문용 열은 소모품 전용 (화면 requestPrepare 와 동일)
+            rec[c] = ""
     elif "구매처" in rec:
         rec["구매처"] = str(rec.get("구매처") or "").strip()
     old = existing or {}
@@ -1349,9 +1351,10 @@ def _validate_request(rec: dict, existing: dict | None = None):
             rec["금액"] = amt
             rec["단가"] = ""
             rec["수량"] = 1
+            rec["규격"] = ""
             rec["부가세액"] = ""
         else:
-            price = _to_num(rec.get("단가"), strict=True, label="단가")
+            price = _won_int(rec.get("단가"), "단가") if rec.get("단가") not in (None, "") else 0
             if price <= 0:
                 raise ValueError("단가를 입력하세요 (0보다 큰 원 단위 금액).")
             if price > UNIT_MAX:
@@ -1362,7 +1365,7 @@ def _validate_request(rec: dict, existing: dict | None = None):
                 given = rec.get("부가세액")
                 if existing is not None and _cell_out("부가세구분", existing.get("부가세구분")) == "N" and _to_num(given) == 0:
                     given = None  # N→Y 전환: 행 전체를 다시 보내 딸려 온 0 은 '입력 없음'으로 보고 기본값
-                tax = _round_won(base * VAT_RATE) if given in (None, "") else _to_num(given, strict=True, label="부가세액")
+                tax = _round_won(base * VAT_RATE) if given in (None, "") else _won_int(given, "부가세액")
                 if tax < 0:
                     raise ValueError("부가세액은 0 이상이어야 합니다.")
                 if tax > AMOUNT_MAX:
