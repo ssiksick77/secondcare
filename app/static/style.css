@@ -678,7 +678,7 @@ dialog.dlg-sheet { width: min(820px, 95vw); }
 /* 지출결의서 (시안 .impeccable/mocks/voucher/A5_수정형.html). 미리보기와 인쇄가 같은 규칙.
    인쇄 공문 양식이라 화면 토큰 대신 시안 값: 검정 괘선, 회색 라벨 칸(#F2F2F2).
    2026-10-16 사용자 결정: 행 높이 6.5mm(시안 8mm에서 타이트하게), 제목 아래 이중선 제거, 우상단 결재란(담당·매니저·선임연구원·센터장, 위 직책·아래 서명).
-   머리: 왼쪽 기관명 + 거래번호·담당자 상자, 오른쪽 결재란, 그 아래 가운데 제목 */
+   머리: 왼쪽 기관명, 오른쪽 결재란, 그 아래 가운데 제목. 거래번호·담당자 상자는 없앰(거래번호는 결의 내역 첫 줄) */
 dialog.dlg-voucher { width: min(880px, 96vw); max-width: none; }
 .vc-preview { max-height: calc(100vh - 150px); overflow: auto; background: var(--bg-table); border: 1px solid var(--rule); padding: 12px; }
 .vc-preview .voucher { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm; background: #fff; border: 1px solid var(--rule); }
@@ -688,21 +688,17 @@ dialog.dlg-voucher { width: min(880px, 96vw); max-width: none; }
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
 }
 .voucher .vc-head { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 6mm; align-items: start; }
-.voucher .vc-left { display: flex; flex-direction: column; gap: 1.5mm; }
 .voucher .vc-inst { font-size: 10pt; color: #333; margin: 0; line-height: 1.45; }
 .voucher .vc-band { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; padding: 3mm 0 1mm; }
 .voucher .vc-title { margin: 0; text-align: center; font-size: 22pt; font-weight: 700; letter-spacing: 0; line-height: 1.2; color: #000; }
-.voucher .vc-box { min-width: 52mm; border-collapse: collapse; font-size: 10pt; background: #fff; align-self: flex-start; }   /* 긴 거래번호(YYYY-재원코드-NNN)는 오른쪽으로 넓어짐 */
 /* 결재란: 세로 라벨 '결재' + 직책 4칸(위, 회색)·서명 칸(아래, 14mm) */
 .voucher .vc-sign { border-collapse: collapse; font-size: 9.5pt; background: #fff; }
 .voucher .vc-sign th, .voucher .vc-sign td { border: 0.5pt solid #000; text-align: center; vertical-align: middle; padding: 0 1.5mm; color: #000; }
 .voucher .vc-sign .vc-sign-t { height: var(--vc-row); width: 22mm; font-weight: 600; color: #333; background: var(--vc-label-bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; white-space: nowrap; }
 .voucher .vc-sign .vc-sign-k { width: 7mm; padding: 0; writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 0.5mm; }
 .voucher .vc-sign tbody td { height: 14mm; }
-.voucher .vc-box th, .voucher .vc-box td { border: 0.5pt solid #000; height: var(--vc-row); padding: 0 2mm 0 var(--vc-pad); text-align: left; vertical-align: middle; font-weight: 400; white-space: nowrap; line-height: 1.2; color: #000; }
-.voucher .vc-box th { color: #333; width: 20mm; }
-.voucher .vc-box .vc-no { font-weight: 700; }
-.voucher .vc-box th, .voucher .vc-kv th, .voucher .vc-g thead th { background: var(--vc-label-bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.voucher .vc-kv .vc-no { font-weight: 700; }
+.voucher .vc-kv th, .voucher .vc-g thead th { background: var(--vc-label-bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .voucher h3 { margin: 1.7mm 0 0.5mm; font-size: 21px; font-weight: 700; line-height: 1; color: #000; display: flex; align-items: baseline; justify-content: space-between; break-after: avoid; }
 .voucher h3 small { font-size: 8.5pt; font-weight: 400; color: #666; }
 .voucher .vc-t { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1px solid #000; background: #fff; font-size: inherit; }

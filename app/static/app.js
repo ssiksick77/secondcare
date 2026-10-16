@@ -1910,16 +1910,14 @@ function voucherHtml(v, withIds) {
   const full = (a, b, cls = "") => `<tr><th scope="row">${a}</th><td colspan="3"${cls}>${b}</td></tr>`;
   return `<article class="voucher">
   <header class="vc-head">
-    <div class="vc-left">
-      <p class="vc-inst">${t(v.org)}</p>
-      <table class="vc-box"><tbody><tr><th scope="row">거래번호</th><td class="vc-no">${t(r["거래번호"])}</td></tr><tr><th scope="row">담당자</th><td>${t(v.contact)}</td></tr></tbody></table>
-    </div>
+    <p class="vc-inst">${t(v.org)}</p>
     <table class="vc-sign" aria-label="결재란"><tbody><tr><th scope="row" rowspan="2" class="vc-sign-k">결재</th>${VOUCHER_SIGNERS.map(x => `<th scope="col" class="vc-sign-t">${x}</th>`).join("")}</tr>
       <tr>${VOUCHER_SIGNERS.map(() => "<td></td>").join("")}</tr></tbody></table>
     <div class="vc-band"><h2 class="vc-title"${withIds ? ' id="voucher-title"' : ""}>지출결의서</h2></div>
   </header>
   <h3>결의 내역</h3>
   <table class="vc-t vc-kv"><colgroup><col class="l"><col><col class="l"><col></colgroup><tbody>
+    <tr><th scope="row">거래번호</th><td class="vc-no">${t(r["거래번호"])}</td><th scope="row">관리번호</th><td>${t(r["관리번호"])}</td></tr>
     ${kv("재원코드", r["재원"], "예산목", r["예산목"])}
     ${full("과제명", t(v.title))}
     ${kv("세목", r["세목"], "세세목", r["세세목"])}
@@ -1927,7 +1925,7 @@ function voucherHtml(v, withIds) {
     ${full("적요", t(r["적요"]))}
     ${full("금액", `${vcNum(r["금액"] || 0)}원<span>${esc(korWon(r["금액"]))}</span>`, ' class="vc-amt"')}
     ${kv("결제수단", r["결제수단"], "사용자", r["사용자"])}
-    ${kv("관리번호", r["관리번호"], "품의", v.req)}
+    ${full("품의", t(v.req))}
     ${kv("원인발생일", ymdKo(r["원인발생일"]), "지급청구일", ymdKo(r["지급청구일"]))}
     ${kv("지출완료일", ymdKo(r["지출완료일"]), "전산결의일", ymdKo(r["결의일"]))}
     ${full("비고", t(r["비고"]))}
@@ -1953,9 +1951,9 @@ async function openVoucher(row, btn) {
   } catch (e) { showAlert("결의서를 만들지 못했습니다: " + e.message, "error"); return; }
   VOUCHER_BTN = btn || null;
   $("#voucher-sheet").innerHTML = voucherHtml(VOUCHER, true); $("#voucher-sheet").scrollTop = 0;
-  const miss = [!VOUCHER.contact && "담당자", !VOUCHER.title && "과제명"].filter(Boolean);
+  const miss = [!VOUCHER.title && "과제명"].filter(Boolean);  // 담당자 칸은 2026-10-16 양식에서 빠짐(결재란 '담당' 서명으로 대체)
   $("#voucher-note").hidden = !miss.length;
-  $("#voucher-note").textContent = miss.length ? `${miss.join("·")} 칸이 비어 있습니다.${!VOUCHER.contact ? " 담당자는 설정(톱니) › '신청 · 발주서'의 담당자 이름이 들어갑니다." : ""}${!VOUCHER.title ? " 과제명은 [재원] 탭에서 입력합니다." : ""}` : "";
+  $("#voucher-note").textContent = miss.length ? `${miss.join("·")} 칸이 비어 있습니다. 과제명은 [재원] 탭에서 입력합니다.` : "";
   $("#dlg-voucher").showModal(); $("#voucher-print").focus();
 }
 // 인쇄 사본: [인쇄] 버튼이든 Ctrl+P든 결의서 대화상자가 열려 있으면 결의서만 (A4 세로, 아래 가운데 k/n)
