@@ -28,6 +28,9 @@ run_step() {
 smoke() { (cd app && python -I -c "import uvicorn, fastapi, openpyxl"); }
 run_step smoke smoke
 
+# 계산(node)·API·화면(Playwright) 검사. QA 장부 복사본(tests/.tmp)으로만 실행, 실제 장부는 건드리지 않음.
+run_step test python -I tests/run.py
+
 # Project with a UI: KRDS conformance score. Fill the script name and the
 # threshold from dev/.claude/skills/krds-improve after it is installed.
 # run_step krds      <krds score script> --min-score 90

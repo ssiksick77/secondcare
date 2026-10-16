@@ -651,12 +651,14 @@ if __name__ == "__main__":
         print(f"[경고] {e} (구조 보정은 첫 저장 시 적용됩니다)")
     ai_state = f"사용 ({ai.provider()} / {ai.model()})" if ai.enabled() else "비활성 (우하단 설정에서 API 키 입력)"
     print(f"장부 파일: {store.XLSX_PATH}\nAI: {ai_state}\n브라우저: http://{HOST}:{PORT}  (종료: Ctrl+C)")
-    threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
+    if not os.environ.get("LEDGER_NO_BROWSER"):  # 테스트(tests/)·자동 실행에서는 브라우저를 열지 않음
+        threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
     import socket
     with socket.socket() as _s:
         if _s.connect_ex((HOST, PORT)) == 0:
             print(f"[안내] 이미 실행 중입니다 (포트 {PORT}). 브라우저 탭을 확인하세요. 이 창은 닫아도 됩니다.")
-            webbrowser.open(f"http://{HOST}:{PORT}")
+            if not os.environ.get("LEDGER_NO_BROWSER"):
+                webbrowser.open(f"http://{HOST}:{PORT}")
             raise SystemExit(0)
     print("※ 이 콘솔 창을 닫으면 앱이 종료됩니다.")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
