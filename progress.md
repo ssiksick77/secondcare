@@ -4,17 +4,15 @@ Updated: 2026-10-16
 
 ## Goal
 
-기타 tab review done and fixes applied (docs/점검_2026-10-16_신청_기타.md, 반영 결과 section). Next task not defined.
+Session of 2026-10-16 is wrapped up. All four 신청 tabs are reviewed and fixed. The next task is not defined.
 
 ## Done
 
-- 2026-10-16: 기타 tab review (2 agents) → report → user decision D1 (type boundary) → fixes in request.js/store.py. Verified with API + Playwright on a QA copy.
-- 2026-10-16: 학회 tab review (4 agents) → report → user decisions D1-D7, D9 → fixes in store.py (515b121) and conf.js/request.js/app.js/index.html/style.css (bac1758). Verified with API, headless calc and Playwright tests on QA ledger copies.
-- 2026-10-16: exec form prefers the filter fund over the last-used fund (commit 7a699ad).
-- 2026-10-16: travel calculator accepts a fixed list of currencies with one rate per currency; detail JSON is v:2 and reads v:1 (commit on conf.js, README updated). Verified with a headless compute test and a Playwright run on a QA ledger copy.
-- Adopted into the harness on 2026-10-16. The repository already existed (HEAD 914dcd0, branch main), so no baseline commit was made.
-- Moved to `dev/CAIH_회계장부_2026` on 2026-10-16. Old-path references in `app/README.md` and `app/claude_desktop_config.ledger.json` updated.
-- Harness files added: `CLAUDE.md`, `progress.md`, `ideas.md`, `scripts/check.sh`, `.claude/skills/*` (junctions to `dev/.claude/skills`), `.claude/agents/Explore.md` (copy).
+- 66cde60 / 9a91f0b / d1d1d91: 기타 tab review (2 agents), report, fixes (type hint line, 기타 labels, 구분 change re-approves, server drops shop codes on non-소모품 rows, integer won for 단가·부가세액).
+- b6a813f / bac1758 / 515b121 / 6eed4ff: 학회 tab review (4 agents), report, fixes (server enforces calculator total, calculator keyboard/print/toggle/checklist, local-date transit nights, form order and required 출장 구분, 품의 preset).
+- 2e20707 / 69b851b: travel calculator accepts 12 currencies with one rate per currency; detail JSON v:2 reads v:1.
+- 7a699ad: exec form prefers the filter fund over the last-used fund.
+- edc60d4 / b8bf254: adopted into the dev/ harness and moved to `dev/CAIH_회계장부_2026`.
 
 ## In progress
 
@@ -22,20 +20,21 @@ Updated: 2026-10-16
 
 ## Open issues
 
-- 학회 review leftovers (see report 반영 결과): form conflict reload button, leg Tab order, and the P3 list. D8 server role check is in ideas.md.
-- checks: configured, pass. Only one step exists: `smoke` (dependency import check from `app/run.bat`). The project has no test, lint or typecheck command.
-- Uncommitted before adoption: `QA set/` (untracked directory). Not committed by the harness.
-- The `ledger` MCP registration in Claude Desktop and in `claude mcp` may still point at the old path. Re-register with the command in `app/README.md` if it fails.
-- `CLAUDE.md` has no placeholders left. The `Correction rules` section is empty by design.
+- checks: configured, pass. Only one step exists: `smoke` (dependency import check). The project has no test, lint or typecheck command. The verification scripts of this session live only in the session scratchpad (`fix/api_test.py`, `fix/ui_test.py`, `fix/etc_test.py`, `test_currency.js`, `test_lax.js`); they are lost when the scratchpad is cleaned.
+- Uncommitted before adoption and untouched: `QA set/` (untracked) and `memo.md` (deleted in the working tree, was an empty file). Decide whether to commit or restore them.
+- 학회 review leftovers: form conflict [새로 불러오기] button, leg Tab order, P3 list in docs/점검_2026-10-16_신청_학회.md.
+- 기타 review leftovers: P3 list in docs/점검_2026-10-16_신청_기타.md.
+- Server role check (연구원/담당자) is deferred; see ideas.md.
+- The `ledger` MCP registration in Claude Desktop may still point at the old path. Re-register with the command in `app/README.md` if it fails.
 
 ## Decisions
 
-- 2026-10-16 (user) request types: 장비 = 전자제품, 소모품 = 알파몰·드림디포 purchases, 학회, everything else = 기타. D2-D6 of the 기타 review taken as proposed (hints only, no currency fields, type change re-approves, save switches tab, no print form) because the user gave no answer.
-- 2026-10-16 (user) 학회 review: D1 transit nights by local date for air/sea legs, travel days stay KST; D2 detail changes need re-approval; D3 품의 preset 적요 "학회명 (장소, 시작~종료)", 참가자 in 비고; D4 국내외 default empty and required; D5 per-person note, no multiplication; D6 금액 row below 학회 detail fields in 학회 mode; D7 save allows 0, approve blocks 0; D9 terms "출장 구분", "학회 여비 산출 내역". D8 (server role check) deferred.
-- 2026-10-16 (user): currency list is fixed (no free-text code); one rate input per currency in use, shown next to the USD rate; all rates are won per 1 unit (JPY hint says to divide a per-100 quote).
-- `scripts/check.sh` uses the import check from `run.bat` as the only step, because no other check command exists in the project. Do not invent checks; add real ones when tests exist.
-- Skills are linked with Windows junctions (`mklink /J`) and the agent file is copied, because symlinks need elevated permission here.
+- 2026-10-16 (user) request types: 장비 = 전자제품, 소모품 = 알파몰·드림디포 purchases, 학회, everything else = 기타. D2-D6 of the 기타 review were taken as proposed because the user gave no answer.
+- 2026-10-16 (user) 학회 review: transit nights by local date for air/sea legs, travel days stay KST; detail changes need re-approval; 품의 preset "학회명 (장소, 시작~종료)" with 참가자 in 비고; 출장 구분 required with no default; per-person note; 금액 row below 학회 fields; 0원 saves but cannot be approved; terms "출장 구분", "학회 여비 산출 내역". Server role check deferred.
+- 2026-10-16 (user): currency list is fixed; one rate input per currency in use; all rates are won per 1 unit.
+- `scripts/check.sh` uses the import check from `run.bat` as the only step, because no other check command exists. Add real checks before feature work.
+- Skills are linked with Windows junctions and the agent file is copied, because symlinks need elevated permission here.
 
 ## Next action
 
-Define the next task with the user (candidates: real check in scripts/check.sh — scratchpad fix/api_test.py, ui_test.py, etc_test.py are a good base, LEDGER_HOST + role check, 학회 leftovers). Before feature work, add at least one real check (for example an API smoke test with FastAPI TestClient against the QA dataset) to `scripts/check.sh`.
+Add a real check to `scripts/check.sh`: copy the session's API and Playwright scripts into `tests/`, make them run against a scratch copy of the QA ledger on a free port, and register `run_step test`. Then pick the next feature with the user (LEDGER_HOST + role check, or the review leftovers).
