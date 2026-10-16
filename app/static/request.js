@@ -8,7 +8,7 @@ Object.assign(IDENT, { request: ["신청번호"], order: ["주문번호"], ratt:
 FILTERS.request = {};
 const REQ_LOCKED = ["품의전환", "완료"];  // 비고만 수정 가능, 삭제 불가
 const REQ_ORDER_LOCK = ["구분", "단가", "수량", "금액", "구매처", "부가세구분", "부가세액"];  // 주문에 묶인 신청
-const REQ_APPROVAL_KEYS = ["품목", "규격", "단가", "수량", "금액", "관련과제", "부가세구분", "부가세액"];  // 승인된 건에서 바뀌면 다시 결재 (서버도 같은 기준)
+const REQ_APPROVAL_KEYS = ["품목", "규격", "단가", "수량", "금액", "관련과제", "부가세구분", "부가세액", "상세"];  // 승인된 건에서 바뀌면 다시 결재 (서버도 같은 기준; 상세는 학회의 기간·장소·산출 내역)
 const REQ_CONF_KEYS = [["_시작일", "시작일"], ["_종료일", "종료일"], ["_국내외", "국내외"], ["_장소", "장소"], ["_참가자", "참가자"], ["_등록비", "등록비"]];
 const reqExcerpt = (s, n = 24) => { s = String(s ?? "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n) + "…" : s; };
 const rattCount = r => (DATA.ratt || []).filter(a => a["신청번호"] === r["신청번호"]).length;
@@ -41,9 +41,9 @@ COLS.request = [
   { k: "신청인" },
   { k: "신청일", t: "date" },
   { k: "관련과제" },
-  { k: "품목", t: "title", subCalc: r => r["규격"] || reqExcerpt(r["사유"], 40) },
+  { k: "품목", t: "title", get label() { return reqType() === "학회" ? "학회명" : "품목"; }, subCalc: r => { if (r["구분"] === "학회") { const d = reqDetail(r), span = [d["시작일"], d["종료일"]].filter(Boolean).join(" ~ "); return [span, d["장소"]].filter(Boolean).join(" · ") || reqExcerpt(r["사유"], 40); } return r["규격"] || reqExcerpt(r["사유"], 40); } },
   { k: "구매처", get hide() { return reqType() !== "소모품"; } },  // 소모품 탭에서만 표시
-  { k: "수량", t: "num" },
+  { k: "수량", t: "num", get hide() { return reqType() === "학회"; } },  // 학회는 수량이 늘 1
   { k: "금액", t: "num", amt: true },
   { k: "첨부", ctr: true, calc: rattCount, title: "첨부 파일 수", html: r => { const n = rattCount(r); return n ? String(n) : '<span class="muted">-</span>'; } },
   { k: "결재", calc: r => r["결재일"] || "", title: "결재인 · 결재일 (반려는 사유)",
@@ -73,13 +73,13 @@ const REQUEST_FORMS = {
       { k: "부가세구분", type: "check", label: "부가세 별도 (쇼핑몰 가격이 공급가일 때)", dep: items },
       { k: "부가세액", type: "num", dep: items, hint: "단가 × 수량의 10%, 고칠 수 있음" },
       { k: "_금액", type: "ro", label: "금액 (단가 × 수량)", dep: items },
-      { k: "금액", type: "num", req: true, dep: "학회", hint: "여비 계산기 합계 또는 직접 입력" },
-      { k: "_국내외", type: "select", opts: ["국내", "국외"], label: "국내 / 국외", dep: "학회" },
+      { k: "_국내외", type: "select", opts: ["", "국내", "국외"], label: "출장 구분", dep: "학회", req: true },
       { k: "_시작일", type: "date", label: "시작일", dep: "학회" },
       { k: "_종료일", type: "date", label: "종료일", dep: "학회" },
       { k: "_장소", type: "text", label: "장소", dep: "학회", hint: "도시·국가" },
-      { k: "_참가자", type: "text", label: "참가자", dep: "학회", hint: "쉼표로 구분" },
+      { k: "_참가자", type: "text", label: "참가자", dep: "학회", hint: "쉼표로 구분 · 여비는 신청인 1인 기준" },
       { k: "_등록비", type: "num", label: "등록비", dep: "학회" },
+      { k: "금액", type: "num", req: true, dep: "학회", hint: "여비 계산기 합계 또는 직접 입력" },
       { k: "사유", type: "text", cls: "wide", hint: "용도·필요한 이유" },
       { k: "구매처", type: "select", opts: isReqAdmin() ? reqSuppliers().map(x => x.name) : supAvail(), req: true, dep: "소모품", hint: "주문할 쇼핑몰" },
       { k: "온라인코드", type: "text", dep: "소모품", label: "온라인코드 (둘 중 하나 필수)", hint: "쇼핑몰 상품 페이지의 온라인코드" },
@@ -93,7 +93,7 @@ function requestDefaults(kind) {
   if (kind !== "request") return {};
   let name = ""; try { name = localStorage.getItem("request-name") || ""; } catch { }
   const av = supAvail();
-  return { 구분: reqType(), 신청일: today(), 신청인: name, 수량: 1, _국내외: "국내", 관련과제: FILTERS.request["관련과제"] || "", 구매처: av.length === 1 ? av[0] : (FILTERS.request["구매처"] && av.includes(FILTERS.request["구매처"]) ? FILTERS.request["구매처"] : "") };
+  return { 구분: reqType(), 신청일: today(), 신청인: name, 수량: 1, _국내외: "", 관련과제: FILTERS.request["관련과제"] || "", 구매처: av.length === 1 ? av[0] : (FILTERS.request["구매처"] && av.includes(FILTERS.request["구매처"]) ? FILTERS.request["구매처"] : "") };
 }
 
 // ---------- 화면 전환 · 담당자/연구원 ----------
@@ -181,6 +181,7 @@ function renderRequest() {
   if (!DATA || !DATA.request) return;
   FILTERS.request["구분"] = reqType();
   $("#request-table").dataset.rtype = reqType();  // 소모품 탭은 열(구매처·주문번호)이 더 많아 최소 폭이 다름
+  reqResearcherNote();
   syncReqSub();
   renderList("request");
   renderOrders();
@@ -407,6 +408,14 @@ $("#dlg-fields").addEventListener("change", e => {
 });
 // 학회 여비 계산기: openConfCalc 는 conf.js (계산 결과를 #f-_calc 에 담고 금액 칸을 합계로 잠금)
 document.addEventListener("click", e => { if (e.target.closest("#req-calc-btn") && typeof openConfCalc === "function") openConfCalc(); });
+// 연구원 안내문은 탭에 맞춰 (학회: 여비 계산기·증빙 종류)
+function reqResearcherNote() {
+  const p = $(".req-researcher-note"); if (!p) return;
+  const conf = reqType() === "학회";
+  p.firstChild.nodeValue = conf
+    ? "① [신청 추가]에서 학회명·기간·장소를 적고 [여비 계산기]로 금액을 산출합니다. ② 행을 눌러 초청장·등록 인보이스·e-티켓을 첨부합니다. 담당자가 승인하면 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다."
+    : "① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.";
+}
 
 // 저장 직전 (app.js 제출 처리에서 호출): 기존 행과 합치고, 구분별로 쓰지 않는 칸 정리, 학회 입력은 상세 JSON 으로. 오류 문구를 반환하면 저장 중단
 function requestPrepare(rec, row) {
@@ -424,6 +433,7 @@ function requestPrepare(rec, row) {
       ["v", "in", "out", "합계"].forEach(k => delete det[k]);
       if (calc) Object.assign(det, { v: calc.v, in: calc.in, out: calc.out, 합계: calc.out["합계"] });
     }
+    if (!det["국내외"]) return "출장 구분(국내/국외)을 고르세요.";
     if (det["시작일"] && det["종료일"] && det["종료일"] < det["시작일"]) return "학회 종료일이 시작일보다 빠릅니다.";
     out["상세"] = JSON.stringify(det); out["단가"] = ""; out["수량"] = 1; out["규격"] = "";
     out["부가세구분"] = "N"; out["부가세액"] = "";
@@ -460,10 +470,11 @@ function requestPrepare(rec, row) {
 async function requestConfirmSave(rec, row) {
   const cur = reqFind(row);
   if (!cur || cur["상태"] !== "승인" || !isReqAdmin()) return undefined;
-  const nv = (k, v) => k === "부가세구분" ? (v === "Y" ? "Y" : "N") : ["단가", "수량", "금액", "부가세액"].includes(k) ? Number(v || 0) : String(v ?? "").trim();
+  const detCmp = v => { try { const d = JSON.parse(v || "{}"); if (d && d.out) d.out = { ...d.out, 계산일: "" }; return JSON.stringify(d, Object.keys(d).sort()); } catch { return String(v ?? ""); } };
+  const nv = (k, v) => k === "부가세구분" ? (v === "Y" ? "Y" : "N") : ["단가", "수량", "금액", "부가세액"].includes(k) ? Number(v || 0) : k === "상세" ? detCmp(v) : String(v ?? "").trim();
   const changed = REQ_APPROVAL_KEYS.filter(k => k in rec && nv(k, rec[k]) !== nv(k, cur[k]));
   if (!changed.length) return undefined;
-  const r = await confirmDlg({ title: `승인된 신청 수정 · ${cur["신청번호"]}`, body: `바뀌는 칸: ${changed.map(k => k === "부가세구분" ? "부가세" : k).join("·")}\n\n수정하면 승인이 취소되어 '신청'으로 돌아갑니다. 승인을 유지하려면 [승인 유지]를 누르세요.`, verb: "승인 유지", alt: "신청으로 되돌리기" });
+  const r = await confirmDlg({ title: `승인된 신청 수정 · ${cur["신청번호"]}`, body: `바뀌는 칸: ${changed.map(k => k === "부가세구분" ? "부가세" : k === "상세" ? "학회 정보·산출 내역" : k).join("·")}\n\n수정하면 승인이 취소되어 '신청'으로 돌아갑니다. 승인을 유지하려면 [승인 유지]를 누르세요.`, verb: "승인 유지", alt: "신청으로 되돌리기" });
   if (r === null) return null;
   return r === "alt" ? undefined : { keep_approval: true };
 }
@@ -544,14 +555,16 @@ function convertRequests(list) {
     const missing = orderBundle(ordNosIn[0]).filter(q => !list.some(r => r._row === q._row));
     if (missing.length) { showAlert(`주문 ${ordNosIn[0]}의 신청을 모두 함께 전환해야 합니다. 빠진 신청: ${listLabel(missing)}.`, "warn"); return; }
   }
-  const items = list.map(r => r["품목"]), names = [...new Set(list.map(r => r["신청인"]).filter(Boolean))];
+  const confTitle = r => { const d = reqDetail(r), span = [d["시작일"], d["종료일"]].filter(Boolean).join("~"), sub = [d["장소"], span].filter(Boolean).join(", "); return sub ? `${r["품목"]} (${sub})` : r["품목"]; };
+  const items = list.map(r => r["구분"] === "학회" ? confTitle(r) : r["품목"]), names = [...new Set(list.map(r => r["신청인"]).filter(Boolean))];
+  const attendees = [...new Set(list.filter(r => r["구분"] === "학회").map(r => reqDetail(r)["참가자"]).filter(Boolean))];
   const tasks = [...new Set(list.map(r => r["관련과제"]).filter(Boolean))];
   const orders = [...new Set(list.map(r => r["주문번호"] || ""))];
   const order = orders.length === 1 && orders[0] ? (DATA.order || []).find(o => o["주문번호"] === orders[0]) : null;
   const pay = order && order["결제금액"] !== "" && order["결제금액"] != null ? Number(order["결제금액"]) : null;
   const preset = {
     원인발생일: today(), 적요: items.length <= 3 ? items.join(", ") : `${items.slice(0, 3).join(", ")} 외 ${items.length - 3}건`,
-    금액: pay ?? list.reduce((a, r) => a + (r["금액"] || 0), 0), 품의자: names.join(", "), 거래처: order?.["거래처"] || "", 비고: "", 상태: "대기",
+    금액: pay ?? list.reduce((a, r) => a + (r["금액"] || 0), 0), 품의자: names.join(", "), 거래처: order?.["거래처"] || "", 비고: attendees.length ? `참가자: ${attendees.join(", ")}` : "", 상태: "대기",
   };
   if (tasks.length === 1 && fundOptions().includes(tasks[0])) preset["재원"] = tasks[0];
   openForm("req", null, preset, { convertRequests: list.map(r => r._row), convertPay: pay ?? undefined, title: `품의 전환 - 신청 ${listLabel(list)}` });
@@ -661,7 +674,7 @@ async function renderReqDrawer(fetchItems) {
     kv("관련과제", r["관련과제"] ? `${t(r["관련과제"])}${fund?.["과제명"] ? ` <span class="muted">${t(fund["과제명"])}</span>` : ""}` : ""),
     kv(conf ? "학회명" : "품목", t(r["품목"])),
     ...(conf ? [
-      kv("기간", det["시작일"] || det["종료일"] ? `${t(det["시작일"] || "?")} ~ ${t(det["종료일"] || "?")}` : ""), kv("국내/국외", t(det["국내외"])), kv("장소", t(det["장소"])),
+      kv("기간", det["시작일"] || det["종료일"] ? `${t(det["시작일"] || "?")} ~ ${t(det["종료일"] || "?")}` : ""), kv("출장 구분", t(det["국내외"])), kv("장소", t(det["장소"])),
       kv("참가자", t(det["참가자"])), kv("등록비", won(det["등록비"])), kv("금액", `<b>${fmt(r["금액"])}원</b>`),
       typeof confDrawerKv === "function" ? confDrawerKv(det, kv) : "",
     ] : [kv("규격", t(r["규격"])), ...money]),
@@ -688,14 +701,15 @@ async function renderReqDrawer(fetchItems) {
   const thumb = a => { const n = a["파일명"] || "", id = a["드라이브파일ID"]; return XD_IMG.test(n) && id ? `<img class="xd-thumb" loading="lazy" alt="" src="/api/ratt/thumb/${encodeURIComponent(id)}" data-ext="${esc(fileExt(n))}">` : `<span class="xd-chip" aria-hidden="true">${esc(fileExt(n))}</span>`; };
   const canDelAtt = admin || st === "신청" || st === "반려";
   const ownEdit = canEditReq(r), ownDel = canDelete(r) && (admin || st === "신청");
-  const canUp = !listErr && drive.connected;
+  const canUp = !listErr && drive.connected && !reqLocked(r);  // 품의전환·완료는 서버가 첨부를 거부하므로 버튼도 숨김
   const delWhy = r["주문번호"] && !r["연결품의번호"] ? (admin ? `먼저 주문 ${r["주문번호"]}${josa(r["주문번호"], "을/를")} 취소하세요` : "주문에 묶인 신청은 지울 수 없습니다. 취소가 필요하면 담당자에게 알려 주세요.")
     : reqLocked(r) ? "품의로 전환된 신청은 지울 수 없습니다" : !admin ? `${st === "반려" ? "반려된" : "승인된"} 신청은 지울 수 없습니다. 취소가 필요하면 담당자에게 알려 주세요.` : "신청 상태에서만 삭제할 수 있습니다";
   const delNote = esc(delWhy) + (admin && r["주문번호"] && !r["연결품의번호"] ? ` <button type="button" class="lnk" data-rd="gotoorder">주문 보기</button>` : "");
-  const attHint = r["구분"] === "장비" ? "견적서·사양서를 올리세요." : "견적서·인보이스·요금제 안내 등을 올리세요.";
+  const attHint = r["구분"] === "장비" ? "견적서·사양서를 올리세요." : r["구분"] === "학회" ? "학회 초청 내역·등록비 청구서(인보이스)·e-티켓·영수증을 올리세요." : "견적서·인보이스·요금제 안내 등을 올리세요.";
   const attState = listErr
     ? `<p class="toolbar-note warn">첨부 목록을 불러오지 못했습니다. <button type="button" class="lnk" data-rd="rattretry">다시 시도</button>${admin ? ` <span class="muted">(${esc(listErr)})</span>` : ""}</p>`
-    : !drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않아 첨부를 올릴 수 없습니다. ${admin ? "오른쪽 위 설정(톱니)에서 연결하세요." : "담당자에게 알려 주세요."}${admin && drive.error ? " (" + esc(drive.error) + ")" : ""}</p>` : "";
+    : !drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않아 첨부를 올릴 수 없습니다. ${admin ? "오른쪽 위 설정(톱니)에서 연결하세요." : "담당자에게 알려 주세요."}${admin && drive.error ? " (" + esc(drive.error) + ")" : ""}</p>`
+    : reqLocked(r) ? `<p class="toolbar-note">'${esc(st)}' 상태라 첨부를 더 올릴 수 없습니다. 추가 증빙은 연결 품의·집행의 증빙으로 올리세요.</p>` : "";
   body.innerHTML = `
     <section class="xd-sec xd-info rd-approval">
       <h3>결재 <span class="badge ${esc(st)}">${esc(st)}</span></h3>

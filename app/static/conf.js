@@ -40,7 +40,7 @@ const REG = {
   disclaimer: "본 계산은 참고용이며, 실제 지급액은 과제별 지급기준과 연구비 관리기관의 정산 결과에 따릅니다. 여비를 중복 신청(병원/원내/위탁)하면 환수 대상이며, 거짓·부정 수령 시 수령액의 5배가 가산 징수됩니다(공무원 여비 규정 제31조). 숙박비·운임은 신용카드(정부구매카드) 결제가 원칙입니다.",
 };
 REG.basis = `${REG.title}(${REG.no}, ${REG.effective})`;
-const KST_NOTE = "기내박·일수는 한국 시각 기준으로 셉니다. 각 구간의 현지 출발·도착 일시를 시간대로 환산해, 한국 날짜가 바뀐 횟수를 기내박(항공·선박)으로, 첫 출발일부터 마지막 도착일까지의 한국 날짜 수를 여행일수로 봅니다.";
+const KST_NOTE = "기내박은 각 구간의 현지 날짜가 바뀐 횟수(항공·선박)로, 여행일수는 첫 출발부터 마지막 도착까지의 한국 날짜 수로 셉니다. 현지 출발·도착 일시를 시간대로 환산해 계산합니다.";
 
 // 별표4 비고2 — 국가·도시별 등급 (가등급은 도시 단위)
 const CITY_GRADE = {};
@@ -133,6 +133,7 @@ const localToUtc = (local, tz) => resolveLocal(local, tz)?.ms ?? null;
 const pad2 = n => String(n).padStart(2, "0");
 function wallStr(tz, ms) { const d = new Date(wallMs(tz, ms)); return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
 const kstDay = ms => Math.floor(wallMs(KST, ms) / 864e5);
+const localDay = (tz, ms) => Math.floor(wallMs(tz, ms) / 864e5);  // 그 시간대의 날짜 번호 (기내박: 현지 날짜 기준, 사용자 결정 2026-10-16)
 const kstStr = ms => wallStr(KST, ms);
 function utcOffsetLabel(tz, ms) { const m = Math.round(offsetMs(tz, ms) / 6e4), s = m < 0 ? "−" : "+", a = Math.abs(m); return `UTC${s}${a / 60 | 0}${a % 60 ? ":" + pad2(a % 60) : ""}`; }
 
@@ -180,9 +181,10 @@ function compute(raw) {
   const cur = k => intl ? curCode(inp[k]) : "KRW";
   const fxs = inp.fxs && typeof inp.fxs === "object" ? inp.fxs : {};
   const rateOf = code => code === "KRW" ? 1 : code === "USD" ? fx : nz(fxs[code]);
+  if (intl) MONEY_KEYS.forEach(k => { const raw = inp[k]; if (raw && raw !== "₩" && raw !== "$" && !CUR_SYM[raw]) err(`cf-${k.replace("Cur", "")}-cur`, `결제 통화 '${raw}'는 목록에 없습니다. 통화를 다시 고르세요.`); });
   const usedCurs = [...new Set(MONEY_KEYS.map(cur).filter(c => c !== "KRW" && c !== "USD"))];
   usedCurs.forEach(c => { if (!(rateOf(c) > 0)) miss("cf-fx-" + c, `${c} 환율`); });
-  if (intl && !inp.cityGrade) miss("cf-cgrade", "도시 등급");
+  if (intl && !["가", "나", "다", "라"].includes(inp.cityGrade)) miss("cf-cgrade", "도시 등급");
 
   // 이동 구간: 현지 일시 → UTC → 한국 날짜
   let autoNights = 0, inflight = 0; const basis = [], legs = [];
@@ -197,6 +199,7 @@ function compute(raw) {
     ends.forEach(([k, label]) => {
       const e = info[k];
       if (!e.at) { miss(`leg-${i}-${k}-at`, `구간 ${n} ${label} 일시`); bad = true; return; }
+      if (!intl) e.tz = KST;  // 국내 출장은 한국 시각으로만 (국외에서 바꾼 시간대가 남아 있어도 무시)
       if (!validTz(e.tz)) { err(`leg-${i}-${k}-tz`, `구간 ${n} ${label} 시간대${e.tz ? ` '${e.tz}'` : ""}가 올바르지 않습니다 (IANA 이름, 예: Europe/Paris).`); bad = true; return; }
       const r = resolveLocal(e.at, e.tz);
       if (!r) { err(`leg-${i}-${k}-at`, `구간 ${n} ${label} 일시 형식이 올바르지 않습니다.`); bad = true; return; }
@@ -210,7 +213,9 @@ function compute(raw) {
       legNotes.push({ type: "warn", text: `구간 ${n}: 시간대를 환산하면 도착(한국 ${info.arr.kst})이 출발(한국 ${info.dep.kst})보다 빠르거나 같습니다. 일시와 시간대를 확인하세요. 이 구간의 기내박은 0박으로 계산했습니다.` });
       return;
     }
-    const diff = kstDay(info.arr.ms) - kstDay(info.dep.ms);
+    const prev = legs.slice(0, -1).reverse().find(x => x.ok && !x.order);
+    if (prev && info.dep.ms < prev.arr.ms) legNotes.push({ type: "warn", text: `구간 ${n} 출발(한국 ${info.dep.kst})이 구간 ${prev.n} 도착(한국 ${prev.arr.kst})보다 빠릅니다. 구간 순서와 일시를 확인하세요.` });
+    const diff = localDay(info.arr.tz, info.arr.ms) - localDay(info.dep.tz, info.dep.ms);  // 현지 날짜 변경 수 (미주 서향 귀국편도 실제 기내 밤 수와 같음)
     if (diff > 0) {
       if (REG.transitModes.includes(mode)) { info.nights = diff; autoNights += diff; basis.push(`구간 ${n} ${diff}박`); }
       else legNotes.push({ type: "info", text: `구간 ${n}(${mode}): 숙박 박수에서 빼는 것은 항공·선박 이동뿐이므로 차감하지 않았습니다(제16조).` });
@@ -274,6 +279,7 @@ function compute(raw) {
   else {
     lodgeW = Math.min(lodgePaidW, capW);
     if (lodgePaidW <= 0) lodgeNote = { type: "info", text: `숙박비 상한: ${fmtW(capW)} (${capTxt}). 결제액을 입력하면 지급액을 계산합니다.` };
+    else if (nights <= 0) lodgeNote = { type: "warn", text: `인정 숙박 박수가 0박이라 숙박비 결제액 ${fmtW(lodgePaidW)}을 반영하지 않았습니다. 실제로 숙박했다면 이동 구간 일시와 기내박을 확인하세요.` };
     else if (lodgePaidW <= capW) lodgeNote = { type: "ok", text: `결제액 ${fmtW(lodgePaidW)}이 상한 ${fmtW(capW)} 이내이므로 전액 지급됩니다.` };
     else lodgeNote = { type: "warn", text: `결제액 ${fmtW(lodgePaidW)} 중 상한 ${fmtW(capW)}까지만 반영했습니다(초과분 ${fmtW(lodgePaidW - capW)}). 상한을 넘은 금액의 지급 가능 여부는 연구비 담당자에게 문의하세요.` };
   }
@@ -300,6 +306,7 @@ function compute(raw) {
   lines.push({ kind: "total", k: "총 지급 예상액", amt: grandW, f: "항목별 원 미만 절사" });
 
   const notes = [];
+  if (extW > travelW + sideW) notes.push({ type: "info", text: `외부 지원금 ${fmtW(extW)}이 산출액 ${fmtW(travelW + sideW)}보다 커서 총액은 0원입니다(항목 합계는 음수). 초과분은 지급하지 않습니다.` });
   if (D > 0 && mealsCut > D * REG.mealPerDay) notes.push({ type: "warn", text: `제공받은 식사 ${mealsCut}끼가 출장 ${D}일의 최대 끼니 수(${D * REG.mealPerDay}끼)보다 많습니다. 입력을 확인하세요.` });
   if (mealsCut > 0) notes.push({ type: "info", text: `기내식 ${inflight}끼와 학회 제공 ${confMeals}끼를 반영해 식비에서 ${intl ? fmtD(mealDeduct) + " (" + fmtW(won(mealDeduct * fx)) + ")" : fmtW(won(mealDeduct))}을 차감했습니다.` });
   if (reduced > 0) notes.push({ type: "warn", text: `같은 지역에 오래 머무는 경우 현지 도착 다음 날(${dstr(arrivalN + 1)})부터 세어 15일을 넘는 ${reduced}일은 일비가 10~30% 감액됩니다(제17조). 숙박비와 식비는 감액하지 않았습니다.` });
@@ -346,7 +353,7 @@ function outOf(res, inp) {
 }
 
 // ---------- 화면 ----------
-const CF = { mode: "edit", ctx: {}, res: null, inp: null, saved: null, docs: {} };
+const CF = { mode: "edit", ctx: {}, res: null, inp: null, saved: null, docs: {}, fxKeep: {}, initial: "" };
 const dlg = () => $("#dlg-conf");
 const val = id => $("#" + id)?.value ?? "";
 const numVal = id => nz(String(val(id)).replace(/[,\s원$]/g, ""));
@@ -361,7 +368,7 @@ function tzOptions() {
 function buildShell() {
   const d = dlg(); if (d.dataset.built) return;
   d.dataset.built = "1";
-  $("#conf-basis").textContent = `근거: ${REG.basis} · 과제별 지급기준이 따로 있으면 그 기준이 우선합니다. ${KST_NOTE.split(".")[0]}.`;
+  $("#conf-basis").textContent = `근거: ${REG.basis} · 과제별 지급기준이 따로 있으면 그 기준이 우선합니다. ${KST_NOTE.split(".")[0]}. 여비는 신청인 1인 기준입니다.`;
   $("#conf-in").innerHTML = `
     <fieldset class="cf-fs" id="cf-fs">
     <section class="cf-sec" aria-labelledby="cf-h1">
@@ -383,7 +390,8 @@ function buildShell() {
       </div>
     </section>
     <section class="cf-sec" aria-labelledby="cf-h2">
-      <h3 id="cf-h2">이동 구간 <small>출발·도착을 각각 현지 시각과 시간대로 입력 → 한국 시각으로 환산</small></h3>
+      <h3 id="cf-h2">이동 구간</h3>
+      <p class="toolbar-note cf-intl">출발·도착을 각각 현지 시각과 시간대로 입력하면 한국 시각으로 환산합니다. 날짜는 2026-10-04 10:00 처럼 직접 입력할 수 있습니다.</p>
       <div class="table-wrap cf-legwrap"><table class="grid compact cf-legs" id="cf-legs">
         <thead><tr><th scope="col" class="ctr">구간</th><th scope="col">수단</th><th scope="col"><span class="sr-only">출발·도착</span></th><th scope="col">장소</th><th scope="col">시간대</th><th scope="col">현지 일시</th><th scope="col">한국 시각 (KST)</th><th scope="col" class="num">기내박</th><th scope="col" class="num">기내식(끼)</th><th scope="col"><span class="sr-only">작업</span></th></tr></thead>
         <tbody id="cf-legbody"></tbody>
@@ -427,10 +435,25 @@ function buildShell() {
   $("#conf-out").addEventListener("change", e => {
     const cb = e.target.closest("input[data-doc]"); if (!cb || CF.mode !== "edit") return;
     if (cb.checked) CF.docs[cb.dataset.doc] = true; else delete CF.docs[cb.dataset.doc];
-    update();
+    // 다시 그리지 않는다: 체크 상태는 CF.docs 에만 두고 적용·인쇄 때 readInputs 로 읽는다 (다시 그리면 포커스·연속 클릭을 잃음)
+  });
+  $("#conf-out").addEventListener("click", e => {
+    const b = e.target.closest("[data-focus]"); if (!b) return;
+    const id = b.dataset.focus;
+    const el = id === "cf-legs" ? $("#cf-legbody .lg-at") : id.startsWith("leg-") ? legField(id) : $("#" + id);
+    if (el) { el.focus(); el.scrollIntoView?.({ block: "center" }); }
   });
 }
 
+// 미입력 id "leg-<j>-<dep|arr>-<at|tz>" → 그 칸 (j 는 표 순서)
+function legField(id) {
+  const m = /^leg-(\d+)-(dep|arr)-(at|tz)$/.exec(id); if (!m) return null;
+  const tr = $$("#cf-legbody tr.cf-dep")[Number(m[1])]; if (!tr) return null;
+  const i = tr.dataset.leg, cls = m[3] === "at" ? ".lg-at" : ".lg-tz";
+  const el = $(`#cf-legbody tr[data-leg="${i}"] ${cls}[data-end="${m[2]}"]`);
+  if (cls === ".lg-tz" && el && el.value === TZ_OTHER) { const o = el.parentElement.querySelector(".lg-tzo"); if (o && !o.hidden) return o; }
+  return el;
+}
 function endCells(i, k, e) {
   const label = k === "dep" ? "출발" : "도착", n = i + 1;
   const known = TZ_LIST.includes(e.tz), other = e.tz && !known;
@@ -492,17 +515,19 @@ function syncTrip() {
   const intl = val("cf-trip") !== "dom";
   $$("#conf-in .cf-intl").forEach(el => { el.hidden = !intl; });
   $$("#conf-in .cf-dom").forEach(el => { el.hidden = intl; });
-  $$("#conf-in .cf-cur").forEach(s => { s.hidden = !intl; if (!intl) s.value = "KRW"; });
+  $$("#conf-in .cf-cur").forEach(s => { s.hidden = !intl; });  // 값은 보존: 국내로 갔다가 돌아와도 통화·환율이 남는다 (compute 가 국내에서는 KRW 로 계산)
+  $("#cf-legs")?.classList.toggle("cf-domestic", !intl);  // 국내: 시간대·한국 시각·기내박 열 숨김 (compute 가 KST 로 고정)
   syncFxRows();
 }
 // 사용 중인 결제 통화(KRW·USD 제외)마다 환율 칸을 하나씩 둔다 (사용자 결정: 통화별 한 번만 입력)
 function syncFxRows(rates) {
   const box = $("#cf-fxs"); if (!box) return;
   const intl = val("cf-trip") !== "dom";
-  const keep = {}; $$("#cf-fxs input").forEach(i => { keep[i.dataset.cur] = i.value; });
+  $$("#cf-fxs input").forEach(i => { CF.fxKeep[i.dataset.cur] = i.value; });  // 칸이 사라져도 값은 기억 (토글 왕복·통화 변경 복원)
+  if (rates) Object.entries(rates).forEach(([c, v]) => { if (v) CF.fxKeep[c] = fmtN(v); });
   const used = intl ? [...new Set($$("#conf-in .cf-cur").map(s => s.value).filter(c => c !== "KRW" && c !== "USD"))] : [];
   box.innerHTML = used.map(c => `<label for="cf-fx-${c}">${lab(`적용 환율 (원/${c})`, CUR_NAME[c] || "")}<input type="text" id="cf-fx-${c}" class="num-input cf-fx-cur" data-cur="${c}" inputmode="decimal" placeholder="예: 1500" autocomplete="off"></label>`).join("");
-  used.forEach(c => { const v = rates && rates[c] != null ? rates[c] : keep[c]; if (v) $("#cf-fx-" + c).value = String(v); });
+  used.forEach(c => { const v = CF.fxKeep[c]; if (v) $("#cf-fx-" + c).value = String(v); });
   box.hidden = !used.length;
 }
 const readFxs = () => Object.fromEntries($$("#cf-fxs input").map(i => [i.dataset.cur, numVal(i.id)]).filter(([, v]) => v > 0));
@@ -533,6 +558,7 @@ function onInput(e) {
     if (sel && !sel.dataset.manual && z) sel.value = z;
   }
   if (e.type === "input" && (t.tagName === "SELECT" || t.type === "checkbox")) return;  // select·체크는 change 에서 한 번만
+  if (e.type === "change" && t.tagName === "INPUT" && t.type !== "checkbox") return;  // 글자·숫자·날짜 칸은 input 에서 이미 갱신 (blur 의 change 로 다시 그리면 다음 클릭을 잃음)
   update();
 }
 
@@ -541,8 +567,8 @@ function readInputs() {
   return {
     tripType: val("cf-trip") === "dom" ? "dom" : "intl", grade: val("cf-grade"), showAll: $("#cf-showall").checked,
     citySearch: val("cf-city").trim(), cityGrade: val("cf-cgrade"), region: Number(val("cf-region")), fx: numVal("cf-fx"), fxs: readFxs(), fxDate: val("cf-fxdate"),
-    cs: val("cf-cs"), ce: val("cf-ce"), legs: readLegs(), transitManual: tr === "" ? null : Math.max(0, Math.floor(Number(tr.replace(/[,\s]/g, "")) || 0)),
-    fare: numVal("cf-fare"), fareCur: val("cf-fare-cur"), lodgePaid: numVal("cf-lodge"), lodgeCur: val("cf-lodge-cur"), confMeals: numVal("cf-confmeals"),
+    cs: val("cf-cs"), ce: val("cf-ce"), legs: readLegs(), transitManual: tr === "" || !Number.isFinite(Number(tr.replace(/[,\s]/g, ""))) ? null : Math.max(0, Math.floor(Number(tr.replace(/[,\s]/g, "")))),
+    fare: numVal("cf-fare"), fareCur: val("cf-fare-cur"), lodgePaid: numVal("cf-lodge"), lodgeCur: val("cf-lodge-cur"), confMeals: Math.floor(numVal("cf-confmeals")),
     regFee: numVal("cf-reg"), regCur: val("cf-reg-cur"), printFee: numVal("cf-print"), printCur: val("cf-print-cur"),
     etcFee: numVal("cf-etc"), etcCur: val("cf-etc-cur"), extFund: numVal("cf-ext"), extCur: val("cf-ext-cur"), docs: { ...CF.docs },
   };
@@ -550,7 +576,8 @@ function readInputs() {
 function applyInputs(inp) {
   const s = { ...defaultInputs(), ...inp };
   const set = (id, v) => { const el = $("#" + id); if (el) el.value = v ?? ""; };
-  const amt = v => nz(v) ? String(v) : "";
+  const amt = v => nz(v) ? fmtN(v) : "";  // 천 단위 구분 (numVal 이 쉼표를 지우므로 안전)
+  CF.fxKeep = {};
   set("cf-trip", s.tripType === "dom" ? "dom" : "intl");
   $("#cf-showall").checked = !!s.showAll;
   refreshGrades(String(s.grade || "2")); syncTrip();
@@ -584,14 +611,15 @@ function docsHtml(docs, ro) {
 function summaryCards(o) {
   const card = (k, v, cls = "") => `<div class="card"><div class="k">${esc(k)}</div><div class="v${cls}">${v}</div></div>`;
   return card("총 지급 예상액", esc(fmtW(o.합계))) + card("여비", esc(fmtW(o.여비))) + card("부대비", esc(fmtW(o.부대비))) + card("외부 지원 차감", o.외부지원 ? "−" + esc(fmtW(o.외부지원)) : "0원", o.외부지원 ? " neg" : "")
-    + card("일수 · 박수", `${o.일수}일 · ${o.박수}박`) + card(o.구분 === "국내" ? "숙박 지역" : "도시 등급", esc(o.등급));
+    + card("일수 · 박수", `${o.일수}일 · ${o.박수}박`) + (o.구분 === "국내" ? card("숙박 지역", `${esc(String(o.등급).split(" (")[0])}${/\(/.test(o.등급) ? `<div class="cf-sub">${esc(o.등급.slice(o.등급.indexOf("(") + 1).replace(/\)$/, ""))}</div>` : ""}`) : card("도시 등급", esc(o.등급)));
 }
 function renderOut(res) {
   const out = $("#conf-out");
   const sum = $("#conf-sum");
+  const docsEl = $("#cf-docs");
   if (res.blocked) {
     sum.innerHTML = `<div class="card cf-blocked"><div class="k">총 지급 예상액</div><div class="v">입력 미완료</div></div>`;
-    out.innerHTML = `<section class="cf-sec"><h3>계산하려면</h3><ul class="cf-todo">${[...res.missing.map(m => `<li>${esc(m.msg)} 입력</li>`), ...res.errors.map(e => `<li class="cf-err">${esc(e.msg)}</li>`)].join("")}</ul>
+    out.innerHTML = `<section class="cf-sec"><h3>계산하려면</h3><ul class="cf-todo">${[...res.missing.map(m => `<li><button type="button" class="lnk" data-focus="${esc(m.id)}">${esc(m.msg)} 입력</button></li>`), ...res.errors.map(e => `<li class="cf-err"><button type="button" class="lnk" data-focus="${esc(e.id)}">${esc(e.msg)}</button></li>`)].join("")}</ul>
       ${res.notes.length ? `<ul class="cf-notes">${res.notes.filter(n => n.type === "warn").map(noteLi).join("")}</ul>` : ""}</section>`;
     return;
   }
@@ -603,8 +631,13 @@ function renderOut(res) {
     <section class="cf-sec" aria-labelledby="cf-h-lines"><h3 id="cf-h-lines">산출 내역</h3>${linesTable(res.lines, "산출 내역")}
       <p class="toolbar-note cf-basisnote"><b>기준</b> ${esc(KST_NOTE)} 출장 기간 ${esc(res.ts)} ~ ${esc(res.te)} (한국 날짜 ${res.D}일), 기내박 ${res.transitNights}박${res.basis.length ? " (" + esc(res.basis.join(", ")) + ")" : ""}.</p></section>
     <div><section class="cf-sec" aria-labelledby="cf-h-notes"><h3 id="cf-h-notes">안내</h3><ul class="cf-notes">${res.notes.map(noteLi).join("")}</ul></section>
-      <section class="cf-sec" aria-labelledby="cf-h-docs"><h3 id="cf-h-docs">제출 서류 체크리스트</h3>${docsHtml(res.docs, CF.mode !== "edit")}</section></div>
+      <section class="cf-sec" aria-labelledby="cf-h-docs"><h3 id="cf-h-docs">제출 서류 체크리스트</h3><div id="cf-docs-slot"></div></section></div>
   </div><p class="toolbar-note cf-disc">※ ${esc(REG.disclaimer)}</p>`;
+  // 체크리스트 노드는 다시 쓰지 않고 옮겨 둔다: 숫자 칸 blur 가 input 을 다시 보내 산출 영역이 다시 그려져도 체크 클릭·포커스가 유지된다
+  const key = (res.intl ? "intl" : "dom") + (CF.mode !== "edit" ? "|ro" : "");
+  const slot = $("#cf-docs-slot");
+  if (docsEl && docsEl.dataset.key === key) slot.replaceWith(docsEl);
+  else { const d = document.createElement("div"); d.id = "cf-docs"; d.dataset.key = key; d.innerHTML = docsHtml(res.docs, CF.mode !== "edit"); slot.replaceWith(d); }
 }
 function renderLegs(res) {
   $$("#cf-legbody tr.cf-dep").forEach((tr, j) => {
@@ -625,7 +658,9 @@ function renderLegs(res) {
   $("#cf-transit-hint").textContent = `자동 계산: ${res.autoNights}박${res.basis.length ? " (" + res.basis.join(", ") + ")" : ""}. 실제와 다르면 직접 입력하세요.`;
 }
 function update() {
-  CF.inp = readInputs();
+  const inp = readInputs();
+  if (CF.res && JSON.stringify(inp) === JSON.stringify(CF.inp)) return;  // 값이 같으면(숫자 칸 blur 의 쉼표 재서식 등) 다시 그리지 않는다 → 체크리스트 클릭·포커스 유지
+  CF.inp = inp;
   CF.res = compute(CF.inp);
   renderLegs(CF.res); renderOut(CF.res);
   $("#conf-apply").disabled = CF.res.blocked;
@@ -655,6 +690,18 @@ function seedFromForm(inp) {  // 새 계산: 신청 폼의 학회 칸으로 시�
   return inp;
 }
 
+function mergeForm(inp) {  // 기존 계산을 다시 열 때: 폼에서 바꾼 학회 기간·등록비를 계산 입력에 반영
+  const v = k => F(k)?.value?.trim() || "";
+  if (v("_시작일")) inp.cs = v("_시작일");
+  if (v("_종료일")) inp.ce = v("_종료일");
+  if (F("_등록비")) { const reg = numOf(v("_등록비")); if (reg !== nz(inp.regFee)) inp.regFee = reg || 0; }
+  return inp;
+}
+const confDirty = () => CF.mode === "edit" && CF.initial && JSON.stringify(readInputs()) !== CF.initial;
+async function closeConf() {
+  if (confDirty() && !await confirmDlg({ title: "계산 취소", body: "입력한 내용은 금액에 적용되지 않습니다.", verb: "버리고 닫기", cancel: "계속 입력", danger: true })) return;
+  dlg().close();
+}
 function openConfCalc(opts = {}) {
   buildShell();
   if (!opts.readonly && $("#dlg").open && $("#req-calc-btn")?.dataset.view === "1")  // 잠긴 신청: 폼에서도 보기 전용
@@ -665,12 +712,15 @@ function openConfCalc(opts = {}) {
   CF.ctx = ro ? ctxOfRec(opts.rec) : formCtx();
   CF.saved = ro ? calc.out || null : null;
   CF.mode = ro ? "view" : "edit";
-  applyInputs(calc ? calc.in : seedFromForm(defaultInputs()));
+  applyInputs(calc ? (ro ? calc.in : mergeForm({ ...calc.in })) : seedFromForm(defaultInputs()));
   $("#cf-fs").disabled = ro;
+  $("#cf-docs")?.remove();  // 새로 열 때는 체크리스트를 저장값으로 다시 그린다
+  CF.res = null; CF.inp = null;  // update() 의 '변경 없음' 건너뛰기를 막고 처음부터 그린다
+  CF.initial = ro ? "" : JSON.stringify(readInputs());
   const d = dlg();
   d.classList.toggle("cf-ro", ro);
   $("#conf-title").textContent = ro ? `학회 여비 산출 내역${CF.ctx.신청번호 ? " · " + CF.ctx.신청번호 : ""}` : "학회 여비 계산기";
-  $("#conf-reset").hidden = ro || !calc;
+  $("#conf-reset").hidden = true;  // 초기화는 신청 폼의 [계산 초기화] 버튼 하나로 (동작 통일)
   $("#conf-apply").hidden = ro;
   $("#conf-close").textContent = ro ? "닫기" : "취소";
   update();
@@ -688,8 +738,10 @@ function applyToForm() {
   set("_국내외", o.구분);
   set("_시작일", CF.inp.cs); set("_종료일", CF.inp.ce);
   if (F("_장소") && !F("_장소").value.trim()) set("_장소", CF.inp.citySearch || CF.inp.legs.find(l => l.arr.place && l.arr.tz !== KST)?.arr.place || "");
-  if (o.등록비 > 0) set("_등록비", fmt(o.등록비));
+  const regEl = F("_등록비"), regBefore = regEl ? numOf(regEl.value) || 0 : 0;
+  if (regEl) regEl.value = o.등록비 > 0 ? fmt(o.등록비) : "";  // 계산기에서 0으로 지우면 폼도 비움 (상세 등록비 = in.regFee)
   syncFormRow();
+  return regEl && regBefore !== (o.등록비 || 0) ? `등록비는 ${fmtW(o.등록비 || 0)}으로 바꿨습니다.` : "";
 }
 function resetForm() {
   const el = F("_calc"); if (el) el.value = "";
@@ -721,7 +773,7 @@ function confCalcValue() { const el = F("_calc"); return el ? (el.value ? calcFr
 function confDrawerKv(det, kv) {
   if (!det || !det.out || det.합계 == null) return "";
   const o = det.out;
-  return kv("여비 계산", `${esc(o.일수)}일 · ${esc(o.박수)}박${o.기내박 ? ` (기내박 ${esc(o.기내박)})` : ""} · ${esc(o.등급)} · <b>${esc(fmtW(o.합계))}</b> <button type="button" class="lnk" data-rd="confview">산출 내역 보기</button>`);
+  return kv("여비 계산", `${esc(o.일수)}일 · ${esc(o.박수)}박${o.기내박 ? ` (기내박 ${esc(o.기내박)})` : ""} · ${esc(o.등급)} <button type="button" class="lnk" data-rd="confview">산출 내역 보기</button>`);
 }
 
 // ---------- 인쇄 (A4, 기본 정보 / 산출 내역 / 안내 / 서류 체크리스트) ----------
@@ -730,7 +782,7 @@ function printHtml(o, ctx) {
   const head = [["신청번호", ctx.신청번호], ["신청인(출장자)", ctx.신청인], ["학회명", ctx.학회명], ["관련과제", ctx.관련과제]].filter(([, v]) => v);
   const meta = [...head, ...(o.meta || [])];
   const legs = o.legs || [];
-  return `<header class="os-head"><h2>학회 출장 여비 산출 내역</h2><div class="os-no">${ctx.신청번호 ? `신청번호 <b>${T(ctx.신청번호)}</b> · ` : ""}계산 ${T(o.계산일 || "")} · 출력 ${T(today())}</div></header>
+  return `<header class="os-head"><h2>학회 여비 산출 내역</h2><div class="os-no">${ctx.신청번호 ? `신청번호 <b>${T(ctx.신청번호)}</b> · ` : ""}계산 ${T(o.계산일 || "")} · 출력 ${T(today())}</div></header>
     <p class="pc-basis">근거: ${T(o.basis || REG.basis)} · 과제별 지급기준이 따로 있으면 그 기준이 우선합니다.</p>
     <h3 class="pc-h">1. 기본 정보</h3>
     <table class="os-meta"><tbody>${meta.map(([k, v]) => `<tr><th scope="row">${T(k)}</th><td>${T(v)}</td></tr>`).join("")}</tbody></table>
@@ -745,28 +797,46 @@ function printHtml(o, ctx) {
     <p class="pc-disc">※ ${T(REG.disclaimer)}</p>
     <p class="pc-sign">위와 같이 여비 산출 내역을 확인함.<br><br>확인자: ______________ (서명)</p>`;
 }
-function printConf() {
+function prepPrint() {  // 인쇄 사본 준비. 인쇄할 게 없으면 false
   const o = CF.mode === "view" && CF.saved && CF.saved.lines ? CF.saved : (CF.res && !CF.res.blocked ? outOf(CF.res, CF.inp) : null);
-  if (!o) return;
+  if (!o) return false;
   $("#print-conf").innerHTML = printHtml(o, CF.ctx);
   document.body.classList.add("printing-conf");
-  window.print();
+  return true;
 }
+function printConf() { if (prepPrint()) window.print(); }
+window.addEventListener("beforeprint", () => {  // Ctrl+P: 계산기가 열려 있으면 뒤 화면 대신 산출 내역 (결의서·발주서와 같은 방식)
+  if (document.body.classList.contains("printing-conf") || !dlg().open) return;
+  if (!prepPrint()) showAlert("입력이 완료되지 않아 산출 내역을 인쇄할 수 없습니다.", "warn");
+});
 window.addEventListener("afterprint", () => { if (!document.body.classList.contains("printing-conf")) return; document.body.classList.remove("printing-conf"); $("#print-conf").innerHTML = ""; });
 
 // ---------- 이벤트 ----------
 document.addEventListener("click", e => {
-  if (e.target.closest("#req-calc-reset")) { resetForm(); F("금액")?.focus(); }
+  if (e.target.closest("#req-calc-reset")) { resetForm(); const a = F("금액"); if (a && !a.readOnly) a.value = ""; a?.focus(); showAlert("계산 결과를 지웠습니다. 금액을 직접 입력할 수 있습니다 (저장해야 반영).", "ok"); }
 });
-$("#conf-form").addEventListener("submit", e => {
-  e.preventDefault();
+function applyConf() {
   if (CF.mode !== "edit") return;
   update();
   if (CF.res.blocked) { showAlert("입력이 완료되지 않아 적용할 수 없습니다. '계산하려면' 목록을 확인하세요.", "warn"); return; }
-  applyToForm(); dlg().close(); F("금액")?.focus();
-  showAlert(`여비 합계 ${fmtW(CF.res.grandW)}을 금액에 넣었습니다. 신청을 저장해야 반영됩니다.`, "ok");
+  const extra = applyToForm(); CF.initial = ""; dlg().close(); F("금액")?.focus();
+  showAlert(`여비 합계 ${fmtW(CF.res.grandW)}을 금액에 넣었습니다. ${extra ? extra + " " : ""}신청을 저장해야 반영됩니다.`, "ok");
+}
+$("#conf-form").addEventListener("submit", e => { e.preventDefault(); if (e.submitter) applyConf(); });  // 버튼·Ctrl+Enter 만. Enter 의 암묵 제출(submitter 없음)은 무시
+// 신청 폼과 같은 규칙: Enter 는 다음 칸, Ctrl+Enter 는 금액에 적용 (도시 검색·숫자 칸에서 Enter 로 닫히지 않게)
+$("#conf-form").addEventListener("keydown", e => {
+  if (e.key !== "Enter" || e.isComposing) return;
+  const t = e.target;
+  if (t.tagName === "BUTTON" || t.tagName === "TEXTAREA") return;
+  if (e.ctrlKey || e.metaKey) { e.preventDefault(); applyConf(); return; }
+  if (t.hasAttribute("list")) return;  // 도시 검색: Enter 는 datalist 선택에 쓰고, 제출은 submitter 검사로 막는다
+  e.preventDefault();
+  if (CF.mode !== "edit") return;
+  const all = $$("#conf-form input, #conf-form select, #conf-form button").filter(x => !x.disabled && !x.hidden && x.tabIndex !== -1 && x.offsetParent !== null);
+  const i = all.indexOf(t); if (i >= 0 && all[i + 1]) all[i + 1].focus();
 });
-$("#conf-close").addEventListener("click", () => dlg().close());
+$("#conf-close").addEventListener("click", closeConf);
+dlg().addEventListener("cancel", e => { if (!confDirty()) return; e.preventDefault(); closeConf(); });
 $("#conf-reset").addEventListener("click", () => { resetForm(); dlg().close(); F("금액")?.focus(); showAlert("계산 결과를 지웠습니다. 금액을 직접 입력할 수 있습니다 (저장해야 반영).", "ok"); });
 $("#conf-print").addEventListener("click", printConf);
 

@@ -769,9 +769,15 @@ table.grid.cf-legs tbody tr:hover td { background: transparent; }
 table.grid.cf-legs input, table.grid.cf-legs select { min-height: 0; height: 24px; padding: 0 4px; font-size: 12px; }
 table.grid.cf-legs input[type="datetime-local"] { font: inherit; font-size: 12px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg); color: var(--ink); width: 168px; }
 table.grid.cf-legs input[type="datetime-local"]:disabled { background: var(--bg-head); color: var(--ink-3); }
-table.grid.cf-legs .lg-place { width: 116px; }
-table.grid.cf-legs .lg-tz { width: 260px; }
-table.grid.cf-legs .lg-tzo { width: 260px; margin: 2px 0; display: block; }
+table.grid.cf-legs .lg-place { width: 100px; }
+table.grid.cf-legs .lg-tz { width: 200px; }
+table.grid.cf-legs .lg-tzo { width: 200px; margin: 2px 0; display: block; }
+/* 국내 출장: 시간대·한국 시각·기내박 열은 쓰지 않으므로 숨김 (5·7·8번째 열) */
+table.grid.cf-legs.cf-domestic th:nth-child(5), table.grid.cf-legs.cf-domestic th:nth-child(7), table.grid.cf-legs.cf-domestic th:nth-child(8),
+table.grid.cf-legs.cf-domestic tr.cf-dep > td:nth-child(5), table.grid.cf-legs.cf-domestic tr.cf-dep > td:nth-child(7), table.grid.cf-legs.cf-domestic tr.cf-dep > td:nth-child(8),
+table.grid.cf-legs.cf-domestic tr.cf-arr > td:nth-child(3), table.grid.cf-legs.cf-domestic tr.cf-arr > td:nth-child(5) { display: none; }
+.cf-sum .cf-sub { font-size: 12px; font-weight: 400; color: var(--ink-2); }
+.cf-todo .lnk { font: inherit; }
 table.grid.cf-legs .lg-mode { width: 64px; }
 table.grid.cf-legs .lg-meal { width: 44px; }
 table.grid.cf-legs .cf-end, table.grid.cf-legs .cf-kst { color: var(--ink-2); }
@@ -893,5 +899,6 @@ table.grid.edit td.num .cell-input { text-align: right; }
   body.printing-conf .os-meta th, body.printing-conf .os-meta td, body.printing-conf .os-lines th, body.printing-conf .os-lines td { border-color: var(--ink); }
   body.printing-conf .os-meta th { width: 150px; }
   body.printing-conf .os-lines tr { break-inside: avoid; }
+  body.printing-conf .pc-lines { break-inside: avoid; }
   .req-selbar, .req-role, table.grid th.sel, table.grid td.sel { display: none !important; }
 }

@@ -237,6 +237,7 @@ const SEL_HOOK = {};
 // 행이 많으면 처음 LIST_LIMIT 건만 그리고 '더 보기'로 나머지 (합계·CSV 는 항상 전체 기준). 필터가 바뀌면 다시 접힘
 const LIST_LIMIT = 400, LIST_MORE = {};
 const norm = s => String(s ?? "").toLowerCase().replace(/,/g, "");
+function detailText(d) { if (!d) return ""; try { const o = JSON.parse(d); return o && typeof o === "object" ? ["학회명", "장소", "참가자"].map(k => o[k] || "").join(" ") : ""; } catch { return ""; } }
 function filtered(kind) {
   const f = FILTERS[kind] || {};
   const q = norm((f.q || "").trim());
@@ -263,7 +264,7 @@ function filtered(kind) {
       if (QUICK === "noevid" && hasEvidence(r)) return false;
       if (QUICK === "excluded" && !isExcludedExec(r)) return false;
     }
-    if (q && !Object.entries(r).some(([k, v]) => !k.startsWith("_") && norm(v).includes(q))) return false;
+    if (q && !Object.entries(r).some(([k, v]) => !k.startsWith("_") && k !== "상세" && norm(v).includes(q)) && !norm(detailText(r["상세"])).includes(q)) return false;  // 상세(JSON)는 키·코드가 아니라 학회명·장소·참가자만 검색
     return true;
   });
 }

@@ -511,19 +511,20 @@
 </dialog>
 
 <!-- 신청: 학회 여비 계산기 (conf.js). 신청 폼 [여비 계산기] 또는 상세 패널 [산출 내역 보기](보기 전용)로 연다 -->
-<dialog id="dlg-conf" aria-labelledby="conf-title" class="dlg-conf">
+<dialog id="dlg-conf" aria-labelledby="conf-title" aria-describedby="conf-basis" class="dlg-conf">
   <form id="conf-form" method="dialog" novalidate>
     <div class="cf-head">
       <h2 id="conf-title">학회 여비 계산기</h2>
       <p class="toolbar-note" id="conf-basis"></p>
     </div>
     <div class="cf-body">
-      <div class="cards cf-sum" id="conf-sum" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div class="cards cf-sum" id="conf-sum"></div>
       <div id="conf-in"></div>
       <div id="conf-out"></div>
     </div>
     <div class="dlg-actions cf-foot">
-      <button type="button" class="btn" id="conf-reset" title="상세의 계산 결과를 지우고 금액을 직접 입력할 수 있게 합니다">계산 초기화</button>
+      <button type="button" class="btn" id="conf-reset" hidden>계산 초기화</button>
+      <span class="toolbar-note">Enter: 다음 칸 · Ctrl+Enter: 금액에 적용</span>
       <span class="sp"></span>
       <button type="button" class="btn" id="conf-print" title="A4 산출 내역 인쇄 (기본 정보 · 산출 내역 · 안내 · 서류 체크리스트)">인쇄</button>
       <button type="button" class="btn btn-ghost" id="conf-close">취소</button>

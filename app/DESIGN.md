@@ -163,7 +163,7 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.sm}"
     padding: "18px 22px 20px"
-    width: "min(780px, 95vw)"
+    width: "min(780px, 95vw)"  /* 예외: 학회 여비 계산기 #dlg-conf 는 min(1180px, 96vw) — 이동 구간 표(장소·시간대·현지 일시·KST) 때문 */
   drawer:
     backgroundColor: "{colors.bg}"
     textColor: "{colors.ink}"
