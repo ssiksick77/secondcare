@@ -4,10 +4,11 @@ Updated: 2026-10-16
 
 ## Goal
 
-지출결의서 form updated (결재란, no title rule, 6.5mm rows). Next task not defined.
+재원 종류 and 공금 balance are done. Next task not defined.
 
 ## Done
 
+- 재원 종류 column + 공금 single-balance rule (store/main/mcp/app.js), README section, API 12 + UI 5 new test cases (commit: `git log --grep 'fund type'`).
 - 지출결의서: 결재란 4칸(담당·매니저·선임연구원·센터장, 위 직책·아래 서명), 제목 아래 이중선 제거, 행 6.5mm, 거래번호·담당자 상자 제거(거래번호는 결의 내역 첫 줄). Verified with a screenshot and a 1-page PDF on the QA ledger (commit: see `git log --grep voucher`).
 - 596f351: tests/ added (calc node test, API test, Playwright UI test, runner, server helper) and registered in `scripts/check.sh`; `main.py` honors `LEDGER_NO_BROWSER`. CLAUDE.md and README document the tests.
 - 66cde60 / 9a91f0b / d1d1d91: 기타 tab review (2 agents), report, fixes (type hint line, 기타 labels, 구분 change re-approves, server drops shop codes on non-소모품 rows, integer won for 단가·부가세액).
@@ -22,7 +23,8 @@ Updated: 2026-10-16
 
 ## Open issues
 
-- checks: configured, pass (smoke, test). The test step needs node and Playwright chromium on the machine; it takes about 1 minute. No lint or typecheck yet.
+- checks: configured, pass (smoke, test: calc 19, API 29, UI 30). The test step needs node and Playwright chromium; about 1.5 minutes. No lint or typecheck yet.
+- 공금 leftovers: labor screen's 인건비예산 fallback still sums 예산목 budgets (empty for 공금); 재원 list has no 종류 filter; existing live ledger will get 종류=국책 written on its first save after this version.
 - Uncommitted before adoption and untouched: `QA set/` (untracked) and `memo.md` (deleted in the working tree, was an empty file). Decide whether to commit or restore them.
 - 학회 review leftovers: form conflict [새로 불러오기] button, leg Tab order, P3 list in docs/점검_2026-10-16_신청_학회.md.
 - 기타 review leftovers: P3 list in docs/점검_2026-10-16_신청_기타.md.
@@ -31,6 +33,7 @@ Updated: 2026-10-16
 
 ## Decisions
 
+- 2026-10-16 (user) 재원 종류: list 국책/원내/위탁/교육/공금/기타; 공금 deposits go through 예산변동 (no per-예산목 split), 예산목 stays required on 집행/품의/신청, existing funds default to 국책 and the user edits them later.
 - 2026-10-16 (user) 지출결의서 결재란: 담당 / 매니저 / 선임연구원 / 센터장 4칸, 위 직책·아래 서명. Row height 6.5mm and blank name cells were my choice (user did not answer).
 - 2026-10-16 (user) request types: 장비 = 전자제품, 소모품 = 알파몰·드림디포 purchases, 학회, everything else = 기타. D2-D6 of the 기타 review were taken as proposed because the user gave no answer.
 - 2026-10-16 (user) 학회 review: transit nights by local date for air/sea legs, travel days stay KST; detail changes need re-approval; 품의 preset "학회명 (장소, 시작~종료)" with 참가자 in 비고; 출장 구분 required with no default; per-person note; 금액 row below 학회 fields; 0원 saves but cannot be approved; terms "출장 구분", "학회 여비 산출 내역". Server role check deferred.
