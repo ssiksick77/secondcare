@@ -3,7 +3,8 @@
    - 관용(공용)차량 항목 제외
    - 이동 구간은 출발·도착마다 장소·시간대·현지 일시를 받고 UTC 순간으로 환산한다.
      기내박·여행일수는 한국 시각(KST) 기준으로 센다.
-   저장: 신청 '상세' JSON 에 {v:1, in:{…}, out:{합계, …}} 를 넣고 맨 위 '합계'도 같이 둔다(request.js 금액 잠금 규칙).
+   저장: 신청 '상세' JSON 에 {v:2, in:{…}, out:{합계, …}} 를 넣고 맨 위 '합계'도 같이 둔다(request.js 금액 잠금 규칙).
+   v:2 — 금액 통화는 코드(KRW/USD/EUR…), in.fxs 에 통화별 환율(원/1단위). v:1(₩/$ 기호, fx 만)은 읽을 때 변환한다.
    공개: openConfCalc(opts) · confFormInit(det, opts) · confCalcValue() · confDrawerKv(det, kv) · window.ConfCalc(순수 함수, 테스트용) */
 "use strict";
 (function () {
@@ -142,19 +143,26 @@ const won = n => Math.floor(n + 1e-6);  // 원 미만 절사
 const fmtN = n => Number(n).toLocaleString("ko-KR");
 const fmtW = n => fmtN(n) + "원";
 const fmtD = n => "$" + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+// 결제 통화 고정 목록 (사용자 결정 2026-10-16). 환율은 모두 원/1단위 기준. USD 환율은 지급기준표(별표4) 환산에도 쓴다.
+const CURRENCIES = [["KRW", "₩", "원"], ["USD", "$", "미국 달러"], ["EUR", "€", "유로"], ["JPY", "¥", "일본 엔"], ["GBP", "£", "영국 파운드"], ["CNY", "CN¥", "중국 위안"],
+  ["CHF", "CHF", "스위스 프랑"], ["SGD", "S$", "싱가포르 달러"], ["HKD", "HK$", "홍콩 달러"], ["TWD", "NT$", "대만 달러"], ["AUD", "A$", "호주 달러"], ["CAD", "C$", "캐나다 달러"]];
+const CUR_SYM = Object.fromEntries(CURRENCIES.map(([c, s]) => [c, s]));
+const CUR_NAME = Object.fromEntries(CURRENCIES.map(([c, , n]) => [c, n]));
+const curCode = v => v === "$" ? "USD" : (!v || v === "₩" || !CUR_SYM[v]) ? "KRW" : v;  // v:1 기호 호환
+const fmtC = (n, code) => (CUR_SYM[code] || code) + (Math.round(n * 100) / 100).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const stayFactor = k => { for (const [lim, f] of REG.stay) if (k <= lim) return f; return 1; };
 const NOTE_LABEL = { info: "안내", warn: "주의", danger: "중요", ok: "확인" };
 
 // ---------- 계산 (DOM 무관) ----------
 function defaultInputs() {
   return {
-    tripType: "intl", grade: "2", showAll: false, citySearch: "", cityGrade: "나", region: 100000, fx: 0, fxDate: "", cs: "", ce: "",
+    tripType: "intl", grade: "2", showAll: false, citySearch: "", cityGrade: "나", region: 100000, fx: 0, fxs: {}, fxDate: "", cs: "", ce: "",
     legs: [
       { mode: "항공", meal: 0, dep: { place: "인천", tz: KST, at: "" }, arr: { place: "", tz: "", at: "" } },
       { mode: "항공", meal: 0, dep: { place: "", tz: "", at: "" }, arr: { place: "인천", tz: KST, at: "" } },
     ],
-    transitManual: null, fare: 0, fareCur: "₩", lodgePaid: 0, lodgeCur: "₩", confMeals: 0,
-    regFee: 0, regCur: "₩", printFee: 0, printCur: "₩", etcFee: 0, etcCur: "₩", extFund: 0, extCur: "₩", docs: {},
+    transitManual: null, fare: 0, fareCur: "KRW", lodgePaid: 0, lodgeCur: "KRW", confMeals: 0,
+    regFee: 0, regCur: "KRW", printFee: 0, printCur: "KRW", etcFee: 0, etcCur: "KRW", extFund: 0, extCur: "KRW", docs: {},
   };
 }
 const nz = v => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
@@ -167,6 +175,13 @@ function compute(raw) {
   const err = (id, msg) => errors.push({ id, msg });
   const fx = intl ? nz(inp.fx) : 1;
   if (intl && !(fx > 0)) miss("cf-fx", "적용 환율");
+  // 결제 통화별 환율: KRW=1, USD=fx(지급기준 환율과 동일), 그 외는 inp.fxs[코드]
+  const MONEY_KEYS = ["fareCur", "lodgeCur", "regCur", "printCur", "etcCur", "extCur"];
+  const cur = k => intl ? curCode(inp[k]) : "KRW";
+  const fxs = inp.fxs && typeof inp.fxs === "object" ? inp.fxs : {};
+  const rateOf = code => code === "KRW" ? 1 : code === "USD" ? fx : nz(fxs[code]);
+  const usedCurs = [...new Set(MONEY_KEYS.map(cur).filter(c => c !== "KRW" && c !== "USD"))];
+  usedCurs.forEach(c => { if (!(rateOf(c) > 0)) miss("cf-fx-" + c, `${c} 환율`); });
   if (intl && !inp.cityGrade) miss("cf-cgrade", "도시 등급");
 
   // 이동 구간: 현지 일시 → UTC → 한국 날짜
@@ -239,9 +254,8 @@ function compute(raw) {
   const region = REG.regions.find(r => r.cap === Number(inp.region)) || REG.regions[0];
   const capNight = intl ? g.lodge[c] : (g.lodgeCap ? region.cap : null);
   const fxTxt = fmtN(fx);
-  const cur = k => intl && inp[k] === "$" ? "$" : "₩";
-  const pay = (v, k) => cur(k) === "$" ? won(nz(v) * fx) : won(nz(v));
-  const payTxt = (v, k, base) => (cur(k) === "$" && nz(v) > 0) ? `${fmtD(nz(v))} × 환율 ${fxTxt}` : base;
+  const pay = (v, k) => won(nz(v) * rateOf(cur(k)));
+  const payTxt = (v, k, base) => (cur(k) !== "KRW" && nz(v) > 0) ? `${fmtC(nz(v), cur(k))} × 환율 ${fmtN(rateOf(cur(k)))}` : base;
 
   // 일비: 현지 도착 다음 날부터 세어 15일을 넘는 날은 감액(제17조)
   let ilbiSum = 0, reduced = 0;
@@ -272,7 +286,7 @@ function compute(raw) {
     { kind: "travel", k: "운임 (실비)", amt: fareW, f: payTxt(inp.fare, "fareCur", "E-티켓·영수증 금액"), law: "실제 결제한 운임" },
     { kind: "travel", k: intl ? "일비 (현지 교통비 등)" : "일비", amt: ilbiW, f: intl ? `${fmtD(ilbiDay)} × ${D}일${redTxt} = ${fmtD(ilbiSum)} × 환율 ${fxTxt}` : `${fmtN(ilbiDay)}원 × ${D}일${redTxt}`, law: "여행일수만큼 정액 지급" },
     { kind: "travel", k: "숙박비 (실비, 상한 이내)", amt: lodgeW,
-      f: (capW === null ? `실비 전액 (${nights}박)` : `인정 ${nights}박 (총 ${rawNights}박 − 기내박 ${transitNights}박), 상한 ${fmtW(capW)}`) + (cur("lodgeCur") === "$" && nz(inp.lodgePaid) > 0 ? ` / 결제액 ${fmtD(nz(inp.lodgePaid))} × 환율 ${fxTxt}` : ""),
+      f: (capW === null ? `실비 전액 (${nights}박)` : `인정 ${nights}박 (총 ${rawNights}박 − 기내박 ${transitNights}박), 상한 ${fmtW(capW)}`) + (cur("lodgeCur") !== "KRW" && nz(inp.lodgePaid) > 0 ? ` / 결제액 ${fmtC(nz(inp.lodgePaid), cur("lodgeCur"))} × 환율 ${fmtN(rateOf(cur("lodgeCur")))}` : ""),
       law: "결제액과 상한액 중 적은 금액" },
     { kind: "travel", k: "식비", amt: mealW,
       f: intl ? `${fmtD(mealDay)} × ${D}일 − ${mealsCut}끼 × ${fmtD(mealDay / REG.mealPerDay)} = ${fmtD(mealSum)} × 환율 ${fxTxt}` : `${fmtN(mealDay)}원 × ${D}일 − ${mealsCut}끼 × (${fmtN(mealDay)}원 ÷ ${REG.mealPerDay})`,
@@ -304,6 +318,7 @@ function compute(raw) {
   const meta = [
     ["출장 구분", intl ? "국외" : "국내"], ["직급(여비지급) 구분", g.name], [intl ? "도시 등급" : "숙박 지역", gradeTxt],
     ...(intl ? [["적용 환율(원/USD)", fxTxt + (inp.fxDate ? ` (기준일 ${inp.fxDate})` : "")]] : []),
+    ...(intl && usedCurs.length ? [["결제 통화 환율", usedCurs.map(c => `${c} ${fmtN(rateOf(c))}`).join(" · ")]] : []),
     ["출장 기간 (한국 날짜)", `${ts || "-"} ~ ${te || "-"} (${D}일)`],
     ["학회 기간", `${cs || "-"} ~ ${ce || "-"}${confDays ? ` (${confDays}일)` : ""}`],
     ["숙박 박수", `총 ${rawNights}박 − 기내박 ${transitNights}박${tm != null && tm !== "" ? " (직접 입력)" : ""} = 인정 ${nights}박`],
@@ -314,7 +329,7 @@ function compute(raw) {
     dep: { place: l.dep.place || "", tz: l.dep.tz, local: l.dep.local, off: l.dep.off, kst: l.dep.kst }, arr: { place: l.arr.place || "", tz: l.arr.tz, local: l.arr.local, off: l.arr.off, kst: l.arr.kst } }));
   return {
     intl, blocked: missing.length > 0 || errors.length > 0, missing, errors,
-    D, ts, te, confDays, rawNights, nights, transitNights, autoNights, basis, inflight, confMeals, mealsCut, reduced, fx,
+    D, ts, te, confDays, rawNights, nights, transitNights, autoNights, basis, inflight, confMeals, mealsCut, reduced, fx, fxTable: Object.fromEntries(["USD", ...usedCurs].map(c => [c, rateOf(c)])),
     ilbiDay, mealDay, capNight, capW, lodgePaidW, legs, legRows, lines, notes: allNotes, docs, meta, gradeTxt,
     fareW, ilbiW, lodgeW, mealW, regW, printW, etcW, extW, travelW, sideW, grandW, deadline,
   };
@@ -323,7 +338,7 @@ function compute(raw) {
 function outOf(res, inp) {
   return {
     합계: res.grandW, 여비: res.travelW, 부대비: res.sideW, 외부지원: res.extW, 일수: res.D, 박수: res.nights, 총박수: res.rawNights, 기내박: res.transitNights,
-    등급: res.intl ? (inp.cityGrade || "나") + "등급" : res.gradeTxt, 구분: res.intl ? "국외" : "국내", 환율: res.intl ? res.fx : null, 환율기준일: res.intl ? (inp.fxDate || "") : "",
+    등급: res.intl ? (inp.cityGrade || "나") + "등급" : res.gradeTxt, 구분: res.intl ? "국외" : "국내", 환율: res.intl ? res.fx : null, 환율표: res.intl ? res.fxTable : null, 환율기준일: res.intl ? (inp.fxDate || "") : "",
     기준: "KST", 기간: [res.ts, res.te], 등록비: res.regW,
     lines: res.lines.map(l => ({ kind: l.kind, k: l.k, f: l.f || "", law: l.law || "", amt: l.amt })),
     legs: res.legRows, meta: res.meta, notes: res.notes, docs: res.docs, basis: REG.basis, 계산일: today(),
@@ -335,7 +350,7 @@ const CF = { mode: "edit", ctx: {}, res: null, inp: null, saved: null, docs: {} 
 const dlg = () => $("#dlg-conf");
 const val = id => $("#" + id)?.value ?? "";
 const numVal = id => nz(String(val(id)).replace(/[,\s원$]/g, ""));
-const curSel = (id, label) => `<select id="${id}" class="cf-cur" aria-label="${esc(label)} 통화"><option>₩</option><option>$</option></select>`;
+const curSel = (id, label) => `<select id="${id}" class="cf-cur" aria-label="${esc(label)} 통화">${CURRENCIES.map(([c]) => `<option value="${c}">${c === "KRW" ? "₩" : c}</option>`).join("")}</select>`;
 const lab = (text, hint) => `<span class="lab">${esc(text)}${hint ? ` <small>(${esc(hint)})</small>` : ""}</span>`;
 const money = (id, label, hint) => `<label for="${id}">${lab(label, hint)}<span class="cf-money"><input type="text" id="${id}" class="num-input" inputmode="decimal" placeholder="0" autocomplete="off">${curSel(id + "-cur", label)}</span></label>`;
 function tzOptions() {
@@ -361,7 +376,8 @@ function buildShell() {
         <p class="toolbar-note cf-intl" id="cf-city-hint" aria-live="polite"></p>
         <label for="cf-fx" class="cf-intl">적용 환율 (원/USD)<input type="text" id="cf-fx" class="num-input" inputmode="decimal" placeholder="예: 1380" autocomplete="off"></label>
         <label for="cf-fxdate" class="cf-intl">${lab("환율 기준일", "선택")}<input type="date" id="cf-fxdate"></label>
-        <p class="toolbar-note cf-intl">지급기준표가 미국 달러 기준입니다. 실제 결제일의 기준환율을 입력하세요.</p>
+        <div id="cf-fxs" class="cf-intl"></div>
+        <p class="toolbar-note cf-intl">지급기준표가 미국 달러 기준입니다. 실제 결제일의 기준환율을 입력하세요. 다른 통화로 결제한 금액은 그 통화를 고르면 환율 칸이 추가됩니다(모두 원/1단위 기준. 100엔 단위 고시 환율은 100으로 나눠 입력).</p>
         <label for="cf-cs">학회 시작일<input type="date" id="cf-cs"></label>
         <label for="cf-ce">학회 종료일<input type="date" id="cf-ce"></label>
       </div>
@@ -476,8 +492,20 @@ function syncTrip() {
   const intl = val("cf-trip") !== "dom";
   $$("#conf-in .cf-intl").forEach(el => { el.hidden = !intl; });
   $$("#conf-in .cf-dom").forEach(el => { el.hidden = intl; });
-  $$("#conf-in .cf-cur").forEach(s => { s.hidden = !intl; if (!intl) s.value = "₩"; });
+  $$("#conf-in .cf-cur").forEach(s => { s.hidden = !intl; if (!intl) s.value = "KRW"; });
+  syncFxRows();
 }
+// 사용 중인 결제 통화(KRW·USD 제외)마다 환율 칸을 하나씩 둔다 (사용자 결정: 통화별 한 번만 입력)
+function syncFxRows(rates) {
+  const box = $("#cf-fxs"); if (!box) return;
+  const intl = val("cf-trip") !== "dom";
+  const keep = {}; $$("#cf-fxs input").forEach(i => { keep[i.dataset.cur] = i.value; });
+  const used = intl ? [...new Set($$("#conf-in .cf-cur").map(s => s.value).filter(c => c !== "KRW" && c !== "USD"))] : [];
+  box.innerHTML = used.map(c => `<label for="cf-fx-${c}">${lab(`적용 환율 (원/${c})`, CUR_NAME[c] || "")}<input type="text" id="cf-fx-${c}" class="num-input cf-fx-cur" data-cur="${c}" inputmode="decimal" placeholder="예: 1500" autocomplete="off"></label>`).join("");
+  used.forEach(c => { const v = rates && rates[c] != null ? rates[c] : keep[c]; if (v) $("#cf-fx-" + c).value = String(v); });
+  box.hidden = !used.length;
+}
+const readFxs = () => Object.fromEntries($$("#cf-fxs input").map(i => [i.dataset.cur, numVal(i.id)]).filter(([, v]) => v > 0));
 function cityHint() {
   const q = val("cf-city").trim(), g = CITY_GRADE[q];
   $("#cf-city-hint").textContent = !q ? CITY_HINT : g ? `${q}: ${g}등급을 적용했습니다.` : "목록에 없습니다. 등급을 직접 선택하세요. 지급표에 없는 국가는 가장 가까운 국가의 등급을 적용합니다(별표4 비고3).";
@@ -488,6 +516,7 @@ function onInput(e) {
   const t = e.target;
   if (t.id === "cf-trip" && e.type === "change") { refreshGrades(mapGrade(val("cf-grade"), val("cf-trip"))); syncTrip(); }
   else if (t.id === "cf-showall") refreshGrades(val("cf-grade"));
+  else if (t.classList.contains("cf-cur") && e.type === "change") syncFxRows();
   else if (t.id === "cf-city" && e.type === "input") {
     const q = t.value.trim(), g = CITY_GRADE[q];
     if (g) $("#cf-cgrade").value = g; else if (q) $("#cf-cgrade").value = "";
@@ -511,7 +540,7 @@ function readInputs() {
   const tr = val("cf-transit").trim();
   return {
     tripType: val("cf-trip") === "dom" ? "dom" : "intl", grade: val("cf-grade"), showAll: $("#cf-showall").checked,
-    citySearch: val("cf-city").trim(), cityGrade: val("cf-cgrade"), region: Number(val("cf-region")), fx: numVal("cf-fx"), fxDate: val("cf-fxdate"),
+    citySearch: val("cf-city").trim(), cityGrade: val("cf-cgrade"), region: Number(val("cf-region")), fx: numVal("cf-fx"), fxs: readFxs(), fxDate: val("cf-fxdate"),
     cs: val("cf-cs"), ce: val("cf-ce"), legs: readLegs(), transitManual: tr === "" ? null : Math.max(0, Math.floor(Number(tr.replace(/[,\s]/g, "")) || 0)),
     fare: numVal("cf-fare"), fareCur: val("cf-fare-cur"), lodgePaid: numVal("cf-lodge"), lodgeCur: val("cf-lodge-cur"), confMeals: numVal("cf-confmeals"),
     regFee: numVal("cf-reg"), regCur: val("cf-reg-cur"), printFee: numVal("cf-print"), printCur: val("cf-print-cur"),
@@ -529,7 +558,8 @@ function applyInputs(inp) {
   set("cf-fx", amt(s.fx)); set("cf-fxdate", s.fxDate); set("cf-cs", s.cs); set("cf-ce", s.ce);
   set("cf-transit", s.transitManual == null ? "" : String(s.transitManual));
   [["cf-fare", "fare", "fareCur"], ["cf-lodge", "lodgePaid", "lodgeCur"], ["cf-reg", "regFee", "regCur"], ["cf-print", "printFee", "printCur"], ["cf-etc", "etcFee", "etcCur"], ["cf-ext", "extFund", "extCur"]]
-    .forEach(([id, k, ck]) => { set(id, amt(s[k])); set(id + "-cur", s.tripType === "dom" ? "₩" : (s[ck] === "$" ? "$" : "₩")); });
+    .forEach(([id, k, ck]) => { set(id, amt(s[k])); set(id + "-cur", s.tripType === "dom" ? "KRW" : curCode(s[ck])); });
+  syncFxRows(s.fxs && typeof s.fxs === "object" ? s.fxs : {});
   set("cf-confmeals", amt(s.confMeals));
   $("#cf-legbody").innerHTML = "";
   (Array.isArray(s.legs) && s.legs.length ? s.legs : defaultInputs().legs).forEach(addLeg);
@@ -649,7 +679,7 @@ function openConfCalc(opts = {}) {
 }
 function applyToForm() {
   if (!CF.res || CF.res.blocked) return;
-  const o = outOf(CF.res, CF.inp), calc = { v: 1, in: CF.inp, out: o };
+  const o = outOf(CF.res, CF.inp), calc = { v: 2, in: CF.inp, out: o };
   const el = F("_calc"); if (!el) return;
   el.value = JSON.stringify(calc);
   const amt = F("금액");

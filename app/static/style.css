@@ -757,7 +757,8 @@ dialog.dlg-conf form { padding: 16px 22px 14px; display: flex; flex-direction: c
 .cf-sec .fields > .toolbar-note { margin: 0; align-self: end; padding-bottom: 7px; }
 .cf-money { display: flex; gap: 4px; }
 .cf-money input { flex: 1; min-width: 0; }
-.cf-money select { width: 52px; flex: none; padding: 5px 4px; }
+.cf-money select { width: 64px; flex: none; padding: 5px 4px; }
+#cf-fxs { display: contents; }
 .cf-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; }
 .cf-legwrap { max-height: none; }
 table.grid.cf-legs th { position: static; }
