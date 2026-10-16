@@ -252,7 +252,7 @@ Python 실행 파일 경로를 먼저 확인합니다(명령 프롬프트에서 
 **Claude Code** (모든 폴더에서 쓰려면 `-s user`):
 
 ```text
-claude mcp add ledger -s user -- python "C:/Users/parkj/Desktop/Project/01 in progress/CAIH_회계장부_2026/app/mcp_server.py"
+claude mcp add ledger -s user -- python "C:/Users/parkj/Desktop/Project/dev/CAIH_회계장부_2026/app/mcp_server.py"
 ```
 
 **Claude Desktop**: 설정 → 개발자 → "구성 편집"으로 `%APPDATA%\Claude\claude_desktop_config.json`을 열고 `mcpServers` 안에 아래 항목을 추가합니다(이미 다른 서버가 있으면 쉼표로 이어 붙임). 저장 후 Claude Desktop을 완전히 종료했다가 다시 실행합니다. 같은 내용의 예시 파일이 `app\claude_desktop_config.ledger.json`에 있습니다.
@@ -262,7 +262,7 @@ claude mcp add ledger -s user -- python "C:/Users/parkj/Desktop/Project/01 in pr
   "mcpServers": {
     "ledger": {
       "command": "python",
-      "args": ["C:/Users/parkj/Desktop/Project/01 in progress/CAIH_회계장부_2026/app/mcp_server.py"]
+      "args": ["C:/Users/parkj/Desktop/Project/dev/CAIH_회계장부_2026/app/mcp_server.py"]
     }
   }
 }
