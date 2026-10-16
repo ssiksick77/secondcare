@@ -157,7 +157,7 @@ const NOTE_LABEL = { info: "안내", warn: "주의", danger: "중요", ok: "확�
 // ---------- 계산 (DOM 무관) ----------
 function defaultInputs() {
   return {
-    tripType: "intl", grade: "2", showAll: false, citySearch: "", cityGrade: "나", region: 100000, fx: 0, fxs: {}, fxDate: "", cs: "", ce: "",
+    tripType: "intl", grade: "2", showAll: false, citySearch: "", cityGrade: "나", region: 100000, fx: 0, fxs: {}, fxDate: "", ts: "", te: "", cs: "", ce: "",
     legs: [
       { mode: "항공", meal: 0, dep: { place: "인천", tz: KST, at: "" }, arr: { place: "", tz: "", at: "" } },
       { mode: "항공", meal: 0, dep: { place: "", tz: "", at: "" }, arr: { place: "인천", tz: KST, at: "" } },
@@ -222,31 +222,54 @@ function compute(raw) {
     }
   });
   const okLegs = legs.filter(l => l.ok);
-  if (!okLegs.length && !missing.some(m => m.id.startsWith("leg-")) && !errors.some(e => e.id.startsWith("leg-"))) miss("cf-legs", "이동 구간 출발·도착 일시");
-  let D = 0, tsN = null, teN = null, arrivalN = null;
+  // 출장 기간 (2026-10-16 사용자 결정): 기본 정보의 출장 시작일·종료일을 우선 쓴다. 비어 있으면 이동 구간(한국 날짜)에서, 그것도 없으면 학회 기간에서 유도.
+  // 기본 정보 외(이동 구간·금액 칸)는 필수가 아니다. 이동 구간은 기내박 계산과 출장 기간 검산에만 쓴다.
+  let D = 0, tsN = null, teN = null, arrivalN = null, legsFallback = "";
+  let legTs = null, legTe = null;
   if (okLegs.length) {
     const first = Math.min(...okLegs.map(l => l.dep.ms)), last = Math.max(...okLegs.map(l => l.arr.ms));
-    tsN = kstDay(first); teN = kstDay(last);
-    if (teN < tsN) err("cf-legs", "마지막 도착이 첫 출발보다 빠릅니다. 이동 구간을 확인하세요.");
-    else {
-      D = teN - tsN + 1;
-      const a0 = okLegs[0].order ? null : kstDay(okLegs[0].arr.ms);  // 첫 구간 도착일(한국 날짜) = 현지 도착일
-      arrivalN = a0 != null && a0 >= tsN && a0 <= teN ? a0 : tsN;
-    }
+    legTs = kstDay(first); legTe = kstDay(last);
+    if (legTe < legTs) err("cf-legs", "마지막 도착이 첫 출발보다 빠릅니다. 이동 구간을 확인하세요.");
+  }
+  const hasTrip = inp.ts && inp.te;
+  if (hasTrip && dnum(inp.te) < dnum(inp.ts)) err("cf-te", "출장 종료일이 시작일보다 빠릅니다.");
+  else if (hasTrip) {
+    tsN = dnum(inp.ts); teN = dnum(inp.te); D = teN - tsN + 1;
+    if (legTs != null && legTe >= legTs && (legTs !== tsN || legTe !== teN)) dateNotes.push({ type: "warn", text: `이동 구간으로 계산한 출장 기간(한국 날짜 ${dstr(legTs)} ~ ${dstr(legTe)})이 입력한 출장 기간(${inp.ts} ~ ${inp.te})과 다릅니다. 일수는 입력한 출장 기간으로 셉니다.` });
+  } else if (inp.ts || inp.te) {
+    miss(inp.ts ? "cf-te" : "cf-ts", "출장 " + (inp.ts ? "종료일" : "시작일"));
+  } else if (legTs != null && legTe >= legTs) {
+    tsN = legTs; teN = legTe; D = teN - tsN + 1;
+    legsFallback = `출장 기간을 비워 이동 구간의 한국 날짜(${dstr(tsN)} ~ ${dstr(teN)}, ${D}일)로 셌습니다.`;
+  } else if (inp.cs && inp.ce && dnum(inp.ce) >= dnum(inp.cs)) {
+    tsN = dnum(inp.cs); teN = dnum(inp.ce); D = teN - tsN + 1;
+    legsFallback = `출장 기간과 이동 구간이 없어 학회 기간(${inp.cs} ~ ${inp.ce}, ${D}일)을 출장 기간으로 보고 기내박 0박으로 계산했습니다.`;
+  } else {
+    legsFallback = "출장 기간·이동 구간·학회 기간이 없어 일수·박수를 0으로 두고 입력한 금액만 합산했습니다.";
+  }
+  if (D > 0) {
+    const a0 = okLegs.length && !okLegs[0].order ? kstDay(okLegs[0].arr.ms) : null;  // 첫 구간 도착일(한국 날짜) = 현지 도착일
+    arrivalN = a0 != null && a0 >= tsN && a0 <= teN ? a0 : tsN;
   }
   const ts = tsN != null ? dstr(tsN) : "", te = teN != null && D ? dstr(teN) : "";
-  let confDays = 0; const { cs, ce } = inp;
+  let confDays = 0, cutPre = 0, cutPost = 0; const { cs, ce } = inp;
   if (cs && ce) {
     if (dnum(ce) < dnum(cs)) err("cf-ce", "학회 종료일이 시작일보다 빠릅니다.");
     else {
       confDays = dnum(ce) - dnum(cs) + 1;
       if (D > 0) {
         const pre = dnum(cs) - tsN, post = teN - dnum(ce);
-        if (pre < 0 || post < 0) dateNotes.push({ type: "warn", text: `학회 기간(${cs} ~ ${ce})이 출장 기간(한국 날짜 ${ts} ~ ${te}) 밖으로 나갑니다. 날짜를 확인하세요.` });
-        else if (pre > 1 || post > 1) dateNotes.push({ type: "warn", text: `출장 기간이 학회(목적일) 앞뒤로 ${Math.max(pre, post)}일 확장되어 있습니다. 출장 기간은 목적일 +1일까지만 인정되며(실무 기준), 초과 시 항공 스케줄표 캡처 등 소명 증빙이 필요합니다.` });
+        if (pre < 0 || post < 0) dateNotes.push({ type: "warn", text: `학회 기간(${cs} ~ ${ce})이 출장 기간(${ts} ~ ${te}) 밖으로 나갑니다. 날짜를 확인하세요.` });
+        else if (pre > 1 || post > 1) {
+          cutPre = Math.max(0, pre - 1); cutPost = Math.max(0, post - 1);
+          dateNotes.push({ type: "warn", text: `학회 전후로 각 1일씩만 출장으로 인정됩니다. 학회 앞 ${pre}일, 뒤 ${post}일 중 ${cutPre + cutPost}일을 공제일수로 보아 일비·식비에서 뺐습니다 (초과분을 인정받으려면 항공 스케줄표 등 소명 증빙이 필요합니다).` });
+        }
       }
     }
   }
+  const cutDays = cutPre + cutPost, Dpay = Math.max(0, D - cutDays);  // 일비·식비 지급 일수 = 출장일수 − 공제일수
+  const payFrom = tsN != null ? tsN + cutPre : null, payTo = teN != null ? teN - cutPost : null;  // 인정 출장일 범위
+  if (legsFallback) dateNotes.push({ type: "info", text: legsFallback });
   const tm = inp.transitManual;
   const transitNights = tm === null || tm === "" || tm === undefined || !Number.isFinite(Number(tm)) ? autoNights : Math.max(0, Math.floor(Number(tm)));
   const rawNights = Math.max(0, D - 1), nights = Math.max(0, rawNights - transitNights);
@@ -264,11 +287,11 @@ function compute(raw) {
 
   // 일비: 현지 도착 다음 날부터 세어 15일을 넘는 날은 감액(제17조)
   let ilbiSum = 0, reduced = 0;
-  if (D > 0) for (let d = tsN; d <= teN; d++) { const f = stayFactor(d - arrivalN); if (f < 1) reduced++; ilbiSum += ilbiDay * f; }
+  if (Dpay > 0) for (let d = payFrom; d <= payTo; d++) { const f = stayFactor(d - arrivalN); if (f < 1) reduced++; ilbiSum += ilbiDay * f; }
   const ilbiW = won(ilbiSum * fx);
   // 식비: 일수 × 정액 − 제공 식사 끼니 × (1일 식비 ÷ 3)
   const confMeals = nz(inp.confMeals), mealsCut = inflight + confMeals;
-  const mealGross = D * mealDay, mealDeduct = Math.min(mealGross, mealsCut * mealDay / REG.mealPerDay), mealSum = mealGross - mealDeduct;
+  const mealGross = Dpay * mealDay, mealDeduct = Math.min(mealGross, mealsCut * mealDay / REG.mealPerDay), mealSum = mealGross - mealDeduct;
   const mealW = won(mealSum * fx);
   // 숙박비: 결제액과 상한(1박 상한 × 인정 박수) 중 적은 금액
   const lodgePaidW = pay(inp.lodgePaid, "lodgeCur");
@@ -288,14 +311,15 @@ function compute(raw) {
   const grandW = Math.max(0, travelW + sideW - extW);
 
   const redTxt = reduced ? ` (장기체재 감액 ${reduced}일 반영)` : "";
+  const dayTxt = cutDays ? `(${D}일 − 공제 ${cutDays}일 = ${Dpay}일)` : `${D}일`;  // 공제일수 = 학회 전후 각 1일을 넘는 출장일
   const lines = [
     { kind: "travel", k: "운임 (실비)", amt: fareW, f: payTxt(inp.fare, "fareCur", "E-티켓·영수증 금액"), law: "실제 결제한 운임" },
-    { kind: "travel", k: intl ? "일비 (현지 교통비 등)" : "일비", amt: ilbiW, f: intl ? `${fmtD(ilbiDay)} × ${D}일${redTxt} = ${fmtD(ilbiSum)} × 환율 ${fxTxt}` : `${fmtN(ilbiDay)}원 × ${D}일${redTxt}`, law: "여행일수만큼 정액 지급" },
+    { kind: "travel", k: intl ? "일비 (현지 교통비 등)" : "일비", amt: ilbiW, f: intl ? `${fmtD(ilbiDay)} × ${dayTxt}${redTxt} = ${fmtD(ilbiSum)} × 환율 ${fxTxt}` : `${fmtN(ilbiDay)}원 × ${dayTxt}${redTxt}`, law: cutDays ? "인정 출장일(학회 전후 각 1일까지)만 정액 지급" : "여행일수만큼 정액 지급" },
     { kind: "travel", k: "숙박비 (실비, 상한 이내)", amt: lodgeW,
       f: (capW === null ? `실비 전액 (${nights}박)` : `인정 ${nights}박 (총 ${rawNights}박 − 기내박 ${transitNights}박), 상한 ${fmtW(capW)}`) + (cur("lodgeCur") !== "KRW" && nz(inp.lodgePaid) > 0 ? ` / 결제액 ${fmtC(nz(inp.lodgePaid), cur("lodgeCur"))} × 환율 ${fmtN(rateOf(cur("lodgeCur")))}` : ""),
       law: "결제액과 상한액 중 적은 금액" },
     { kind: "travel", k: "식비", amt: mealW,
-      f: intl ? `${fmtD(mealDay)} × ${D}일 − ${mealsCut}끼 × ${fmtD(mealDay / REG.mealPerDay)} = ${fmtD(mealSum)} × 환율 ${fxTxt}` : `${fmtN(mealDay)}원 × ${D}일 − ${mealsCut}끼 × (${fmtN(mealDay)}원 ÷ ${REG.mealPerDay})`,
+      f: intl ? `${fmtD(mealDay)} × ${dayTxt} − ${mealsCut}끼 × ${fmtD(mealDay / REG.mealPerDay)} = ${fmtD(mealSum)} × 환율 ${fxTxt}` : `${fmtN(mealDay)}원 × ${dayTxt} − ${mealsCut}끼 × (${fmtN(mealDay)}원 ÷ ${REG.mealPerDay})`,
       law: "여행일수만큼 정액, 제공받은 식사는 1끼당 1/3 차감" },
     { kind: "sub", k: "여비 소계", amt: travelW, f: "" },
     { kind: "side", k: "학회 등록비", amt: regW, f: payTxt(inp.regFee, "regCur", "") },
@@ -307,7 +331,7 @@ function compute(raw) {
 
   const notes = [];
   if (extW > travelW + sideW) notes.push({ type: "info", text: `외부 지원금 ${fmtW(extW)}이 산출액 ${fmtW(travelW + sideW)}보다 커서 총액은 0원입니다(항목 합계는 음수). 초과분은 지급하지 않습니다.` });
-  if (D > 0 && mealsCut > D * REG.mealPerDay) notes.push({ type: "warn", text: `제공받은 식사 ${mealsCut}끼가 출장 ${D}일의 최대 끼니 수(${D * REG.mealPerDay}끼)보다 많습니다. 입력을 확인하세요.` });
+  if (Dpay > 0 && mealsCut > Dpay * REG.mealPerDay) notes.push({ type: "warn", text: `제공받은 식사 ${mealsCut}끼가 인정 출장 ${Dpay}일의 최대 끼니 수(${Dpay * REG.mealPerDay}끼)보다 많습니다. 입력을 확인하세요.` });
   if (mealsCut > 0) notes.push({ type: "info", text: `기내식 ${inflight}끼와 학회 제공 ${confMeals}끼를 반영해 식비에서 ${intl ? fmtD(mealDeduct) + " (" + fmtW(won(mealDeduct * fx)) + ")" : fmtW(won(mealDeduct))}을 차감했습니다.` });
   if (reduced > 0) notes.push({ type: "warn", text: `같은 지역에 오래 머무는 경우 현지 도착 다음 날(${dstr(arrivalN + 1)})부터 세어 15일을 넘는 ${reduced}일은 일비가 10~30% 감액됩니다(제17조). 숙박비와 식비는 감액하지 않았습니다.` });
   if (extW > 0 && travelW + sideW - extW < 0) notes.push({ type: "warn", text: "외부 지원금이 산출액보다 커서 총 지급 예상액을 0원으로 표시했습니다." });
@@ -326,7 +350,7 @@ function compute(raw) {
     ["출장 구분", intl ? "국외" : "국내"], ["직급(여비지급) 구분", g.name], [intl ? "도시 등급" : "숙박 지역", gradeTxt],
     ...(intl ? [["적용 환율(원/USD)", fxTxt + (inp.fxDate ? ` (기준일 ${inp.fxDate})` : "")]] : []),
     ...(intl && usedCurs.length ? [["결제 통화 환율", usedCurs.map(c => `${c} ${fmtN(rateOf(c))}`).join(" · ")]] : []),
-    ["출장 기간 (한국 날짜)", `${ts || "-"} ~ ${te || "-"} (${D}일)`],
+    ["출장 기간", `${ts || "-"} ~ ${te || "-"} (${D}일${cutDays ? ` · 공제 ${cutDays}일 → 일비·식비 ${Dpay}일` : ""})`],
     ["학회 기간", `${cs || "-"} ~ ${ce || "-"}${confDays ? ` (${confDays}일)` : ""}`],
     ["숙박 박수", `총 ${rawNights}박 − 기내박 ${transitNights}박${tm != null && tm !== "" ? " (직접 입력)" : ""} = 인정 ${nights}박`],
     ["식비 차감", `기내식 ${inflight}끼 + 학회 제공 ${confMeals}끼`],
@@ -336,7 +360,7 @@ function compute(raw) {
     dep: { place: l.dep.place || "", tz: l.dep.tz, local: l.dep.local, off: l.dep.off, kst: l.dep.kst }, arr: { place: l.arr.place || "", tz: l.arr.tz, local: l.arr.local, off: l.arr.off, kst: l.arr.kst } }));
   return {
     intl, blocked: missing.length > 0 || errors.length > 0, missing, errors,
-    D, ts, te, confDays, rawNights, nights, transitNights, autoNights, basis, inflight, confMeals, mealsCut, reduced, fx, fxTable: Object.fromEntries(["USD", ...usedCurs].map(c => [c, rateOf(c)])),
+    D, Dpay, cutDays, ts, te, confDays, rawNights, nights, transitNights, autoNights, basis, inflight, confMeals, mealsCut, reduced, fx, fxTable: Object.fromEntries(["USD", ...usedCurs].map(c => [c, rateOf(c)])),
     ilbiDay, mealDay, capNight, capW, lodgePaidW, legs, legRows, lines, notes: allNotes, docs, meta, gradeTxt,
     fareW, ilbiW, lodgeW, mealW, regW, printW, etcW, extW, travelW, sideW, grandW, deadline,
   };
@@ -344,7 +368,7 @@ function compute(raw) {
 // 상세 JSON 의 out (저장·드로어·인쇄용 요약)
 function outOf(res, inp) {
   return {
-    합계: res.grandW, 여비: res.travelW, 부대비: res.sideW, 외부지원: res.extW, 일수: res.D, 박수: res.nights, 총박수: res.rawNights, 기내박: res.transitNights,
+    합계: res.grandW, 여비: res.travelW, 부대비: res.sideW, 외부지원: res.extW, 일수: res.D, 공제일수: res.cutDays, 지급일수: res.Dpay, 박수: res.nights, 총박수: res.rawNights, 기내박: res.transitNights,
     등급: res.intl ? (inp.cityGrade || "나") + "등급" : res.gradeTxt, 구분: res.intl ? "국외" : "국내", 환율: res.intl ? res.fx : null, 환율표: res.intl ? res.fxTable : null, 환율기준일: res.intl ? (inp.fxDate || "") : "",
     기준: "KST", 기간: [res.ts, res.te], 등록비: res.regW,
     lines: res.lines.map(l => ({ kind: l.kind, k: l.k, f: l.f || "", law: l.law || "", amt: l.amt })),
@@ -385,8 +409,11 @@ function buildShell() {
         <label for="cf-fxdate" class="cf-intl">${lab("환율 기준일", "선택")}<input type="date" id="cf-fxdate"></label>
         <div id="cf-fxs" class="cf-intl"></div>
         <p class="toolbar-note cf-intl">지급기준표가 미국 달러 기준입니다. 실제 결제일의 기준환율을 입력하세요. 다른 통화로 결제한 금액은 그 통화를 고르면 환율 칸이 추가됩니다(모두 원/1단위 기준. 100엔 단위 고시 환율은 100으로 나눠 입력).</p>
+        <label for="cf-ts">${lab("출장 시작일", "비우면 이동 구간·학회 기간에서")}<input type="date" id="cf-ts"></label>
+        <label for="cf-te">출장 종료일<input type="date" id="cf-te"></label>
         <label for="cf-cs">학회 시작일<input type="date" id="cf-cs"></label>
         <label for="cf-ce">학회 종료일<input type="date" id="cf-ce"></label>
+        <p class="toolbar-note wide">출장은 학회 전후로 각 1일까지만 인정됩니다. 더 길면 주의 문구가 붙고 소명 증빙이 필요합니다.</p>
       </div>
     </section>
     <section class="cf-sec" aria-labelledby="cf-h2">
@@ -567,7 +594,7 @@ function readInputs() {
   return {
     tripType: val("cf-trip") === "dom" ? "dom" : "intl", grade: val("cf-grade"), showAll: $("#cf-showall").checked,
     citySearch: val("cf-city").trim(), cityGrade: val("cf-cgrade"), region: Number(val("cf-region")), fx: numVal("cf-fx"), fxs: readFxs(), fxDate: val("cf-fxdate"),
-    cs: val("cf-cs"), ce: val("cf-ce"), legs: readLegs(), transitManual: tr === "" || !Number.isFinite(Number(tr.replace(/[,\s]/g, ""))) ? null : Math.max(0, Math.floor(Number(tr.replace(/[,\s]/g, "")))),
+    ts: val("cf-ts"), te: val("cf-te"), cs: val("cf-cs"), ce: val("cf-ce"), legs: readLegs(), transitManual: tr === "" || !Number.isFinite(Number(tr.replace(/[,\s]/g, ""))) ? null : Math.max(0, Math.floor(Number(tr.replace(/[,\s]/g, "")))),
     fare: numVal("cf-fare"), fareCur: val("cf-fare-cur"), lodgePaid: numVal("cf-lodge"), lodgeCur: val("cf-lodge-cur"), confMeals: Math.floor(numVal("cf-confmeals")),
     regFee: numVal("cf-reg"), regCur: val("cf-reg-cur"), printFee: numVal("cf-print"), printCur: val("cf-print-cur"),
     etcFee: numVal("cf-etc"), etcCur: val("cf-etc-cur"), extFund: numVal("cf-ext"), extCur: val("cf-ext-cur"), docs: { ...CF.docs },
@@ -582,7 +609,7 @@ function applyInputs(inp) {
   $("#cf-showall").checked = !!s.showAll;
   refreshGrades(String(s.grade || "2")); syncTrip();
   set("cf-city", s.citySearch); set("cf-cgrade", s.cityGrade); set("cf-region", String(s.region || 100000)); if (!$("#cf-region").value) $("#cf-region").selectedIndex = 0;
-  set("cf-fx", amt(s.fx)); set("cf-fxdate", s.fxDate); set("cf-cs", s.cs); set("cf-ce", s.ce);
+  set("cf-fx", amt(s.fx)); set("cf-fxdate", s.fxDate); set("cf-ts", s.ts); set("cf-te", s.te); set("cf-cs", s.cs); set("cf-ce", s.ce);
   set("cf-transit", s.transitManual == null ? "" : String(s.transitManual));
   [["cf-fare", "fare", "fareCur"], ["cf-lodge", "lodgePaid", "lodgeCur"], ["cf-reg", "regFee", "regCur"], ["cf-print", "printFee", "printCur"], ["cf-etc", "etcFee", "etcCur"], ["cf-ext", "extFund", "extCur"]]
     .forEach(([id, k, ck]) => { set(id, amt(s[k])); set(id + "-cur", s.tripType === "dom" ? "KRW" : curCode(s[ck])); });

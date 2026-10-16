@@ -13,6 +13,7 @@ global.$ = () => stub; global.$$ = () => []; global.esc = s => String(s); global
 global.today = () => "2026-10-16"; global.fmt = n => Number(n).toLocaleString("ko-KR");
 new Function(fs.readFileSync(path.join(__dirname, "..", "app", "static", "conf.js"), "utf8"))();
 const { compute, outOf, defaultInputs } = window.ConfCalc;
+const won = n => Math.floor(n + 1e-6);
 
 let n = 0; const fails = [];
 const ck = (name, cond, detail) => { n++; console.log(`  ${cond ? "ok  " : "FAIL"} ${name}${cond ? "" : "  " + JSON.stringify(detail)}`); if (!cond) fails.push(name); };
@@ -48,10 +49,35 @@ ck("국내: 시간대 무시(KST), 3일 2박", !r.blocked && r.D === 3 && r.nigh
 r = compute({ ...base, legs: [leg("항공", ["인천", "Asia/Seoul", "2026-11-09T08:00"], ["도쿄", "Asia/Tokyo", "2026-11-09T10:00"]), leg("항공", ["도쿄", "Asia/Tokyo", "2026-11-09T19:00"], ["인천", "Asia/Seoul", "2026-11-09T22:00"])], lodgePaid: 100, lodgeCur: "USD" });
 ck("당일 출장 + 숙박 결제 → 0박 안내", r.nights === 0 && r.notes.some(x => /0박이라/.test(x.text)), r.notes.map(x => x.text));
 
+// 출장 기간 입력 우선, 이동 구간·금액은 선택 사항
+r = compute({ ...base, ts: "2026-11-09", te: "2026-11-13", legs: [], regFee: 500, regCur: "USD" });
+ck("출장 기간만: 5일 4박, 등록비 합산", !r.blocked && r.D === 5 && r.nights === 4 && r.transitNights === 0 && r.regW === 690000, { blocked: r.blocked, D: r.D, n: r.nights, missing: r.missing });
+r = compute({ ...base, ts: "2026-11-09", te: "2026-11-14", legs: PAR });
+ck("출장 기간 + 구간: 일수는 입력값, 기내박은 구간", r.D === 6 && r.transitNights === 1 && !r.notes.some(x => /다릅니다/.test(x.text)), { D: r.D, t: r.transitNights, notes: r.notes.map(x => x.text) });
+r = compute({ ...base, ts: "2026-11-08", te: "2026-11-14", legs: PAR });
+ck("출장 기간 ≠ 구간 날짜 → 주의", r.D === 7 && r.notes.some(x => /다릅니다/.test(x.text)), r.notes.map(x => x.text));
+r = compute({ ...base, ts: "2026-11-07", te: "2026-11-15", legs: [] });  // 학회 11-10~12: 앞 3일, 뒤 3일 → 공제 2+2
+ck("학회 전후 1일 초과 → 주의 문구", r.notes.some(x => /학회 전후로 각 1일씩만 출장으로 인정됩니다/.test(x.text)), r.notes.map(x => x.text));
+ck("공제일수 4 → 일비·식비 5일", r.D === 9 && r.cutDays === 4 && r.Dpay === 5 && r.ilbiW === won(30 * 5 * 1380) && r.mealW === won(59 * 5 * 1380), { D: r.D, cut: r.cutDays, Dpay: r.Dpay, ilbi: r.ilbiW, meal: r.mealW });
+ck("공제는 숙박 박수에 영향 없음", r.nights === 8, r.nights);
+ck("산식에 공제 표기", /9일 − 공제 4일 = 5일/.test(r.lines.find(l => l.k.startsWith("일비")).f), r.lines.find(l => l.k.startsWith("일비")).f);
+ck("outOf: 공제일수·지급일수", outOf(r, { ...base }).공제일수 === 4 && outOf(r, { ...base }).지급일수 === 5);
+r = compute({ ...base, ts: "2026-11-09", te: "2026-11-13", legs: [] });
+ck("학회 전후 1일 이내 → 주의 없음", !r.notes.some(x => /1일씩만/.test(x.text)), r.notes.map(x => x.text));
+r = compute({ ...base, ts: "2026-11-09", te: "", legs: [] });
+ck("출장 시작일만 → 종료일 미입력", r.blocked && r.missing.some(m => m.id === "cf-te"), r.missing);
+r = compute({ ...base, legs: [], regFee: 500, regCur: "USD" });
+ck("구간·출장 기간 없음: 학회 기간 3일 2박", !r.blocked && r.D === 3 && r.nights === 2 && r.notes.some(x => /학회 기간.*출장 기간으로/.test(x.text)), { blocked: r.blocked, D: r.D, n: r.nights });
+r = compute({ ...base, legs: [], cs: "", ce: "", regFee: 500, regCur: "USD" });
+ck("아무 기간 없음: 0일, 금액만", !r.blocked && r.D === 0 && r.grandW === 690000, { blocked: r.blocked, D: r.D, grand: r.grandW });
+r = compute({ ...base, legs: [leg("항공", ["인천", "Asia/Seoul", "2026-11-09T10:00"], ["파리", "", ""])] });
+ck("구간을 쓰다 말면 그 칸은 여전히 필수", r.blocked && r.missing.some(m => m.id === "leg-0-arr-at"), r.missing);
+
 // 규정 산식
 r = compute({ ...base, legs: PAR, confMeals: 3 });
-ck("일비 = 30 × 6일 × 1380", r.ilbiW === 248400, r.ilbiW);
-ck("식비 = (59 × 6 − 3 × 59/3) × 1380", r.mealW === Math.floor((59 * 6 - 59) * 1380), r.mealW);
+// 출장 11-09~14(6일), 학회 11-10~12 → 뒤 2일 중 1일 공제 → 지급 5일
+ck("일비 = 30 × (6 − 공제 1)일 × 1380", r.cutDays === 1 && r.ilbiW === 207000, { cut: r.cutDays, ilbi: r.ilbiW });
+ck("식비 = (59 × 5 − 3 × 59/3) × 1380", r.mealW === Math.floor((59 * 5 - 59) * 1380), r.mealW);
 ck("라인 합 = 총액", r.lines.filter(l => ["travel", "side", "ext"].includes(l.kind)).reduce((a, l) => a + l.amt, 0) === r.grandW, r.grandW);
 r = compute({ ...base, extFund: 99999999 });
 ck("외부 지원금 초과 → 총액 0 + 안내", r.grandW === 0 && r.notes.some(x => /총액은 0원/.test(x.text)), r.grandW);
