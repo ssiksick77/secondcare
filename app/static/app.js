@@ -329,7 +329,7 @@ function renderList(kind) {
         // 두 줄: 윗줄 상태 + 다음 단계 체크, 아랫줄 그 단계의 날짜(+ 청구 단계에서는 보완 표시/해제 링크)
         const stDate = kind === "exec" ? { 청구: r["지급청구일"], 보완: r["지급청구일"], 완료: r["지출완료일"], 결의: r["결의일"] }[v] : null;
         const fixLink = kind === "exec" && v === "청구" ? `<button type="button" class="lnk" data-act="xact" data-action="fix" data-row="${r._row}" title="서류·증빙 보완 필요로 표시">보완</button>`
-          : kind === "exec" && v === "보완" ? `<button type="button" class="lnk fix" data-act="xact" data-action="unfix" data-row="${r._row}" title="보완 표시 해제" aria-label="보완 해제">해제</button>` : "";
+          : kind === "exec" && v === "보완" ? `<button type="button" class="lnk fix" data-act="xact" data-action="unfix" data-row="${r._row}" title="${esc(latestFix(r["거래번호"])?.["사유"] ? "보완 사유: " + latestFix(r["거래번호"])["사유"] + " — 눌러서 해제" : "보완 표시 해제")}" aria-label="보완 해제">해제</button>` : "";
         const sub = kind === "exec" && (stDate || fixLink) ? `<div class="s">${stDate ? `<span title="${esc(stDate)}">${esc(mmdd(stDate))}</span>` : ""}${stDate && fixLink ? " · " : ""}${fixLink}</div>` : "";
         return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(kind === "exec" ? STATUS_HELP[v] || "" : "")}">${esc(kind === "exec" ? STATUS_LABEL[v] || v : v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : (kind === "exec" ? '<span class="next ph" aria-hidden="true"></span>' : "")}</div>${sub || (kind === "exec" ? '<div class="s">&nbsp;</div>' : "")}</td>`;
       }
@@ -1513,15 +1513,29 @@ $("#exec-tiles").addEventListener("click", e => { const t = e.target.closest("[d
 $("#exec-tiles").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.dataset.quick) { e.preventDefault(); e.target.click(); } });
 $$("[data-filter][data-kind=exec]").forEach(el => el.addEventListener("input", renderExecTiles));
 
+// 보완 이력 (보완이력 시트): 거래번호별 최신순
+const fixLogOf = no => (DATA.fixlog || []).filter(x => x["거래번호"] === no).sort((a, b) => String(b["일시"]).localeCompare(String(a["일시"])) || b._row - a._row);
+const latestFix = no => fixLogOf(no).find(x => x["구분"] === "표시") || null;
 async function execAction(row, action, btn) {
   const r = DATA.exec.find(x => x._row === row); if (!r) return;
   const md = (() => { const [, m, d] = today().split("-"); return `${parseInt(m)}/${parseInt(d)}`; })();
   const label = { claim: `청구 처리 · 지급청구일 ${md}`, resolve: `결의 처리 · 결의일 ${md} (완료)`, unresolve: "결의 취소", complete: `승인 처리 · 지출완료일 ${md}`, fix: "보완 표시", unfix: "보완 해제", uncomplete: "승인 취소 · 지출완료일 삭제" }[action];
   if (action === "uncomplete" && !await confirmDlg({ title: "승인 취소", body: `${r["거래번호"]} 의 지출완료일(${r["지출완료일"]})을 지우고 청구 상태로 되돌립니다.`, verb: "승인 취소", danger: true })) return;
+  let extra = null;  // 보완: 사유를 받아 보완이력에 남긴다 (표시는 필수, 해제는 선택)
+  if (action === "fix") {
+    const reason = await confirmDlg({ title: `보완 표시 · ${r["거래번호"]}`, body: `${r["거래처"] || "-"} · ${fmt(r["금액"])}원 · ${r["적요"] || ""}\n\n무엇을 보완해야 하는지 적으세요. 보완 이력에 남고 상세 패널에서 볼 수 있습니다.`, verb: "보완 표시", input: { label: "보완 사유", value: "", required: true, error: "보완 사유를 입력하세요." } });
+    if (reason === null) return;
+    extra = { 사유: String(reason).trim() };
+  } else if (action === "unfix") {
+    const last = latestFix(r["거래번호"]);
+    const memo = await confirmDlg({ title: `보완 해제 · ${r["거래번호"]}`, body: `${last ? `보완 사유: ${last["사유"]} (${last["일시"]})\n\n` : ""}보완이 끝났으면 해제합니다. 처리 내용은 선택 사항입니다.`, verb: "보완 해제", input: { label: "처리 내용 (선택)", value: "", required: false } });
+    if (memo === null) return;
+    extra = { 사유: String(memo).trim() };
+  }
   const inDrawer = !!btn?.closest("#exec-drawer");
   if (btn) btn.disabled = true;
   try {
-    await api("POST", `/api/exec/${row}/action`, { action, expect: expectOf("exec", r) });
+    await api("POST", `/api/exec/${row}/action`, { action, expect: expectOf("exec", r), ...(extra ? { extra } : {}) });
     showAlert(`${r["거래번호"]} ${label}`, "ok", { undo: true });
     await load();
     if (XD.row === row) { await renderExecDrawer(false); if (inDrawer) xdRefocus(action === "fix" || action === "unfix" ? ".xd-fix" : ".xd-step.next button[data-act=xact]"); }
@@ -1704,6 +1718,8 @@ async function renderExecDrawer(fetchEvid) {
       <h3>처리 단계 <span class="badge ${esc(st)}" title="${esc(STATUS_HELP[st] || "")}">${esc(STATUS_LABEL[st] || st)}</span></h3>
       <ol class="xd-timeline">${steps}</ol>
     </section>
+    ${(() => { const log = fixLogOf(r["거래번호"]); if (!log.length && st !== "보완") return ""; return `<section class="xd-sec xd-fixlog" aria-label="보완 이력"><h3>보완 이력${st === "보완" && log[0] ? ` <span class="muted">· 현재 보완 필요</span>` : ""}</h3>
+      <ul class="xd-fixlist">${log.map(x => `<li class="${x["구분"] === "표시" ? "mark" : "clear"}"><span class="fl-when">${esc(x["일시"])}</span><span class="fl-kind">${esc(x["구분"])}</span><span class="fl-why">${esc(x["사유"] || "-")}</span></li>`).join("") || '<li class="muted">기록 없음</li>'}</ul></section>`; })()}
     <section class="xd-sec xd-info">
       <h3>집행 정보 <span class="sp"></span><button type="button" class="btn btn-sm" data-act="edit" data-kind="exec" data-row="${r._row}" title="재원·예산목·금액·거래처·적요는 수정 창에서">수정</button></h3>
       ${locked ? `<p class="toolbar-note xd-lock">${esc(o.label)} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리합니다.</p>` : ""}

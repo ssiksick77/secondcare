@@ -154,6 +154,25 @@ def main() -> int:
         if src_row:
             pg.evaluate(f"openVoucher({src_row})"); pg.wait_for_timeout(1000)
             ck("결의서: 미관리 재원 안내 한 줄", "예산·잔액을 관리하지 않습니다" in pg.inner_text("#voucher-sheet"))
+        # ---- 보완 표시 사유 입력·이력 ----
+        s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구활동비", "원인발생일": "2026-03-06", "거래처": "검사", "금액": 5000, "적요": "보완 검사", "지급청구일": "2026-03-06"})
+        fx_row = r.get("_row")
+        pg.reload(); pg.wait_for_timeout(1200)
+        pg.evaluate(f"setTimeout(() => execAction({fx_row}, 'fix'), 0)"); pg.wait_for_timeout(400)  # evaluate 가 대화상자 Promise 를 기다리지 않게
+        ck("보완 표시: 사유 입력 대화상자", pg.evaluate("document.querySelector('#dlg-confirm').open && !document.querySelector('#confirm-input-wrap').hidden"))
+        pg.click("#confirm-ok"); pg.wait_for_timeout(300)
+        ck("보완 표시: 빈 사유는 막힘", pg.evaluate("document.querySelector('#dlg-confirm').open"))
+        pg.fill("#confirm-input", "영수증 원본 누락"); pg.click("#confirm-ok")
+        st_ = None
+        for _ in range(25):  # 저장 → load() 까지 기다림 (느린 환경 대비)
+            st_ = pg.evaluate(f"(DATA.exec.find(x=>x._row==={fx_row})||{{}})['상태']")
+            if st_ == "보완":
+                break
+            pg.wait_for_timeout(300)
+        ck("보완 표시: 저장됨", st_ == "보완", st_)
+        pg.evaluate(f"openExecDrawer({fx_row})"); pg.wait_for_timeout(800)
+        dt_ = pg.inner_text("#exec-drawer")
+        ck("드로어: 보완 이력 표시", "보완 이력" in dt_ and "영수증 원본 누락" in dt_)
         ck("페이지 오류 없음", not errs, errs)
         b.close()
     return ck.done("화면")

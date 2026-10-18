@@ -34,6 +34,7 @@ SHEET_REQ = "품의내역"
 SHEET_DEP = "적립금"
 SHEET_TAG = "태그"
 SHEET_EVID = "증빙"
+SHEET_FIXLOG = "보완이력"  # 집행 보완 표시·해제 로그 (2026-10-18)
 SHEET_PEOPLE = "인원"
 SHEET_SALARY = "기준급여"
 SHEET_PAYEE = "지급처"
@@ -82,6 +83,7 @@ REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예
 DEP_COLS = ["일자", "거래처", "구분", "금액", "적요", "사용자", "증빙번호", "연결거래번호", "비고", "태그"]
 TAG_COLS = ["태그명", "분류", "설명"]
 EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
+FIXLOG_COLS = ["거래번호", "일시", "구분", "사유"]  # 구분: 표시 / 해제. 일시: YYYY-MM-DD HH:MM
 # 증빙번호 = {거래번호}-{n}: 거래번호별 일련번호, 지운 번호는 다시 쓰지 않음 (메타 시트 증빙번호최고-{거래번호}). 이전 장부는 맨 끝 열에 붙이고 시트 순서대로 부여
 # 파일 열(EVID_FILE_COLS)이 모두 비어 있는 행 = '실물만 (파일 없음)' 증빙 항목. 나중에 파일을 첨부하면 같은 행·같은 증빙번호에 채워짐
 EVID_FILE_COLS = ["파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일"]
@@ -414,7 +416,8 @@ def _ensure_structure(wb) -> bool:
                                (SHEET_RQ, REQUEST_COLS, (14, 8, 10, 10, 12, 16, 30, 20, 12, 8, 14, 8, 12, 30,
                                                          12, 14, 14, 30, 12, 10, 12, 24, 18, 18, 30, 30, 20, 24)),
                                (SHEET_ORDER, ORDER_COLS, (18, 12, 12, 14, 14, 14, 10, 40, 24)),
-                               (SHEET_RATT, RATT_COLS, (14, 44, 30, 36, 10, 12, 20))):
+                               (SHEET_RATT, RATT_COLS, (14, 44, 30, 36, 10, 12, 20)),
+                               (SHEET_FIXLOG, FIXLOG_COLS, (18, 16, 8, 60))):
         if name not in wb.sheetnames:
             ws = wb.create_sheet(name)
             for i, c in enumerate(cols, 1):
@@ -683,6 +686,7 @@ def read_all() -> dict:
             "request": _rows(wb[SHEET_RQ], REQUEST_COLS, 1, formulas),
             "order": _rows(wb[SHEET_ORDER], ORDER_COLS, 1, formulas),
             "ratt": _rows(wb[SHEET_RATT], RATT_COLS, 1, formulas),
+            "fixlog": _rows(wb[SHEET_FIXLOG], FIXLOG_COLS, 1, formulas) if SHEET_FIXLOG in wb.sheetnames else [],
         }
         req_state = _make_state(data["req"], data["order"])
         for r in data["request"]:  # 연결 품의가 집행완료이거나 주문이 배송되면 '완료' (읽을 때 계산), 없어진 품의면 '승인'
@@ -2054,8 +2058,10 @@ def _refresh_budget_summary(wb):
 
 
 # ---------- 증빙 / 상태 ----------
-def exec_action(row: int, action: str, expect: dict | None = None) -> dict:
-    """집행 행의 단계 처리. action: claim(지급청구일=오늘) | resolve(결의일=오늘) | unresolve | complete(지출완료일=오늘) | uncomplete | fix(보완) | unfix"""
+def exec_action(row: int, action: str, expect: dict | None = None, extra: dict | None = None) -> dict:
+    """집행 행의 단계 처리. action: claim(지급청구일=오늘) | resolve(결의일=오늘) | unresolve | complete(지출완료일=오늘) | uncomplete | fix(보완) | unfix
+    fix 는 extra.사유 가 필수이고, fix·unfix 는 '보완이력' 시트에 한 줄씩 남긴다 (거래번호·일시·구분·사유)."""
+    extra = extra or {}
     with _write_session() as wb:
         ws = wb[SHEET_EXEC]
         rec = next((x for x in _rows(ws, EXEC_COLS) if x["_row"] == row), None)
@@ -2088,15 +2094,27 @@ def exec_action(row: int, action: str, expect: dict | None = None) -> dict:
         elif action == "fix":
             if not rec.get("지급청구일"):
                 raise ValueError("지급청구일이 등록된 뒤에 보완을 표시할 수 있습니다.")
+            reason = str(extra.get("사유") or "").strip()
+            if not reason:
+                raise ValueError("보완 사유를 입력하세요 (무엇을 보완해야 하는지).")
             rec["상태"] = "보완"
+            _fixlog_add(wb, rec["거래번호"], "표시", reason)
         elif action == "unfix":
             rec["상태"] = "청구"
+            _fixlog_add(wb, rec["거래번호"], "해제", str(extra.get("사유") or "").strip())
         else:
             raise ValueError("알 수 없는 동작입니다.")
         rec["상태"] = exec_status(rec)
         _write_row(ws, EXEC_COLS, row, rec)
         _save(wb)
         return rec
+
+
+def _fixlog_add(wb, no: str, kind: str, reason: str):
+    """보완이력 시트에 한 줄 추가 (시트가 없는 이전 장부는 _ensure_structure 가 만들어 둔다)."""
+    ws = wb[SHEET_FIXLOG]
+    rec = {"거래번호": no, "일시": dt.datetime.now().strftime("%Y-%m-%d %H:%M"), "구분": kind, "사유": reason[:2000]}
+    _write_row(ws, FIXLOG_COLS, _next_row(ws, 1), rec, 1)
 
 
 def evid_has_file(e: dict) -> bool:

@@ -94,6 +94,19 @@ def main() -> int:
         ck("미관리 재원 집행은 저장됨", s == 200, (s, r))
         s, r = sv.call("GET", "/api/all")
         ck("대시보드: 미관리 재원 줄·집계 제외 모두 없음", not any(x["재원"] == "SRC1" for x in r["dashboard"]["table"]) and not any(x["재원"] == "SRC1" for x in r["dashboard"]["excluded"]["exec"]))
+        # ---- 보완 표시 사유·이력 ----
+        s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구활동비", "원인발생일": "2026-03-06", "거래처": "검사", "금액": 5000, "적요": "보완 검사", "지급청구일": "2026-03-06"})
+        fx_row = r.get("_row"); fx_no = r.get("거래번호")
+        s, r = sv.call("POST", f"/api/exec/{fx_row}/action", {"action": "fix"})
+        ck("보완 표시: 사유 없으면 400", s == 400, (s, r))
+        s, r = sv.call("POST", f"/api/exec/{fx_row}/action", {"action": "fix", "extra": {"사유": "영수증 원본 누락"}})
+        ck("보완 표시: 사유 있으면 보완 상태", s == 200 and r.get("상태") == "보완", (s, r))
+        s, r = sv.call("POST", f"/api/exec/{fx_row}/action", {"action": "unfix", "extra": {"사유": "원본 수령"}})
+        ck("보완 해제", s == 200 and r.get("상태") == "청구", (s, r))
+        s, r = sv.call("GET", "/api/all")
+        log = [x for x in r.get("fixlog", []) if x["거래번호"] == fx_no]
+        ck("보완이력: 표시·해제 2줄, 사유 보존", len(log) == 2 and log[0]["구분"] == "표시" and log[0]["사유"] == "영수증 원본 누락" and log[1]["구분"] == "해제" and log[1]["사유"] == "원본 수령", log)
+        ck("보완이력: 일시 형식", all(len(str(x["일시"])) >= 16 for x in log), [x["일시"] for x in log])
     return ck.done("API")
 
 

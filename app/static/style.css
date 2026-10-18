@@ -675,6 +675,14 @@ dialog.dlg-sheet { width: min(820px, 95vw); }
 #order-lines col.ol-who { width: 64px; }
 #order-lines td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .print-root { display: none; }
+/* 집행 드로어 보완 이력: 일시 · 구분 · 사유 한 줄씩, 표시는 주의색 */
+.xd-fixlist { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.xd-fixlist li { display: grid; grid-template-columns: 104px 32px 1fr; gap: 6px; padding: 3px 0; border-bottom: 1px solid var(--rule); }
+.xd-fixlist li:last-child { border-bottom: 0; }
+.xd-fixlist .fl-when { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.xd-fixlist .fl-kind { font-weight: 600; }
+.xd-fixlist li.mark .fl-kind { color: var(--warn); }
+.xd-fixlist .fl-why { overflow-wrap: anywhere; }
 /* 지출결의서 (시안 .impeccable/mocks/voucher/A5_수정형.html). 미리보기와 인쇄가 같은 규칙.
    인쇄 공문 양식이라 화면 토큰 대신 시안 값: 검정 괘선, 회색 라벨 칸(#F2F2F2).
    2026-10-16 사용자 결정: 행 높이 6.5mm(시안 8mm에서 타이트하게), 제목 아래 이중선 제거, 우상단 결재란(담당·매니저·선임연구원·센터장, 위 직책·아래 서명).

@@ -493,8 +493,8 @@ async def _drive_err(_: Request, e: drive.DriveError):
 
 @app.post("/api/exec/{row}/action")
 def exec_action(row: int, body: dict):
-    """body: {action: claim|complete|fix|unfix, expect: {...}}"""
-    return store.exec_action(row, body.get("action") or "", body.get("expect"))
+    """body: {action: claim|complete|fix|unfix, expect: {...}, extra: {사유}} — fix 는 extra.사유 필수, fix·unfix 는 보완이력에 기록"""
+    return store.exec_action(row, body.get("action") or "", body.get("expect"), body.get("extra") if isinstance(body.get("extra"), dict) else None)
 
 
 @app.get("/api/drive/status")
