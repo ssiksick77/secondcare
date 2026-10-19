@@ -33,6 +33,7 @@
     <li><button role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false">예산변동</button></li>
     <li><button role="tab" id="tab-deposit" aria-controls="panel-deposit" aria-selected="false">적립금</button></li>
     <li><button role="tab" id="tab-tags" aria-controls="panel-tags" aria-selected="false">태그</button></li>
+    <li><button role="tab" id="tab-vendor" aria-controls="panel-vendor" aria-selected="false">거래처</button></li>
     <li><button role="tab" id="tab-funds" aria-controls="panel-funds" aria-selected="false">재원</button></li>
   </ul>
 </nav>
@@ -292,6 +293,15 @@
       <button type="button" class="btn btn-primary" data-add="tags">태그 추가</button>
     </div>
     <div class="table-wrap"><table class="grid" id="tags-table"></table></div>
+  </section>
+
+  <!-- 거래처 (적립금 거래처 코드) -->
+  <section id="panel-vendor" role="tabpanel" aria-labelledby="tab-vendor" hidden>
+    <div class="toolbar">
+      <span class="toolbar-note">적립금 거래처와 코드입니다. 코드는 적립번호 앞자리(코드-적립|사용-연도-번호)와 주문번호 앞자리에 쓰이며, 번호에 한 번 쓰이면 바꿀 수 없습니다. 등록되지 않은 거래처로 적립금을 저장하면 이름 앞 글자로 코드를 자동 등록합니다.</span>
+      <button type="button" class="btn btn-primary" data-add="vendor">거래처 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="vendor-table"></table></div>
   </section>
 
   <!-- 재원 -->

@@ -32,6 +32,7 @@ SHEET_BUDGET = "예산변동"
 SHEET_EXEC = "집행내역"
 SHEET_REQ = "품의내역"
 SHEET_DEP = "적립금"
+SHEET_VENDOR = "거래처"  # 적립금 거래처 마스터: 거래처명·코드 (적립번호 앞자리, 2026-10-19)
 SHEET_TAG = "태그"
 SHEET_EVID = "증빙"
 SHEET_FIXLOG = "보완이력"  # 집행 보완 표시·해제 로그 (2026-10-18)
@@ -82,6 +83,8 @@ REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예
             "결제수단", "적요", "금액", "태그", "품의자", "비고", "상태"]
 DEP_NO = "적립번호"  # 적립-YYYY-NNN: 적립금 행 식별·증빙 연결 (2026-10-19). 이전 장부에는 _ensure_structure 가 맨 끝 열로 붙인다
 DEP_COLS = [DEP_NO, "일자", "거래처", "구분", "금액", "적요", "사용자", "증빙번호", "연결거래번호", "비고", "태그", "발주일", "결제일", "수령일", "상태"]
+VENDOR_COLS = ["거래처명", "코드", "비고"]
+VENDOR_CODE_RE = re.compile(r"^[0-9A-Za-z가-힣]{2,6}$")  # 적립번호 구분자 '-' 금지
 DEP_STAGE_COLS = ["발주일", "결제일", "수령일"]  # 사용 행의 단계 (2026-10-19 사용자 결정, 집행 단계 방식). 적립 행은 단계 없음
 DEP_STATUS = ["대기", "발주", "결제", "수령"]  # 날짜에서 계산. 적립 행은 빈 값
 TAG_COLS = ["태그명", "분류", "설명"]
@@ -136,6 +139,7 @@ IDENT_COLS = {
     "funds": ["재원코드"], "exec": ["거래번호"], "req": ["품의번호"], "tags": ["태그명"],
     "budget": ["재원", "변경회차", "신청일자"], "deposit": ["일자", "거래처", "구분", "금액"],
     "evidence": ["거래번호", "증빙번호", "파일명"],  # 파일 첨부로 파일명이 바뀌어도 증빙번호는 불변
+    "vendor": ["거래처명", "코드"],
     "people": ["이름"], "salary": ["이름", "시작월"], "payee": ["지급처코드"],
     "labor": ["지급월", "귀속월", "이름", "지급처"], "ladj": ["월", "이름", "금액"],
     "request": ["신청번호"], "order": ["주문번호"], "ratt": ["신청번호", "파일명"],
@@ -404,6 +408,15 @@ def _ensure_structure(wb) -> bool:
             cell = ws.cell(1, i, c)
             cell.font, cell.fill = head_font, head_fill
         for col, w in zip("ABC", (18, 14, 40)):
+            ws.column_dimensions[col].width = w
+        ws.freeze_panes = "A2"
+        changed = True
+    if SHEET_VENDOR not in wb.sheetnames:
+        ws = wb.create_sheet(SHEET_VENDOR)
+        for i, c in enumerate(VENDOR_COLS, 1):
+            cell = ws.cell(1, i, c)
+            cell.font, cell.fill = head_font, head_fill
+        for col, w in zip("ABC", (24, 10, 40)):
             ws.column_dimensions[col].width = w
         ws.freeze_panes = "A2"
         changed = True
@@ -694,6 +707,7 @@ def read_all() -> dict:
             "exec": _rows(wb[SHEET_EXEC], EXEC_COLS, 1, formulas),
             "req": _rows(wb[SHEET_REQ], REQ_COLS, 1, formulas),
             "deposit": _rows(wb[SHEET_DEP], DEP_COLS, 1, formulas),
+            "vendor": _rows(wb[SHEET_VENDOR], VENDOR_COLS),
             "tags": _rows(wb[SHEET_TAG], TAG_COLS, 1, formulas),
             "evidence": [_evid_out(e) for e in _rows(wb[SHEET_EVID], EVID_COLS, 1, formulas)],
             "people": _rows(wb[SHEET_PEOPLE], PEOPLE_COLS, 1, formulas),
@@ -766,6 +780,7 @@ _SHEETS = {
     "req": (SHEET_REQ, REQ_COLS, 1, "품의번호"),
     "budget": (SHEET_BUDGET, BUDGET_COLS, BUDGET_HEAD_ROW, None),
     "deposit": (SHEET_DEP, DEP_COLS, 1, DEP_NO),
+    "vendor": (SHEET_VENDOR, VENDOR_COLS, 1, "거래처명"),
     "tags": (SHEET_TAG, TAG_COLS, 1, "태그명"),
     "evidence": (SHEET_EVID, EVID_COLS, 1, None),
     "request": (SHEET_RQ, REQUEST_COLS, 1, "신청번호"),
@@ -923,9 +938,9 @@ def _number_refs(wb, key: str) -> set[str]:
         for r in _rows(wb[SHEET_DEP], DEP_COLS):
             if r.get("연결거래번호"):
                 refs.add(str(r["연결거래번호"]))
-    elif key == DEP_NO:  # 증빙 시트가 참조하는 적립번호 (지운 번호 재사용 방지)
+    elif key == DEP_NO:  # 증빙 시트가 참조하는 번호 (지운 적립번호 재사용 방지; 모양이 맞는 것만 _dep_year_max 가 센다)
         for e in _rows(wb[SHEET_EVID], EVID_COLS):
-            if str(e.get("거래번호") or "").startswith(DEP_PREFIX):
+            if e.get("거래번호"):
                 refs.add(str(e["거래번호"]).strip())
     elif key == "품의번호":
         for r in _rows(wb[SHEET_EXEC], EXEC_COLS):
@@ -1093,9 +1108,13 @@ def _check_codes(rec: dict, existing: dict | None = None):
         raise ValueError("소모품은 온라인코드 또는 상품코드 중 하나는 입력하세요.")
 
 
-def order_prefix(vendor) -> str:
-    """주문번호 앞자리: 알파몰→알파, 드림디포→드림, 그 밖에는 구매처 이름의 앞 두 글자 (한글·영문·숫자만). 쓸 글자가 없으면 ValueError."""
+def order_prefix(vendor, wb=None) -> str:
+    """주문번호 앞자리: 거래처 탭에 코드가 있으면 그 코드, 없으면 알파몰→알파, 드림디포→드림, 그 밖에는 구매처 이름의 앞 두 글자 (한글·영문·숫자만). 쓸 글자가 없으면 ValueError."""
     v = str(vendor or "").strip()
+    if wb is not None:
+        for x in _vendor_rows(wb):
+            if _same_key(x["거래처명"], v):
+                return str(x["코드"]).strip()
     if v in ORDER_PREFIXES:
         return ORDER_PREFIXES[v]
     clean = re.sub(r"[^0-9A-Za-z가-힣]", "", v)
@@ -1121,7 +1140,7 @@ def _assign_order_number(wb, ws, rec):
     """{앞자리}-YYYYMMDD-NN (구매처·주문일별 일련번호, 예: 알파-20261014-01, 드림-20261014-01).
     메타 시트의 앞자리·날짜별 최고값과 참조된 번호 이하는 다시 쓰지 않음 (취소된 번호 재사용 방지)."""
     d = _to_date(rec.get("주문일")) or dt.date.today().isoformat()
-    stem = f"{order_prefix(rec.get('거래처'))}-{d.replace('-', '')}"
+    stem = f"{order_prefix(rec.get('거래처'), wb)}-{d.replace('-', '')}"
     prefix = stem + "-"
     mx = int(_to_num(_meta_get(wb, _order_hw_key(stem))))
     seen = [str(r.get("주문번호") or "") for r in _rows(ws, ORDER_COLS)] + list(_number_refs(wb, "주문번호"))
@@ -1238,48 +1257,103 @@ def _assign_number(wb, ws, cols, head_row, key, rec):
     rec[key] = f"{prefix}{mx + 1:03d}"
 
 
-DEP_PREFIX = "적립-"
+DEP_OLD_RE = re.compile(r"^적립-\d{4}-\d{3}$")  # 2026-10-19 하루 쓰인 옛 모양: 보정 때 새 모양으로 바꾼다
+DEP_NO_RE = re.compile(r"^(.+)-(적립|사용)-(\d{4})-(\d+)$")
 
 
-def _dep_year_max(wb, ws, year: str) -> int:
-    """그 연도의 적립번호 최고값 (시트 + 증빙 시트 참조)."""
+def _vendor_rows(wb) -> list[dict]:
+    return _rows(wb[SHEET_VENDOR], VENDOR_COLS) if SHEET_VENDOR in wb.sheetnames else []
+
+
+def _auto_vendor_code(name: str, taken: set[str]) -> str:
+    """이름의 한글·영문·숫자만 남겨 앞 2자부터 늘려 가며(최대 6자) 비어 있는 코드를 만든다. 그래도 겹치면 숫자를 붙인다."""
+    clean = re.sub(r"[^0-9A-Za-z가-힣]", "", str(name or ""))
+    if len(clean) < 2:
+        raise ValueError(f"거래처 '{name}' 에서 코드를 만들 글자(한글·영문·숫자 2자 이상)가 없습니다. 거래처 탭에서 코드를 먼저 등록하세요.")
+    low = {t.casefold() for t in taken}
+    for n in range(2, min(6, len(clean)) + 1):
+        if clean[:n].casefold() not in low:
+            return clean[:n]
+    base = clean[:5]
+    for i in range(2, 100):
+        c = f"{base}{i}"[:6]
+        if c.casefold() not in low:
+            return c
+    raise ValueError(f"거래처 '{name}' 의 코드를 자동으로 만들 수 없습니다. 거래처 탭에서 코드를 등록하세요.")
+
+
+def _vendor_code(wb, name: str) -> tuple[str, bool]:
+    """거래처 코드 (없으면 자동 등록). 반환 (코드, 자동 등록 여부)."""
+    name = str(name or "").strip()
+    rows = _vendor_rows(wb)
+    for v in rows:
+        if _same_key(v["거래처명"], name):
+            return str(v["코드"]).strip(), False
+    code = _auto_vendor_code(name, {str(v["코드"]) for v in rows})
+    ws = wb[SHEET_VENDOR]
+    _write_row(ws, VENDOR_COLS, _next_row(ws), {"거래처명": name, "코드": code, "비고": "자동 등록 (코드 확인 필요)"})
+    return code, True
+
+
+def _dep_prefix_max(wb, ws, prefix: str) -> int:
+    """prefix(코드-구분-연도-)로 시작하는 적립번호 최고값 (시트 + 증빙 시트 참조)."""
     mx = 0
     seen = [str(r.get(DEP_NO) or "") for r in _rows(ws, DEP_COLS)] + list(_number_refs(wb, DEP_NO))
     for v in seen:
-        m = re.match(r"^적립-(\d{4})-(\d+)$", v)
-        if m and m[1] == year:
-            mx = max(mx, int(m[2]))
+        if v.startswith(prefix) and v[len(prefix):].isdigit():
+            mx = max(mx, int(v[len(prefix):]))
     return mx
 
 
 def _assign_dep_number(wb, ws, rec):
-    """적립-YYYY-NNN 자동 부여 (일자 연도별 일련번호, 증빙이 참조한 번호는 재사용하지 않음)."""
+    """{거래처코드}-{적립|사용}-YYYY-NNN 자동 부여 (거래처·구분·일자 연도별 일련번호, 증빙이 참조한 번호는 재사용하지 않음).
+    거래처 코드가 없으면 자동 등록하고 rec['_vendor_registered'] 에 코드를 남긴다 (화면 안내용)."""
     d = _to_date(rec.get("일자")) or dt.date.today().isoformat()
-    year = d[:4]
-    rec[DEP_NO] = f"{DEP_PREFIX}{year}-{_dep_year_max(wb, ws, year) + 1:03d}"
+    code, auto = _vendor_code(wb, rec.get("거래처"))
+    prefix = f"{code}-{rec.get('구분')}-{d[:4]}-"
+    rec[DEP_NO] = f"{prefix}{_dep_prefix_max(wb, ws, prefix) + 1:03d}"
+    if auto:
+        rec["_vendor_registered"] = code
+
+
+def _vendor_code_used(wb, code: str) -> bool:
+    """적립번호 앞자리로 이미 쓰인 코드인지."""
+    return any(str(r.get(DEP_NO) or "").casefold().startswith(f"{code}-".casefold()) for r in _rows(wb[SHEET_DEP], DEP_COLS))
+
+
+def _vendor_usage(wb, name: str) -> int:
+    return sum(1 for r in _rows(wb[SHEET_DEP], DEP_COLS) if _same_key(r.get("거래처"), name))
 
 
 def _ensure_dep_numbers(wb) -> bool:
-    """적립금 보정: 적립번호가 빈 행(이전 장부)에 일자 순(같으면 행 순)으로 번호를 부여. 변경 여부 반환."""
-    if SHEET_DEP not in wb.sheetnames:
+    """적립금 보정: 적립번호가 빈 행(이전 장부)과 옛 모양(적립-YYYY-NNN) 행에 일자 순(같으면 행 순)으로 새 번호를 부여.
+    옛 번호를 가리키던 증빙 시트의 거래번호도 함께 바꾼다. 변경 여부 반환."""
+    if SHEET_DEP not in wb.sheetnames or SHEET_VENDOR not in wb.sheetnames:
         return False
     ws = wb[SHEET_DEP]
     heads = _headers(ws)
     if DEP_NO not in heads or "일자" not in heads:
         return False
     rows = _rows(ws, DEP_COLS)
-    blank = [r for r in rows if r.get("일자") and not str(r.get(DEP_NO) or "").strip()]
-    if not blank:
+    todo = [r for r in rows if r.get("일자") and (not str(r.get(DEP_NO) or "").strip() or DEP_OLD_RE.match(str(r[DEP_NO]).strip()))]
+    if not todo:
         return False
-    blank.sort(key=lambda r: (str(r["일자"]), r["_row"]))
-    nxt: dict[str, int] = {}
+    todo.sort(key=lambda r: (str(r["일자"]), r["_row"]))
     ci = heads.index(DEP_NO) + 1
-    for r in blank:
-        year = str(r["일자"])[:4]
-        if year not in nxt:
-            nxt[year] = _dep_year_max(wb, ws, year)
-        nxt[year] += 1
-        ws.cell(r["_row"], ci, f"{DEP_PREFIX}{year}-{nxt[year]:03d}")
+    renamed: dict[str, str] = {}
+    for r in todo:
+        old = str(r.get(DEP_NO) or "").strip()
+        new = dict(r)
+        _assign_dep_number(wb, ws, new)
+        ws.cell(r["_row"], ci, new[DEP_NO])
+        if old:
+            renamed[old] = new[DEP_NO]
+    if renamed and SHEET_EVID in wb.sheetnames:
+        we = wb[SHEET_EVID]
+        for e in _rows(we, EVID_COLS):
+            old = str(e.get("거래번호") or "").strip()
+            if old in renamed:
+                _write_row(we, EVID_COLS, e["_row"], {"거래번호": renamed[old], "증빙번호": str(e.get("증빙번호") or "").replace(old, renamed[old], 1)})
     return True
 
 
@@ -1364,6 +1438,12 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
     for c in cols:
         if c in NUM_COLS and rec.get(c) not in (None, ""):
             _to_num(rec[c], strict=True, label=c)
+    if kind == "vendor":
+        if not str(rec.get("거래처명") or "").strip():
+            raise ValueError("거래처명은 필수입니다.")
+        rec["코드"] = str(rec.get("코드") or "").strip()
+        if not VENDOR_CODE_RE.match(rec["코드"]):
+            raise ValueError("코드는 한글·영문·숫자 2~6자여야 합니다 ('-' 등 기호 불가).")
     if kind == "tags":
         if not str(rec.get("태그명") or "").strip():
             raise ValueError("태그명은 필수입니다.")
@@ -1695,14 +1775,16 @@ def create(kind: str, rec: dict) -> dict:
             if rec.get("구분") == "사용" and not rec.get("발주일"):  # 새 사용 건은 일자에 발주한 것으로 시작
                 rec["발주일"] = rec["일자"]
                 rec["상태"] = dep_status(rec)
-        elif key and kind not in ("funds", "tags", "people", "payee"):
+        elif key and kind not in ("funds", "tags", "people", "payee", "vendor"):
             _assign_number(wb, ws, cols, head_row, key, rec)
         if kind == "evidence":  # MCP·API 로 직접 추가해도 증빙번호 부여 (입력값은 무시)
             _assign_evid_number(wb, ws, rec)
-        if kind in ("funds", "tags", "people", "payee"):
+        if kind in ("funds", "tags", "people", "payee", "vendor"):
             rec[key] = str(rec[key]).strip()
             if any(_same_key(r[key], rec[key]) for r in _rows(ws, cols)):
                 raise ValueError(f"이미 존재하는 {key}입니다 (대소문자·공백만 다른 값 포함).")
+        if kind == "vendor" and any(_same_key(r["코드"], rec["코드"]) for r in _rows(ws, cols)):
+            raise ValueError(f"코드 '{rec['코드']}' 는 다른 거래처가 쓰고 있습니다.")
         if kind == "budget":
             _check_budget_round(rec, _rows(ws, cols, head_row))
             _check_budget_fund(wb, rec)
@@ -1719,9 +1801,12 @@ def create(kind: str, rec: dict) -> dict:
             _assign_number(wb, ws_ex, EXEC_COLS, 1, "거래번호", ex)
             _write_row(ws_ex, EXEC_COLS, _next_row(ws_ex), ex)
             rec["연결거래번호"] = ex["거래번호"]
+        note = rec.get("_vendor_registered")
         rec = {k: v for k, v in rec.items() if not k.startswith("_")}
         r = _next_row(ws, head_row)
         _write_row(ws, cols, r, rec, head_row)
+        if note:
+            rec["_vendor_registered"] = note  # 화면 안내용 (시트에는 쓰지 않음)
         if kind == "budget":
             _refresh_budget_summary(wb)
         _save(wb)
@@ -1788,8 +1873,13 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
             raise ValueError(f"'{existing['이름']}' 은 지급·기준급여·조정 내역에서 사용 중이라 이름을 바꿀 수 없습니다.")
         if kind == "payee" and existing[key] != str(rec[key]).strip() and _payee_usage(wb, existing[key]):
             raise ValueError(f"지급처코드 '{existing[key]}' 는 지급 내역에서 사용 중이라 바꿀 수 없습니다.")
+        if kind == "vendor":
+            if any(_same_key(r["코드"], rec["코드"]) and r["_row"] != row for r in cur):
+                raise ValueError(f"코드 '{rec['코드']}' 는 다른 거래처가 쓰고 있습니다.")
+            if not _same_key(existing["코드"], rec["코드"]) and _vendor_code_used(wb, existing["코드"]):
+                raise ValueError(f"코드 '{existing['코드']}' 는 적립번호에 이미 쓰여 바꿀 수 없습니다 (번호 불변).")
         if key:
-            if kind in ("funds", "tags", "people", "payee"):
+            if kind in ("funds", "tags", "people", "payee", "vendor"):
                 rec[key] = str(rec[key]).strip()
                 if any(_same_key(r[key], rec[key]) and r["_row"] != row for r in cur):
                     raise ValueError(f"이미 존재하는 {key}입니다 (대소문자·공백만 다른 값 포함).")
@@ -1798,6 +1888,8 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
                         _rename_tag(wb, existing[key], rec[key])
                     elif kind == "funds" and _fund_usage(wb, existing[key]):
                         raise ValueError(f"재원코드 '{existing[key]}' 는 집행·품의·예산에서 사용 중이라 바꿀 수 없습니다.")
+                    elif kind == "vendor" and _vendor_usage(wb, existing[key]):
+                        raise ValueError(f"거래처 '{existing[key]}' 는 적립금 기록에서 사용 중이라 이름을 바꿀 수 없습니다.")
             else:
                 rec[key] = existing[key]  # 번호는 불변
         if kind == "evidence":
@@ -1866,6 +1958,8 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
                 raise ValueError(f"'{existing['태그명']}' 태그를 쓰는 행이 {n}건 있습니다. 먼저 해당 행의 태그를 바꾸거나 태그명을 수정하세요.")
         if kind == "funds" and _fund_usage(wb, existing["재원코드"]):
             raise ValueError(f"재원코드 '{existing['재원코드']}' 는 집행·품의·예산에서 사용 중이라 삭제할 수 없습니다.")
+        if kind == "vendor" and (_vendor_usage(wb, existing["거래처명"]) or _vendor_code_used(wb, existing["코드"])):
+            raise ValueError(f"거래처 '{existing['거래처명']}' 는 적립금 기록에서 사용 중이라 삭제할 수 없습니다.")
         if kind == "req" and existing.get("상태") == "집행완료":
             raise ValueError("집행으로 전환된 품의는 삭제할 수 없습니다 (감사 추적). 상태를 '취소'로 바꾸거나 연결 집행을 먼저 정리하세요.")
         if kind == "deposit":
@@ -2337,7 +2431,7 @@ def evidence_for(number: str) -> list[dict]:
 def _evid_subject(wb, number: str) -> tuple[str, dict] | None:
     """증빙이 붙는 행: 집행(거래번호) 또는 적립금(적립번호). 없으면 None."""
     number = str(number or "").strip()
-    if number.startswith(DEP_PREFIX):
+    if DEP_NO_RE.match(number):
         r = next((x for x in _rows(wb[SHEET_DEP], DEP_COLS) if x.get(DEP_NO) == number), None)
         return ("deposit", r) if r else None
     r = next((x for x in _rows(wb[SHEET_EXEC], EXEC_COLS) if x["거래번호"] == number), None)

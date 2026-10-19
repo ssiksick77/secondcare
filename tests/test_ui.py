@@ -172,13 +172,20 @@ def main() -> int:
         pg.evaluate("openForm('budget')"); pg.wait_for_timeout(300)
         ck("예산변동 폼: 신청일자 필수", pg.evaluate("document.getElementById('f-신청일자').required"))
         pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
+        # ---- 거래처 탭 ----
+        pg.evaluate("switchTab('vendor')"); pg.wait_for_timeout(300)
+        ck("거래처 탭: 표에 코드 열", "코드" in pg.inner_text("#vendor-table thead"))
+        pg.evaluate("openForm('vendor')"); pg.wait_for_timeout(300)
+        pg.fill("#f-거래처명", "화면검사상사"); pg.fill("#f-코드", "화검"); pg.keyboard.press("Control+Enter"); ck("거래처 추가 저장", wait_closed(pg))
+        pg.wait_for_timeout(600)
+        ck("거래처 표에 새 행", "화검" in pg.inner_text("#vendor-table tbody"))
         # ---- 적립금 드로어: 증빙 등록 ----
         s, r = sv.call("POST", "/api/deposit", {"일자": "2026-03-08", "거래처": "검사상사", "구분": "사용", "금액": 9000, "적요": "드로어 검사"})
         dep_row, dep_no = r.get("_row"), r.get("적립번호")
         pg.reload(); pg.wait_for_timeout(1200)
         pg.evaluate("switchTab('deposit')"); pg.wait_for_timeout(300)
         pg.click(f"#deposit-table tbody tr[data-row='{dep_row}'] td[data-col='거래처']"); pg.wait_for_timeout(900)
-        ck("적립금 행 클릭 → 드로어(적립번호·증빙)", not pg.evaluate("document.querySelector('#exec-drawer').hidden") and dep_no in pg.inner_text("#xd-title") and "증빙" in pg.inner_text("#xd-body"))
+        ck("적립금 행 클릭 → 드로어(적립번호·증빙)", not pg.evaluate("document.querySelector('#exec-drawer').hidden") and dep_no in pg.inner_text("#xd-title") and "증빙" in pg.inner_text("#xd-body"), (dep_no, pg.inner_text("#xd-title")))
         pg.fill("#evid-entry-form [name=kind]", "영수증"); pg.click("#evid-entry-form button[type=submit]")
         n_ = 0
         for _ in range(25):

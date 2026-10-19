@@ -92,6 +92,13 @@ def list_funds() -> str:
 
 @mcp.tool(annotations=RO)
 @_safe
+def list_vendors() -> str:
+    """적립금 거래처 목록: 거래처명, 코드(적립번호 앞자리), 비고. 미등록 거래처로 적립금을 넣으면 이름 앞 글자로 코드가 자동 등록된다."""
+    return _j(store.read_all()["vendor"])
+
+
+@mcp.tool(annotations=RO)
+@_safe
 def list_tags() -> str:
     """태그(센터 내부 계정) 목록: 태그명, 분류, 설명. 집행·품의·적립금의 태그는 이 목록 중 1개여야 한다."""
     return _j(store.read_all()["tags"])

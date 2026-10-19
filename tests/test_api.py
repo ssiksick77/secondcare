@@ -125,16 +125,37 @@ def main() -> int:
         import re
         from urllib.parse import quote
         s, r = sv.call("GET", "/api/all")
-        ck("적립금: 기존 행 모두 적립번호 보정", r["deposit"] and all(re.fullmatch(r"적립-\d{4}-\d{3}", str(x.get("적립번호") or "")) for x in r["deposit"]), [x.get("적립번호") for x in r["deposit"]][:5])
+        ck("적립금: 기존 행 모두 적립번호 보정 (코드-구분-연도-NNN)", r["deposit"] and all(re.fullmatch(r"[0-9A-Za-z가-힣]{2,6}-(적립|사용)-\d{4}-\d{3}", str(x.get("적립번호") or "")) for x in r["deposit"]), [x.get("적립번호") for x in r["deposit"]][:5])
+        codes = {v["거래처명"]: v["코드"] for v in r["vendor"]}
+        ck("거래처 자동 등록: 가상문구A/B 코드가 서로 다름", codes.get("가상문구A") and codes.get("가상문구B") and codes["가상문구A"] != codes["가상문구B"], codes)
+        # ---- 거래처 마스터 ----
+        s, r = sv.call("POST", "/api/vendor", {"거래처명": "검사/상사", "코드": "검사"})
+        ck("거래처 등록", s == 200 and r.get("코드") == "검사", (s, r))
+        ven_row = r.get("_row")
+        s, r = sv.call("POST", "/api/vendor", {"거래처명": "다른상사", "코드": "검사"})
+        ck("코드 중복 → 400", s == 400, (s, r))
+        s, r = sv.call("POST", "/api/vendor", {"거래처명": "또다른", "코드": "a-b"})
+        ck("코드에 '-' → 400", s == 400, (s, r))
+        s, r = sv.call("POST", "/api/vendor", {"거래처명": "또다른", "코드": "x"})
+        ck("코드 1자 → 400", s == 400, (s, r))
         s, r = sv.call("POST", "/api/deposit", {"일자": "2026-03-07", "거래처": "검사/상사", "구분": "사용", "금액": 12000, "적요": "증빙 검사"})
         dep_no, dep_row = r.get("적립번호"), r.get("_row")
-        ck("적립금 추가: 적립-YYYY-NNN 부여", s == 200 and re.fullmatch(r"적립-2026-\d{3}", str(dep_no)), (s, r))
+        ck("적립금 추가: 코드-사용-YYYY-NNN 부여", s == 200 and re.fullmatch(r"검사-사용-2026-\d{3}", str(dep_no)), (s, r))
+        s, r = sv.call("POST", "/api/deposit", {"일자": "2026-03-07", "거래처": "검사/상사", "구분": "적립", "금액": 100000})
+        ck("적립 행 번호는 구분이 다르고 일련번호 따로", s == 200 and r.get("적립번호") == "검사-적립-2026-001", (s, r))
+        s, r = sv.call("POST", "/api/deposit", {"일자": "2026-03-07", "거래처": "새거래처Z", "구분": "사용", "금액": 500})
+        ck("미등록 거래처: 자동 코드 등록 + 안내 플래그", s == 200 and r.get("적립번호", "").startswith("새거-사용-2026-") and r.get("_vendor_registered") == "새거", (s, r))
+        rec = sv.rec("vendor", ven_row); rec["코드"] = "검상"
+        s, r = sv.call("PUT", f"/api/vendor/{ven_row}", {"rec": rec})
+        ck("번호에 쓰인 코드 변경 → 400", s == 400, (s, r))
+        s, r = sv.call("DELETE", f"/api/vendor/{ven_row}", {})
+        ck("적립금에 쓰인 거래처 삭제 → 400", s == 400, (s, r))
         rec = sv.rec("deposit", dep_row); rec["적립번호"] = "적립-2026-999"; rec["비고"] = "번호 바꾸기 시도"
         s, r = sv.call("PUT", f"/api/deposit/{dep_row}", {"rec": rec})
         ck("적립금 수정: 적립번호는 불변", s == 200 and r.get("적립번호") == dep_no, (s, r))
         s, r = sv.call("POST", f"/api/evidence/{quote(dep_no)}/entry", {"증빙종류": "영수증", "비고": "실물"})
         ck("적립 증빙 항목(실물만) 추가", s == 200 and r.get("증빙번호") == f"{dep_no}-1", (s, r))
-        s, r = sv.call("POST", f"/api/evidence/{quote('적립-2099-001')}/entry", {"증빙종류": "영수증"})
+        s, r = sv.call("POST", f"/api/evidence/{quote('검사-사용-2099-001')}/entry", {"증빙종류": "영수증"})
         ck("없는 적립번호 → 404", s == 404, (s, r))
         import requests
         up = requests.post(f"{sv.base}/api/evidence/{quote(dep_no)}", data={"kind": "카드전표"}, files={"files": ("r.png", b"\x89PNG fake", "image/png")})
@@ -145,6 +166,17 @@ def main() -> int:
         ck("적립 증빙 목록 2건", s == 200 and len(r["items"]) == 2, (s, r))
         s, r = sv.call("DELETE", f"/api/deposit/{dep_row}", {})
         ck("증빙 있는 적립금 행 삭제 → 400", s == 400, (s, r))
+        # ---- 옛 모양 적립번호(적립-YYYY-NNN) 보정: 새 모양으로 바꾸고 증빙 참조도 함께 ----
+        fix2 = ("import openpyxl, store; wb = openpyxl.load_workbook(store.XLSX_PATH); ws = wb[store.SHEET_DEP]; "
+                "h = store._headers(ws); ci = h.index(store.DEP_NO) + 1; old = ws.cell(2, ci).value; ws.cell(2, ci).value = '적립-2026-001'; "
+                "we = wb[store.SHEET_EVID]; he = store._headers(we); r = we.max_row + 1; we.cell(r, he.index('거래번호') + 1).value = '적립-2026-001'; we.cell(r, he.index('증빙종류') + 1).value = '영수증'; "
+                "wb.save(store.XLSX_PATH); wb.close(); store.init_file(); d = store.read_all(); new = next(x for x in d['deposit'] if x['_row'] == 2)[store.DEP_NO]; "
+                "assert new != '적립-2026-001' and '-' in new, new; ev = [e for e in d['evidence'] if e['거래번호'] == new]; assert ev and not any(e['거래번호'] == '적립-2026-001' for e in d['evidence']), d['evidence'][-2:]")
+        fix2_dir = os.path.join(sv.dir, "fix2"); os.makedirs(fix2_dir, exist_ok=True)
+        shutil.copyfile(os.path.join(sv.dir, "ledger.xlsx"), os.path.join(fix2_dir, "ledger.xlsx"))
+        pr = subprocess.run([sys.executable, "-c", fix2], cwd=os.path.join(os.path.dirname(sv.dir), "..", "..", "app"),
+                            env=dict(os.environ, LEDGER_XLSX=os.path.join(fix2_dir, "ledger.xlsx")), capture_output=True, text=True)
+        ck("옛 적립번호 → 새 모양으로 바꾸고 증빙 참조 갱신", pr.returncode == 0, pr.stderr[-400:])
         # ---- 적립금 단계: 발주일/결제일/수령일 → 상태 (사용 행만) ----
         s, r = sv.call("POST", "/api/deposit", {"일자": "2026-03-09", "거래처": "검사상사", "구분": "사용", "금액": 3000, "적요": "단계 검사"})
         st_row = r.get("_row")

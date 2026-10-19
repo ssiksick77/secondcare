@@ -10,7 +10,7 @@ const localISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 const today = () => localISO(new Date());  // 로컬(한국) 날짜. toISOString 은 UTC 라 오전 9시 전에 어제가 됨
 const mmdd = d => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d.slice(5, 7) + "/" + d.slice(8, 10) : d;
 // 행 식별값 (서버가 다른 창/MCP 에서 행이 밀렸는지 검사)
-const IDENT = { funds: ["재원코드"], exec: ["거래번호"], req: ["품의번호"], tags: ["태그명"], budget: ["재원", "변경회차", "신청일자"], deposit: ["일자", "거래처", "구분", "금액"] };
+const IDENT = { funds: ["재원코드"], exec: ["거래번호"], req: ["품의번호"], tags: ["태그명"], vendor: ["거래처명", "코드"], budget: ["재원", "변경회차", "신청일자"], deposit: ["일자", "거래처", "구분", "금액"] };
 const F = k => document.getElementById("f-" + k);
 // 단계 ↔ 날짜: 발생=원인발생일, 청구=지급청구일, (보완=수동 표시), 승인=지출완료일, 결의=결의일
 const STATUS_LABEL = { 발생: "발생", 청구: "청구", 보완: "보완", 완료: "승인", 결의: "완료" };  // 결의일이 등록되면 '완료'로 표시
@@ -45,6 +45,7 @@ const COLS = {
     { k: "사용자" }, { k: "증빙번호", title: "영수증·주문 번호 등 손으로 적는 번호 (증빙 파일은 '증빙' 열)" }, { k: "연결거래번호" }, { k: "증빙", t: "num", calc: r => evidCountNo(r["적립번호"]), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true }],
   funds: [{ k: "재원코드" }, { k: "종류" }, { k: "잔액미관리", label: "잔액", ctr: true, html: r => r["잔액미관리"] === "Y" ? '<span class="muted" title="재원 출처로만 쓰고 예산·잔액을 관리하지 않음">미관리</span>' : "관리" }, { k: "과제명", wrap: true }, { k: "시작일", t: "date" }, { k: "종료일", t: "date" }, { k: "비고", wrap: true }, { k: "인건비예산", t: "num", title: "인건비 화면의 지급처 예산 (비우면 예산목 합계)" }],
   tags: [{ k: "태그명" }, { k: "분류" }, { k: "설명", wrap: true }, { k: "사용건수", t: "num", calc: r => tagUsage(r["태그명"]) }],
+  vendor: [{ k: "거래처명" }, { k: "코드", title: "적립번호 앞자리 (코드-적립|사용-연도-번호). 번호에 쓰인 뒤에는 바꿀 수 없음" }, { k: "비고", wrap: true }, { k: "적립금 건수", t: "num", calc: r => DATA.deposit.filter(d => (d["거래처"] || "").trim().toLowerCase() === (r["거래처명"] || "").trim().toLowerCase()).length }],
 };
 function tagUsage(name) { return ["exec", "req", "deposit"].reduce((a, k) => a + DATA[k].filter(r => r["태그"] === name).length, 0); }
 function tagField(extra = {}) {
@@ -110,6 +111,10 @@ function formFields(kind) {
   if (kind === "tags") return [
     { k: "태그명", type: "text", req: true, hint: "쉼표 금지" }, { k: "분류", type: "datalist", list: "분류", hint: "상위 계정" },
     { k: "설명", type: "text", cls: "wide" },
+  ];
+  if (kind === "vendor") return [
+    { k: "거래처명", type: "text", req: true, hint: "적립금 입력의 거래처와 같은 이름" }, { k: "코드", type: "text", req: true, hint: "한글·영문·숫자 2~6자, 적립번호 앞자리" },
+    { k: "비고", type: "text", cls: "wide" },
   ];
   if (kind === "funds") return [
     { k: "재원코드", type: "text", req: true, hint: "'-' 없이, 예: AI01" },
@@ -230,7 +235,7 @@ function fillDatalists() {
     return [...s].sort();
   };
   const fill = (id, vals) => { $(id).innerHTML = vals.map(v => `<option value="${esc(v)}">`).join(""); };
-  fill("#dl-거래처", collect(["거래처"]));
+  fill("#dl-거래처", [...new Set([...(DATA.vendor || []).map(v => v["거래처명"]), ...collect(["거래처"])])]);  // 등록 거래처 먼저
   fill("#dl-사용자", collect(["사용자", "품의자"]));
   fill("#dl-태그", collect(["태그"]));
   fill("#dl-세목", collect(["세목"]));
@@ -246,7 +251,7 @@ function renderAll() {
   renderExecTiles();
   if (XD.row != null && !$("#exec-drawer").hidden) rerenderDrawer(false);
   renderDashboard();
-  renderList("exec"); renderList("req"); renderList("budget"); renderList("funds"); renderList("deposit"); renderList("tags");
+  renderList("exec"); renderList("req"); renderList("budget"); renderList("funds"); renderList("deposit"); renderList("tags"); renderList("vendor");
   renderBudgetSummary(); renderDepositSummary();
   if (typeof renderLabor === "function") renderLabor();
   if (typeof renderRequest === "function") renderRequest();
@@ -292,7 +297,7 @@ function filtered(kind) {
 
 function renderList(kind) {
   const cols = COLS[kind].filter(c => !c.hide);  // hide: CSV 에는 포함, 화면에서는 생략
-  const rows = (kind === "funds" || kind === "tags") ? [...DATA[kind]] : filtered(kind);
+  const rows = (kind === "funds" || kind === "tags" || kind === "vendor") ? [...DATA[kind]] : filtered(kind);
   const defKey = { exec: "원인발생일", req: "원인발생일", deposit: "일자", labor: "지급월", salary: "시작월", ladj: "월", request: "신청일" }[kind];
   const noAct = kind === "exec" || kind === "request";  // 작업 열 없음: 행 클릭 = 상세 패널, 두 번 클릭 = 수정
   const sort = SORT[kind] || (defKey ? { k: defKey, dir: -1 } : null);
@@ -661,7 +666,7 @@ function rememberLast(kind, rec) {
 function openForm(kind, row, preset, opts = {}) {
   const rec = row != null ? DATA[kind].find(r => r._row === row) : null;
   const fields = formFields(kind).filter(f => !(f.onlyNew && rec));
-  const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}), ...(typeof REQUEST_TITLES !== "undefined" ? REQUEST_TITLES : {}) };
+  const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", vendor: "거래처", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}), ...(typeof REQUEST_TITLES !== "undefined" ? REQUEST_TITLES : {}) };
   $("#dlg-title").textContent = opts.title || (titles[kind] + (rec ? " 수정" + (IDENT_LABEL(kind, rec) ? " · " + IDENT_LABEL(kind, rec) : "") : " 추가"));
   $("#dlg-error").hidden = true; $("#dlg-error").classList.remove("info");
   $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !!opts.convertRequests || !["exec", "req", "deposit", "budget", "tags", "labor", "salary", "people", "request"].includes(kind);
@@ -813,10 +818,11 @@ $("#dlg-form").addEventListener("submit", async e => {
     }
     const cb = DLG_ON_SAVED; DLG_ON_SAVED = null;
     if (!row) rememberLast(kind, rec);
-    const no = saved["거래번호"] || saved["품의번호"] || saved["신청번호"] || saved["재원코드"] || saved["태그명"] || "";
+    const no = saved["거래번호"] || saved["품의번호"] || saved["신청번호"] || saved["적립번호"] || saved["재원코드"] || saved["태그명"] || saved["거래처명"] || "";
     dlg.dataset.initial = ""; dlg.close();
     if (doneMsg) showAlert(doneMsg, "ok", { undo: true });
     else if (kind === "request" && typeof requestSavedMsg === "function") requestSavedMsg(saved, !row);
+    else if (saved["_vendor_registered"]) showAlert(`${no} 저장했습니다. 거래처 '${saved["거래처"]}' 를 코드 '${saved["_vendor_registered"]}' 로 자동 등록했습니다 — 거래처 탭에서 코드를 확인하세요.`, "warn", { action: { label: "거래처 탭", run: () => switchTab("vendor") } });
     else showAlert(`${no ? no + " " : ""}저장했습니다.` + (convertRow != null ? " (품의 → 집행 전환 완료)" : ""), "ok");
     await load();
     if (kind === "request" && typeof requestAfterSave === "function") requestAfterSave(saved);
@@ -937,7 +943,7 @@ async function setDateToday(row, col, btn) {
 }
 
 // ---------- 삭제 ----------
-const DEL_KIND = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
+const DEL_KIND = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", vendor: "거래처", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
 function IDENT_LABEL(kind, r) { return r?.["거래번호"] || r?.["품의번호"] || r?.["신청번호"] || r?.["재원코드"] || r?.["태그명"] || (typeof laborIdent === "function" ? laborIdent(kind, r) : ""); }
 async function del(kind, row) {
   const r = DATA[kind].find(x => x._row === row);
