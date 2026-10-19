@@ -33,7 +33,6 @@ Updated: 2026-10-16
 - 학회 review leftovers: form conflict [새로 불러오기] button, leg Tab order, P3 list in docs/점검_2026-10-16_신청_학회.md.
 - 기타 review leftovers: P3 list in docs/점검_2026-10-16_신청_기타.md.
 - Server role check (연구원/담당자) is deferred; see ideas.md.
-- 거래처 탭: 구매처 목록의 '드림디포'와 등록 거래처 '드림디포분당정자점'(코드 드림)이 이름이 달라, 드림디포 주문 시 '드림디포'가 코드 '드림디'로 자동 등록될 수 있음. 사용자가 둘 중 하나로 맞출 것.
 - The `ledger` MCP registration in Claude Desktop may still point at the old path. Re-register with the command in `app/README.md` if it fails.
 
 ## Decisions
@@ -52,6 +51,7 @@ Updated: 2026-10-16
 - 2026-10-19 (user) 적립금 단계: 발주일/결제일/수령일, 집행 패널 방식 그대로 (user opted out of questions). My calls: 사용 행만 단계(적립 행은 없음), 상태 열 저장+날짜에서 재계산(대기/발주/결제/수령), 새 사용 행·이전 장부 사용 행은 발주일=일자로 시작, 뒤 단계 있으면 앞 단계 비우기 금지, 주문 생성 행도 같은 패널에서 날짜 수정, MCP add_deposit 에 날짜 3개 선택 인자.
 - 2026-10-19 (user) 적립번호 = 거래처코드-적립|사용-YYYY-NNN; 거래처 코드는 새 `거래처` 시트/탭에서 지정. My calls (user agreed): 코드 한글·영문·숫자 2~6자, 번호에 쓰이면 불변; 미등록 거래처는 저장 허용 + 이름 앞 글자로 자동 등록(겹치면 길게) + 안내; 주문번호 앞자리도 코드 우선; 옛 모양 번호는 보정 때 재부여하고 증빙 참조 갱신.
 - 2026-10-19 (user) 소모품 구매관리대장(ref) 들여오기 완료 — docs/import_소모품대장/import.py 로 실제 장부에 적용(백업 app/backup/manual_before_import_20261019_195215.xlsx). 거래처 이름은 '알파'(코드 알파, 이전 등록명 알파미금역점은 비고), 구매처 기본 목록·app/.env REQUEST_SUPPLIERS 를 알파몰→알파로(사용자 지시). 신청번호는 앱이 새로 부여, 반려 건은 주문에 묶지 않음, 0703-01 배송일은 사용자가 직접 입력 예정. 쿠팡 멀티탭 1건은 '기타' 신청.
+- 2026-10-19 (user) 들여오기 후속: 구매처 목록 알파,드림디포분당정자점(.env); 신청인 이름 통일(JIN PARK→박진용, eye…→이은희, seri oh→오세리, Haeun Kim→김하은, 실제 장부 19건, 백업 manual_before_namefix_*); 신청 비고의 '구 신청번호' 삭제; 신청 표 사유는 별도 열; 신청번호 = 구분 코드 E/S/C/Z-YYYY-NNN (구분·연도별 일련, R- 번호는 보정 때 재부여 + 주문·첨부·비고 참조 갱신, 드라이브 첨부 폴더명은 그대로); 주문 표 '신청번호' 열 → '구매내역'(첫 품목 외 n건).
 
 ## Next action
 
