@@ -552,11 +552,17 @@ def evidence_entry(number: str, body: dict):
 async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind: str = Form(""),
                           date: str = Form(""), note: str = Form(""), row: str = Form(""),
                           evno: str = Form("", alias="증빙번호")):
-    """여러 파일을 드라이브 증빙관리/YYYY/재원코드/거래번호 에 올리고 증빙 시트에 기록.
+    """여러 파일을 드라이브에 올리고 증빙 시트에 기록. 집행(거래번호)은 증빙관리/YYYY/재원코드/거래번호,
+    적립금(적립번호)은 증빙관리/YYYY/적립금/거래처명/적립번호 (사용자 결정 2026-10-19).
     row(증빙 시트 행) 또는 증빙번호를 주면 그 '실물만' 항목에 파일 1개를 첨부한다 (증빙번호·증빙종류·비고 유지, 이미 파일이 있으면 409)."""
-    rec = next((r for r in store.read_all()["exec"] if r["거래번호"] == number), None)
-    if rec is None:
-        raise HTTPException(404, "집행 행을 찾을 수 없습니다.")
+    subj = store.evidence_subject(number)
+    if subj is None:
+        raise HTTPException(404, "집행 또는 적립금 행을 찾을 수 없습니다.")
+    rec, is_dep = subj["rec"], subj["kind"] == "deposit"
+    # 폴더·파일명 재료: 집행은 재원·적요·원인발생일, 적립금은 거래처·적요(없으면 구분)·일자
+    base_date = rec["일자"] if is_dep else rec["원인발생일"]
+    name_head = rec["거래처"] if is_dep else rec["재원"]
+    summary = (rec["적요"] or rec["구분"]) if is_dep else (rec["적요"] or rec["거래처"] or "")
     target = None
     if row.strip() or evno.strip():
         if row.strip() and not row.strip().isdigit():
@@ -572,11 +578,11 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
         kind = target["증빙종류"] or kind
     if not kind.strip():
         raise HTTPException(400, "증빙종류를 입력하세요.")
-    d = store._to_date(date) or rec["원인발생일"] or dt.date.today().isoformat()
+    d = store._to_date(date) or base_date or dt.date.today().isoformat()
     if not store._valid_date(d):
         raise HTTPException(400, "날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).")
     yymmdd = d[2:4] + d[5:7] + d[8:10]
-    year = (rec["원인발생일"] or d)[:4]
+    year = (base_date or d)[:4]
     blobs = []
     for f in files:  # 크기 검사를 먼저 전부 수행 (중간 실패로 고아 파일이 생기지 않도록)
         data = await f.read()
@@ -585,13 +591,13 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
         if not data:
             raise HTTPException(400, f"{f.filename}: 빈 파일입니다.")
         blobs.append((f, data))
-    folder = drive.ensure_folder([year, rec["재원"], number])
+    folder = drive.ensure_folder([year, "적립금", drive.safe_part(rec["거래처"]), number] if is_dep else [year, rec["재원"], number])
     existing = store.evidence_names(number)
     items, uploaded = [], []
     try:
         for f, data in blobs:
             ext = (f.filename or "").rsplit(".", 1)[-1] if "." in (f.filename or "") else ""
-            name = drive.build_filename(rec["재원"], rec["적요"] or rec["거래처"] or "", kind, rec["금액"], yymmdd, ext, existing)
+            name = drive.build_filename(name_head, summary, kind, rec["금액"], yymmdd, ext, existing)
             existing.append(name)
             up = drive.upload(folder, name, data, f.content_type or "")
             uploaded.append(up["id"])

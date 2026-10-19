@@ -80,7 +80,8 @@ REQ_NOTE_RE = re.compile(r"^품의 (\S+)")  # 이전 장부: 집행 비고 '품�
 LINKED_LOCKED = ["재원", "예산목", "금액", "거래처", "원인발생일"]  # 인건비·적립 연결 집행에서 잠그는 열
 REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예산목", "세목", "세세목", "거래처",
             "결제수단", "적요", "금액", "태그", "품의자", "비고", "상태"]
-DEP_COLS = ["일자", "거래처", "구분", "금액", "적요", "사용자", "증빙번호", "연결거래번호", "비고", "태그"]
+DEP_NO = "적립번호"  # 적립-YYYY-NNN: 적립금 행 식별·증빙 연결 (2026-10-19). 이전 장부에는 _ensure_structure 가 맨 끝 열로 붙인다
+DEP_COLS = [DEP_NO, "일자", "거래처", "구분", "금액", "적요", "사용자", "증빙번호", "연결거래번호", "비고", "태그"]
 TAG_COLS = ["태그명", "분류", "설명"]
 EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
 FIXLOG_COLS = ["거래번호", "일시", "구분", "사유"]  # 구분: 표시 / 해제. 일시: YYYY-MM-DD HH:MM
@@ -418,6 +419,8 @@ def _ensure_structure(wb) -> bool:
         changed = True
     if _ensure_budget_dates(wb):
         changed = True
+    if _ensure_dep_numbers(wb):
+        changed = True
 
     for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30)),
                                (SHEET_SALARY, SALARY_COLS, (14, 10, 10, 14, 30)),
@@ -438,7 +441,7 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10),
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
                                    (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12)):
         ws = wb[sheet]
@@ -755,7 +758,7 @@ _SHEETS = {
     "exec": (SHEET_EXEC, EXEC_COLS, 1, "거래번호"),
     "req": (SHEET_REQ, REQ_COLS, 1, "품의번호"),
     "budget": (SHEET_BUDGET, BUDGET_COLS, BUDGET_HEAD_ROW, None),
-    "deposit": (SHEET_DEP, DEP_COLS, 1, None),
+    "deposit": (SHEET_DEP, DEP_COLS, 1, DEP_NO),
     "tags": (SHEET_TAG, TAG_COLS, 1, "태그명"),
     "evidence": (SHEET_EVID, EVID_COLS, 1, None),
     "request": (SHEET_RQ, REQUEST_COLS, 1, "신청번호"),
@@ -876,6 +879,10 @@ def _number_refs(wb, key: str) -> set[str]:
         for r in _rows(wb[SHEET_DEP], DEP_COLS):
             if r.get("연결거래번호"):
                 refs.add(str(r["연결거래번호"]))
+    elif key == DEP_NO:  # 증빙 시트가 참조하는 적립번호 (지운 번호 재사용 방지)
+        for e in _rows(wb[SHEET_EVID], EVID_COLS):
+            if str(e.get("거래번호") or "").startswith(DEP_PREFIX):
+                refs.add(str(e["거래번호"]).strip())
     elif key == "품의번호":
         for r in _rows(wb[SHEET_EXEC], EXEC_COLS):
             if r.get(EXEC_LINK_COL):
@@ -1185,6 +1192,51 @@ def _assign_number(wb, ws, cols, head_row, key, rec):
             if m and m[2] == fund and m[1] == year:
                 mx = max(mx, int(m[3]))
     rec[key] = f"{prefix}{mx + 1:03d}"
+
+
+DEP_PREFIX = "적립-"
+
+
+def _dep_year_max(wb, ws, year: str) -> int:
+    """그 연도의 적립번호 최고값 (시트 + 증빙 시트 참조)."""
+    mx = 0
+    seen = [str(r.get(DEP_NO) or "") for r in _rows(ws, DEP_COLS)] + list(_number_refs(wb, DEP_NO))
+    for v in seen:
+        m = re.match(r"^적립-(\d{4})-(\d+)$", v)
+        if m and m[1] == year:
+            mx = max(mx, int(m[2]))
+    return mx
+
+
+def _assign_dep_number(wb, ws, rec):
+    """적립-YYYY-NNN 자동 부여 (일자 연도별 일련번호, 증빙이 참조한 번호는 재사용하지 않음)."""
+    d = _to_date(rec.get("일자")) or dt.date.today().isoformat()
+    year = d[:4]
+    rec[DEP_NO] = f"{DEP_PREFIX}{year}-{_dep_year_max(wb, ws, year) + 1:03d}"
+
+
+def _ensure_dep_numbers(wb) -> bool:
+    """적립금 보정: 적립번호가 빈 행(이전 장부)에 일자 순(같으면 행 순)으로 번호를 부여. 변경 여부 반환."""
+    if SHEET_DEP not in wb.sheetnames:
+        return False
+    ws = wb[SHEET_DEP]
+    heads = _headers(ws)
+    if DEP_NO not in heads or "일자" not in heads:
+        return False
+    rows = _rows(ws, DEP_COLS)
+    blank = [r for r in rows if r.get("일자") and not str(r.get(DEP_NO) or "").strip()]
+    if not blank:
+        return False
+    blank.sort(key=lambda r: (str(r["일자"]), r["_row"]))
+    nxt: dict[str, int] = {}
+    ci = heads.index(DEP_NO) + 1
+    for r in blank:
+        year = str(r["일자"])[:4]
+        if year not in nxt:
+            nxt[year] = _dep_year_max(wb, ws, year)
+        nxt[year] += 1
+        ws.cell(r["_row"], ci, f"{DEP_PREFIX}{year}-{nxt[year]:03d}")
+    return True
 
 
 def _same_key(a, b) -> bool:
@@ -1583,6 +1635,8 @@ def create(kind: str, rec: dict) -> dict:
             _check_supplier(rec)
             _check_codes(rec)
             _assign_request_number(wb, ws, rec)
+        elif kind == "deposit":
+            _assign_dep_number(wb, ws, rec)
         elif key and kind not in ("funds", "tags", "people", "payee"):
             _assign_number(wb, ws, cols, head_row, key, rec)
         if kind == "evidence":  # MCP·API 로 직접 추가해도 증빙번호 부여 (입력값은 무시)
@@ -1760,6 +1814,8 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
             link = _dep_order_links(_rows(wb[SHEET_ORDER], ORDER_COLS), _rows(ws, cols, head_row)).get(row)
             if link:
                 raise ValueError(DEP_ORDER_LOCK_MSG.format(no=link))
+        if kind == "deposit" and existing.get(DEP_NO) and any(e["거래번호"] == existing[DEP_NO] for e in _rows(wb[SHEET_EVID], EVID_COLS)):
+            raise ValueError("증빙이 등록된 적립금 기록입니다(파일 없는 실물만 항목 포함). 증빙을 먼저 지우세요.")
         if kind == "deposit" and existing.get("연결거래번호"):
             if cascade:
                 ws_ex = wb[SHEET_EXEC]
@@ -2179,14 +2235,31 @@ def evidence_for(number: str) -> list[dict]:
         return [_evid_out(r) for r in _rows(wb[SHEET_EVID], EVID_COLS) if r["거래번호"] == number]
 
 
+def _evid_subject(wb, number: str) -> tuple[str, dict] | None:
+    """증빙이 붙는 행: 집행(거래번호) 또는 적립금(적립번호). 없으면 None."""
+    number = str(number or "").strip()
+    if number.startswith(DEP_PREFIX):
+        r = next((x for x in _rows(wb[SHEET_DEP], DEP_COLS) if x.get(DEP_NO) == number), None)
+        return ("deposit", r) if r else None
+    r = next((x for x in _rows(wb[SHEET_EXEC], EXEC_COLS) if x["거래번호"] == number), None)
+    return ("exec", r) if r else None
+
+
+def evidence_subject(number: str) -> dict | None:
+    """API 용: {"kind": "exec"|"deposit", "rec": 행} 또는 None."""
+    with _lock:
+        got = _evid_subject(_load(), number)
+    return {"kind": got[0], "rec": got[1]} if got else None
+
+
 def evidence_entry(number: str, kind: str, note: str = "") -> dict:
     """파일 없이 증빙 항목(실물만)을 만든다: 증빙번호 부여, 파일 열은 빈칸. 드라이브는 건드리지 않음."""
     number, kind = str(number or "").strip(), str(kind or "").strip()
     if not kind:
         raise ValueError("증빙종류를 입력하세요.")
     with _write_session() as wb:
-        if not any(x["거래번호"] == number for x in _rows(wb[SHEET_EXEC], EXEC_COLS)):
-            raise NotFound("집행 행을 찾을 수 없습니다.")
+        if _evid_subject(wb, number) is None:
+            raise NotFound("집행 또는 적립금 행을 찾을 수 없습니다.")
         ws = wb[SHEET_EVID]
         it = {"거래번호": number, "증빙종류": kind, "비고": str(note or "").strip(), **{c: "" for c in EVID_FILE_COLS}}
         _validate("evidence", it)
@@ -2629,6 +2702,7 @@ def order_create(rows: list, extra: dict | None = None, expects: list | None = N
             _validate("deposit", dep)
             _validate_tag(dep, wb)
             ws_d = wb[SHEET_DEP]
+            _assign_dep_number(wb, ws_d, dep)
             dep["_row"] = _next_row(ws_d)
             _write_row(ws_d, DEP_COLS, dep["_row"], dep)
         r = _next_row(ws_o)

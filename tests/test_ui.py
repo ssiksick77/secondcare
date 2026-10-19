@@ -172,6 +172,22 @@ def main() -> int:
         pg.evaluate("openForm('budget')"); pg.wait_for_timeout(300)
         ck("예산변동 폼: 신청일자 필수", pg.evaluate("document.getElementById('f-신청일자').required"))
         pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
+        # ---- 적립금 드로어: 증빙 등록 ----
+        s, r = sv.call("POST", "/api/deposit", {"일자": "2026-03-08", "거래처": "검사상사", "구분": "사용", "금액": 9000, "적요": "드로어 검사"})
+        dep_row, dep_no = r.get("_row"), r.get("적립번호")
+        pg.reload(); pg.wait_for_timeout(1200)
+        pg.evaluate("switchTab('deposit')"); pg.wait_for_timeout(300)
+        pg.click(f"#deposit-table tbody tr[data-row='{dep_row}'] td[data-col='거래처']"); pg.wait_for_timeout(900)
+        ck("적립금 행 클릭 → 드로어(적립번호·증빙)", not pg.evaluate("document.querySelector('#exec-drawer').hidden") and dep_no in pg.inner_text("#xd-title") and "증빙" in pg.inner_text("#xd-body"))
+        pg.fill("#evid-entry-form [name=kind]", "영수증"); pg.click("#evid-entry-form button[type=submit]")
+        n_ = 0
+        for _ in range(25):
+            n_ = pg.evaluate(f"(DATA.evidence||[]).filter(e=>e['거래번호']==={dep_no!r}).length")
+            if n_:
+                break
+            pg.wait_for_timeout(300)
+        ck("적립 증빙 항목 추가 → 목록·표 개수", n_ == 1 and pg.inner_text(f"#deposit-table tbody tr[data-row='{dep_row}'] td[data-col='증빙']").strip() == "1", n_)
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
         # ---- 보완 표시 사유 입력·이력 ----
         s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구활동비", "원인발생일": "2026-03-06", "거래처": "검사", "금액": 5000, "적요": "보완 검사", "지급청구일": "2026-03-06"})
         fx_row = r.get("_row")

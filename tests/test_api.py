@@ -121,6 +121,30 @@ def main() -> int:
         ck("미관리 재원 집행은 저장됨", s == 200, (s, r))
         s, r = sv.call("GET", "/api/all")
         ck("대시보드: 미관리 재원 줄·집계 제외 모두 없음", not any(x["재원"] == "SRC1" for x in r["dashboard"]["table"]) and not any(x["재원"] == "SRC1" for x in r["dashboard"]["excluded"]["exec"]))
+        # ---- 적립금 증빙: 적립번호 자동 부여, 증빙은 집행과 같은 API 로 ----
+        import re
+        from urllib.parse import quote
+        s, r = sv.call("GET", "/api/all")
+        ck("적립금: 기존 행 모두 적립번호 보정", r["deposit"] and all(re.fullmatch(r"적립-\d{4}-\d{3}", str(x.get("적립번호") or "")) for x in r["deposit"]), [x.get("적립번호") for x in r["deposit"]][:5])
+        s, r = sv.call("POST", "/api/deposit", {"일자": "2026-03-07", "거래처": "검사/상사", "구분": "사용", "금액": 12000, "적요": "증빙 검사"})
+        dep_no, dep_row = r.get("적립번호"), r.get("_row")
+        ck("적립금 추가: 적립-YYYY-NNN 부여", s == 200 and re.fullmatch(r"적립-2026-\d{3}", str(dep_no)), (s, r))
+        rec = sv.rec("deposit", dep_row); rec["적립번호"] = "적립-2026-999"; rec["비고"] = "번호 바꾸기 시도"
+        s, r = sv.call("PUT", f"/api/deposit/{dep_row}", {"rec": rec})
+        ck("적립금 수정: 적립번호는 불변", s == 200 and r.get("적립번호") == dep_no, (s, r))
+        s, r = sv.call("POST", f"/api/evidence/{quote(dep_no)}/entry", {"증빙종류": "영수증", "비고": "실물"})
+        ck("적립 증빙 항목(실물만) 추가", s == 200 and r.get("증빙번호") == f"{dep_no}-1", (s, r))
+        s, r = sv.call("POST", f"/api/evidence/{quote('적립-2099-001')}/entry", {"증빙종류": "영수증"})
+        ck("없는 적립번호 → 404", s == 404, (s, r))
+        import requests
+        up = requests.post(f"{sv.base}/api/evidence/{quote(dep_no)}", data={"kind": "카드전표"}, files={"files": ("r.png", b"\x89PNG fake", "image/png")})
+        upj = up.json()
+        ck("적립 증빙 업로드: 증빙관리/연도/적립금/거래처/적립번호", up.status_code == 200 and upj["folder"]["id"] == f"증빙관리/2026/적립금/검사 상사/{dep_no}", (up.status_code, upj))
+        ck("적립 증빙 파일명: 거래처_적요_종류_금액_YYMMDD", up.status_code == 200 and upj["items"][0]["파일명"] == "검사 상사_증빙 검사_카드전표_12000_260307.png", upj.get("items"))
+        s, r = sv.call("GET", f"/api/evidence/{quote(dep_no)}")
+        ck("적립 증빙 목록 2건", s == 200 and len(r["items"]) == 2, (s, r))
+        s, r = sv.call("DELETE", f"/api/deposit/{dep_row}", {})
+        ck("증빙 있는 적립금 행 삭제 → 400", s == 400, (s, r))
         # ---- 보완 표시 사유·이력 ----
         s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구활동비", "원인발생일": "2026-03-06", "거래처": "검사", "금액": 5000, "적요": "보완 검사", "지급청구일": "2026-03-06"})
         fx_row = r.get("_row"); fx_no = r.get("거래번호")

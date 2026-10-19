@@ -37,8 +37,8 @@ const COLS = {
     { k: "금액", t: "num", amt: true }, { k: "태그" }, { k: "품의자" }, { k: "비고", wrap: true },
   ],
   budget: null, // meta 로드 후 생성
-  deposit: [{ k: "일자", t: "date" }, { k: "거래처" }, { k: "구분", t: "badge" }, { k: "금액", t: "num", amt: true }, { k: "적요", wrap: true },
-    { k: "사용자" }, { k: "증빙번호" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
+  deposit: [{ k: "적립번호", title: "적립금 거래 번호 (적립-연도-일련번호). 행을 누르면 상세·증빙" }, { k: "일자", t: "date" }, { k: "거래처" }, { k: "구분", t: "badge" }, { k: "금액", t: "num", amt: true }, { k: "적요", wrap: true },
+    { k: "사용자" }, { k: "증빙번호", title: "영수증·주문 번호 등 손으로 적는 번호 (증빙 파일은 '증빙' 열)" }, { k: "연결거래번호" }, { k: "증빙", t: "num", calc: r => evidCountNo(r["적립번호"]), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true }],
   funds: [{ k: "재원코드" }, { k: "종류" }, { k: "잔액미관리", label: "잔액", ctr: true, html: r => r["잔액미관리"] === "Y" ? '<span class="muted" title="재원 출처로만 쓰고 예산·잔액을 관리하지 않음">미관리</span>' : "관리" }, { k: "과제명", wrap: true }, { k: "시작일", t: "date" }, { k: "종료일", t: "date" }, { k: "비고", wrap: true }, { k: "인건비예산", t: "num", title: "인건비 화면의 지급처 예산 (비우면 예산목 합계)" }],
   tags: [{ k: "태그명" }, { k: "분류" }, { k: "설명", wrap: true }, { k: "사용건수", t: "num", calc: r => tagUsage(r["태그명"]) }],
 };
@@ -239,7 +239,7 @@ function fillDatalists() {
 // ---------- 렌더 ----------
 function renderAll() {
   renderExecTiles();
-  if (XD.row != null && !$("#exec-drawer").hidden) renderExecDrawer(false);
+  if (XD.row != null && !$("#exec-drawer").hidden) rerenderDrawer(false);
   renderDashboard();
   renderList("exec"); renderList("req"); renderList("budget"); renderList("funds"); renderList("deposit"); renderList("tags");
   renderBudgetSummary(); renderDepositSummary();
@@ -342,7 +342,7 @@ function renderList(kind) {
       ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}">집행전환</button>`
       : kind === "labor" ? (r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
     const editBtn = kind === "labor" && r["상태"] === "확정" ? "" : `<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button>`;
-    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === "exec" && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}${SEL_HOOK[kind]?.rowCls(r) || ""}">${SEL_HOOK[kind]?.cell(r) || ""}${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${noAct ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;
+    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === XD.kind && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}${SEL_HOOK[kind]?.rowCls(r) || ""}">${SEL_HOOK[kind]?.cell(r) || ""}${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${noAct ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;
   }
   let foot = "";
   if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor" || kind === "request")) {
@@ -1026,18 +1026,18 @@ function showBanner(msg) {
 }
 
 function closeExecDrawer() {
-  const dr = $("#exec-drawer"), wasOpen = !dr.hidden, row = XD.row;
+  const dr = $("#exec-drawer"), wasOpen = !dr.hidden, row = XD.row, kind = XD.kind;
   // 포커스가 드로어 안(또는 body)에 있을 때만 연 행으로 되돌림 — 탭 전환 등으로 닫힐 때는 건드리지 않음
   const ae = document.activeElement, restore = wasOpen && (!ae || ae === document.body || dr.contains(ae));
   dr.hidden = true; document.body.classList.remove("drawer-open");
-  if (XD.row != null) { XD.row = null; if (DATA) markExecRow(row, null); }
-  if (restore && row != null) $(`#exec-table tbody tr[data-row="${row}"] .rowbtn`)?.focus();
+  if (XD.row != null) { XD.row = null; if (DATA && kind === "exec") markExecRow(row, null); else if (DATA) $(`#deposit-table tbody tr[data-row="${row}"]`)?.classList.remove("selected"); }
+  if (restore && row != null) ($(`#${kind}-table tbody tr[data-row="${row}"] .rowbtn`) || $(`#${kind}-table tbody tr[data-row="${row}"] button`))?.focus();
 }
 // Esc: 열린 대화상자가 있으면 그 대화상자가 먼저 처리 (드로어는 닫지 않음)
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !e.defaultPrevented && !$("#exec-drawer").hidden && !document.querySelector("dialog[open]")) closeExecDrawer(); });
 function switchTab(name) {
   document.body.dataset.tab = name;
-  if (name !== "exec") closeExecDrawer();
+  if (name !== XD.kind) closeExecDrawer();
   $$("#main-tabs [role=tab]").forEach(b => {
     const on = b.id === "tab-" + name;
     b.setAttribute("aria-selected", on);
@@ -1098,6 +1098,8 @@ $("#exec-table").addEventListener("keydown", e => {
 document.addEventListener("click", e => {
   const b = e.target.closest("button[data-act], button[data-add]");
   if (!b) {
+    const trd = e.target.closest("#deposit-table tbody tr[data-row]");  // 적립금 행 한 번 클릭 = 상세·증빙 드로어 (작업 열 버튼은 제외)
+    if (trd && !e.target.closest("a, input, select, button")) { openDepDrawer(Number(trd.dataset.row)); return; }
     const tr = e.target.closest("#exec-table tbody tr[data-row]");
     // 한 번 클릭 = 상세 패널(잠깐 기다렸다가 열어 두 번째 클릭이 밀린 버튼 위에 떨어지지 않게), 두 번 클릭 = 수정 창
     if (tr && DELMODE && !e.target.closest("input, button, a")) { const cb = tr.querySelector("input[data-selrow]"); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event("change", { bubbles: true })); } return; }
@@ -1113,6 +1115,7 @@ document.addEventListener("click", e => {
   if (b.dataset.act === "voucher") return openVoucher(Number(b.dataset.row), b);
   if (b.dataset.act === "show-excluded") { switchTab("exec"); QUICK = "excluded"; FILTERS.exec = {}; $$("[data-filter][data-kind=exec]").forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = ""; }); renderExecTiles(); renderList("exec"); showAlert("예산 집계에서 제외된 집행만 표시 중입니다. 빠른 필터 타일을 누르거나 새로고침하면 해제됩니다.", "ok"); return; }
   if (b.dataset.add) return openForm(b.dataset.add);
+  if (b.dataset.act === "dep-exec") { const ex = DATA.exec.find(x => x["거래번호"] === b.dataset.no); switchTab("exec"); setSearch("exec", b.dataset.no); if (ex) openExecDrawer(ex._row); return; }
   if (b.dataset.act === "dep-use") return openForm("deposit", null, { 거래처: b.dataset.vendor, 구분: "사용" });
   if (b.dataset.act === "dep-add") return openForm("deposit", null, { 거래처: b.dataset.vendor, 구분: "적립" });
   const row = Number(b.dataset.row);
@@ -1473,8 +1476,9 @@ $("#s-clear-key").addEventListener("click", async () => {
 
 // ================= 집행 상세 드로어 · 증빙 · 단계 처리 =================
 let QUICK = "";
-const XD = { row: null, evid: null, drive: null, seq: 0 };
-function evidCount(r) { return (DATA.evidence || []).filter(e => e["거래번호"] === r["거래번호"]).length; }
+const XD = { kind: "exec", row: null, evid: null, drive: null, seq: 0 };  // kind: 드로어가 보여 주는 행의 종류 (exec | deposit)
+function evidCountNo(no) { return no ? (DATA.evidence || []).filter(e => e["거래번호"] === no).length : 0; }
+function evidCount(r) { return evidCountNo(r["거래번호"]); }
 // 집행 행의 출처: 인건비 확정 / 적립금 적립 기록 / 품의 전환. 연결 행은 핵심 열이 잠김
 const LOCKED_COLS = ["재원", "예산목", "금액", "거래처", "원인발생일"];
 function execOrigin(r) {
@@ -1487,9 +1491,10 @@ function execOrigin(r) {
 // 품의→집행 전환으로 생긴 집행의 품의번호: 연결품의번호 열 우선, 비어 있으면 비고 '품의 X' (이관 전 장부 호환). 비고는 자유 편집
 function execReqNo(r) { const v = String(r?.["연결품의번호"] ?? "").trim(); if (v) return v; const m = /^품의 (\S+)/.exec(r?.["비고"] || ""); return m ? m[1] : ""; }
 function originBadge(r) { const o = execOrigin(r); return o ? ` <button type="button" class="origin ${o.kind}" data-act="origin" data-row="${r._row}" title="${esc(o.label)} 에서 생성${o.locked ? " · 재원·예산목·금액·거래처·원인발생일은 원본에서만 변경" : ""} · 클릭하면 원본으로 이동">${o.kind}</button>` : ""; }
+// 어떤 탭의 검색 칸에 q 만 남기고 그 표를 다시 그림 (원본으로 이동·연결 집행 보기)
+const setSearch = (kind, q) => { FILTERS[kind] = { q }; $$(`[data-filter][data-kind=${kind}]`).forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = el.dataset.filter === "q" ? q : ""; }); renderList(kind); };
 function gotoOrigin(row) {
   const r = DATA.exec.find(x => x._row === row); const o = execOrigin(r); if (!o) return;
-  const setSearch = (kind, q) => { FILTERS[kind] = { q }; $$(`[data-filter][data-kind=${kind}]`).forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = el.dataset.filter === "q" ? q : ""; }); renderList(kind); };
   if (o.kind === "인건비") { setMode(true); switchLaborTab("ledger"); setSearch("labor", r["거래번호"]); }
   else if (o.kind === "적립") { switchTab("deposit"); setSearch("deposit", r["거래번호"]); }
   else { switchTab("req"); setSearch("req", o.no); }
@@ -1557,7 +1562,8 @@ function markExecRow(prev, next) {
   const wrap = t.closest(".table-wrap"); if (wrap) wrap.classList.toggle("scrollable", t.scrollWidth > wrap.clientWidth + 4);  // 열 접기로 폭이 바뀜
 }
 function openExecDrawer(row, opts = {}) {
-  const prev = XD.row;
+  const prev = XD.kind === "exec" ? XD.row : null;
+  if (XD.kind !== "exec") { XD.kind = "exec"; renderList("deposit"); }
   XD.row = row; XD.evid = null;
   $("#ai-drawer").hidden = true;
   $("#exec-drawer").hidden = false; document.body.classList.add("drawer-open");
@@ -1568,7 +1574,8 @@ function openExecDrawer(row, opts = {}) {
 $("#xd-close").addEventListener("click", closeExecDrawer);
 
 // ---- 이전/다음 건: 지금 그려진 집행 표의 행 순서 ----
-function xdRows() { return $$("#exec-table tbody tr[data-row]").map(tr => Number(tr.dataset.row)); }
+function xdRows() { return $$(`#${XD.kind}-table tbody tr[data-row]`).map(tr => Number(tr.dataset.row)); }
+function rerenderDrawer(fetchEvid) { return XD.kind === "deposit" ? renderDepDrawer(fetchEvid) : renderExecDrawer(fetchEvid); }
 function updateXdNav() {
   if (XD.row == null || $("#exec-drawer").hidden) return;
   const rows = xdRows(), i = rows.indexOf(XD.row);
@@ -1581,8 +1588,8 @@ function xdNav(delta) {
   if (i < 0 || j < 0 || j >= rows.length) return false;
   // 본문은 다시 그려지므로 그 안에 있던 포커스는 드로어로 옮겨 둠 (계속 ↑↓ 가능)
   if ($("#xd-body").contains(document.activeElement)) $("#exec-drawer").focus();
-  openExecDrawer(rows[j], { focus: false });
-  $(`#exec-table tbody tr[data-row="${rows[j]}"]`)?.scrollIntoView({ block: "nearest" });
+  (XD.kind === "deposit" ? openDepDrawer : openExecDrawer)(rows[j], { focus: false });
+  $(`#${XD.kind}-table tbody tr[data-row="${rows[j]}"]`)?.scrollIntoView({ block: "nearest" });
   updateXdNav();
   return true;
 }
@@ -1699,8 +1706,6 @@ async function renderExecDrawer(fetchEvid) {
   const body = $("#xd-body"), scroll = XD.shownRow === r._row ? body.scrollTop : 0;
   const st = r["상태"], o = execOrigin(r), locked = !!o?.locked;
   const evid = XD.evid || [];
-  const kinds = [...new Set(evid.map(e => e["증빙종류"]).filter(Boolean))];
-  const nFile = evid.filter(evHasFile).length;
   const drive = XD.drive || {};
   // 타임라인: 마지막으로 날짜가 있는 단계의 다음이 '다음 단계'
   const last = XD_STAGES.reduce((a, s, i) => r[s[1]] ? i : a, -1), next = last + 1;
@@ -1734,8 +1739,75 @@ async function renderExecDrawer(fetchEvid) {
         ${XD_INLINE.map(([k, t]) => iv(k, t)).join("")}
       </div>
     </section>
+    ${evidSectionsHtml({ number: r["거래번호"], evid, drive, dateDefault: r["원인발생일"], folderHint: `증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])}`, folderUrl: r["증빙폴더"] })}
+    <section class="xd-sec xd-foot">${(() => { const ev = evid.length; const dis = locked || ev; const vOk = !!r["지출완료일"]; return `<button type="button" class="btn btn-sm" data-act="voucher" data-row="${r._row}"${vOk ? "" : " disabled"} title="${vOk ? "지출결의서 미리보기 · A4 인쇄" : VOUCHER_OFF}">결의서</button><button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
+  bindEvidForm({ number: r["거래번호"], rerender: () => renderExecDrawer(true) });
+  bindXdBody();
+  XD.formRow = r._row; XD.shownRow = r._row;
+  if (keepEntry) { const f = $("#evid-entry-form"); f.kind.value = keepEntry.kind; f.note.value = keepEntry.note; }
+  if (keep) { const f = $("#evid-form"); f.kind.value = keep.kind; if (keep.date) f.date.value = keep.date; f.note.value = keep.note; try { if (keep.files?.length && !f.files.disabled) f.files.files = keep.files; } catch { } }
+  body.scrollTop = scroll;
+}
+
+// ---- 적립금 드로어: 집행 드로어(#exec-drawer)를 같이 쓴다. 거래 정보 + 증빙 3절 ----
+function openDepDrawer(row, opts = {}) {
+  const prev = XD.kind === "deposit" ? XD.row : null;
+  if (XD.kind !== "deposit") { if (XD.row != null) markExecRow(XD.row, null); XD.kind = "deposit"; }
+  XD.row = row; XD.evid = null;
+  $("#ai-drawer").hidden = true;
+  $("#exec-drawer").hidden = false; document.body.classList.add("drawer-open");
+  const t = $("#deposit-table"); t.querySelector(`tbody tr[data-row="${prev}"]`)?.classList.remove("selected"); t.querySelector(`tbody tr[data-row="${row}"]`)?.classList.add("selected");
+  renderDepDrawer(true);
+  if (opts.focus !== false) $("#xd-close").focus();
+}
+async function renderDepDrawer(fetchEvid) {
+  const r = DATA.deposit.find(x => x._row === XD.row);
+  if (!r) { $("#exec-drawer").hidden = true; XD.row = null; return; }
+  const no = r["적립번호"] || "";
+  $("#xd-title").innerHTML = esc(no || "적립금");
+  $("#xd-sub").innerHTML = `${esc(r["일자"])} · ${esc(r["거래처"])} · ${esc(r["구분"])} <b>${fmt(r["금액"])}원</b>`;
+  updateXdNav();
+  const oldForm = $("#evid-form"), keep = oldForm && XD.formRow === r._row ? { kind: oldForm.kind.value, date: oldForm.date.value, note: oldForm.note.value, files: oldForm.files.files } : null;
+  const oldEntry = $("#evid-entry-form"), keepEntry = oldEntry && XD.formRow === r._row ? { kind: oldEntry.kind.value, note: oldEntry.note.value } : null;
+  const seq = ++XD.seq;
+  if (fetchEvid || !XD.evid) {
+    try { const d = no ? await api("GET", `/api/evidence/${encodeURIComponent(no)}`) : { items: [], drive: {} }; if (seq !== XD.seq || XD.row !== r._row) return; XD.evid = d.items; XD.drive = d.drive; }
+    catch (e) { XD.evid = []; XD.drive = { connected: false, error: e.message }; }
+  }
+  if (seq !== XD.seq) return;
+  const body = $("#xd-body"), scroll = XD.shownRow === r._row ? body.scrollTop : 0;
+  const evid = XD.evid || [], drive = XD.drive || {};
+  const kv = (k, v) => `<b>${k}</b><span class="xd-ro">${esc(v == null || v === "" ? "-" : v)}</span>`;
+  const lockedBy = r._locked_by;  // 주문이 남긴 사용 행: 핵심 열·삭제 잠금
+  const linkNo = r["연결거래번호"], linkEv = linkNo ? evidCountNo(linkNo) : 0;
+  body.innerHTML = `
+    <section class="xd-sec xd-info">
+      <h3>적립금 정보 <span class="badge">${esc(r["구분"])}</span><span class="sp"></span><button type="button" class="btn btn-sm" data-act="edit" data-kind="deposit" data-row="${r._row}">수정</button></h3>
+      ${lockedBy ? `<p class="toolbar-note xd-lock">주문 ${esc(lockedBy)} 에 연결된 적립금 기록입니다. 금액·거래처·구분·증빙번호는 주문 보기에서 처리합니다.</p>` : ""}
+      ${linkNo ? `<p class="toolbar-note">연결 집행 <button type="button" class="lnk" data-act="dep-exec" data-no="${esc(linkNo)}" title="집행내역에서 이 집행 보기">${esc(linkNo)}</button> · 그 집행의 증빙 ${linkEv}개 (이 적립금 기록의 증빙과 별개)</p>` : ""}
+      <div class="kv">
+        ${kv("일자", r["일자"])}${kv("거래처", r["거래처"])}${kv("금액", fmt(r["금액"]) + "원")}${kv("적요", r["적요"])}
+        ${kv("사용자", r["사용자"])}${kv("증빙번호(수기)", r["증빙번호"])}${kv("태그", r["태그"])}${kv("비고", r["비고"])}
+      </div>
+    </section>
+    ${evidSectionsHtml({ number: no, evid, drive, dateDefault: r["일자"], folderHint: `증빙관리/${esc((r["일자"] || "").slice(0, 4))}/적립금/${esc(r["거래처"])}/${esc(no)}` })}
+    <section class="xd-sec xd-foot">${(() => { const ev = evid.length, dis = lockedBy || ev; return `<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="deposit" data-row="${r._row}"${dis ? " disabled" : ""} title="${lockedBy ? "주문 연결 행: 주문 보기에서 처리" : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 적립금 기록을 삭제"}">이 기록 삭제</button>${dis ? `<span class="toolbar-note">${lockedBy ? "주문에 연결된 기록이라 주문 보기에서 처리합니다" : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
+  bindEvidForm({ number: no, rerender: () => renderDepDrawer(true) });
+  bindXdBody();
+  XD.formRow = r._row; XD.shownRow = r._row;
+  if (keepEntry) { const f = $("#evid-entry-form"); f.kind.value = keepEntry.kind; f.note.value = keepEntry.note; }
+  if (keep) { const f = $("#evid-form"); f.kind.value = keep.kind; if (keep.date) f.date.value = keep.date; f.note.value = keep.note; try { if (keep.files?.length && !f.files.disabled) f.files.files = keep.files; } catch { } }
+  body.scrollTop = scroll;
+}
+// 증빙 절 3개(목록 · 실물만 항목 추가 · 업로드): 집행 드로어와 적립금 드로어가 같이 쓴다.
+// c = { number(거래번호|적립번호), evid, drive, dateDefault(파일명 날짜 기본값), folderHint(끌어놓기 칸 안내), folderUrl(폴더 열기, 없으면 생략) }
+function evidSectionsHtml(c) {
+  const evid = c.evid || [], drive = c.drive || {};
+  const kinds = [...new Set(evid.map(e => e["증빙종류"]).filter(Boolean))];
+  const nFile = evid.filter(evHasFile).length;
+  return `
     <section class="xd-sec">
-      <h3>증빙 <span class="toolbar-note">${evid.length}개${nFile < evid.length ? ` · 파일 ${nFile}개` : ""}</span><span class="sp"></span>${r["증빙폴더"] ? `<a class="btn btn-sm" href="${esc(r["증빙폴더"])}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
+      <h3>증빙 <span class="toolbar-note">${evid.length}개${nFile < evid.length ? ` · 파일 ${nFile}개` : ""}</span><span class="sp"></span>${c.folderUrl ? `<a class="btn btn-sm" href="${esc(c.folderUrl)}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
       ${!drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않았습니다. 오른쪽 위 설정(톱니)에서 연결하면 업로드할 수 있습니다.${drive.error ? " (" + esc(drive.error) + ")" : ""}</p>` : ""}
       ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th class="xd-th-cell"><span class="sr-only">미리보기</span></th><th>증빙</th><th>파일</th><th>비고</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>
         ${evid.map(evidRowHtml).join("")}
@@ -1755,19 +1827,12 @@ async function renderExecDrawer(fetchEvid) {
       <h3>증빙 업로드</h3>
       <form id="evid-form" class="evid-form">
         <label>증빙종류 <input type="text" name="kind" list="dl-증빙종류" required autocomplete="off" placeholder="예: 카드전표, 견적서, 회의록"></label>
-        <label>파일명 날짜 <input type="date" name="date" value="${esc(r["원인발생일"] || today())}"></label>
+        <label>파일명 날짜 <input type="date" name="date" value="${esc(c.dateDefault || today())}"></label>
         <label>비고 <input type="text" name="note" placeholder="선택"></label>
         <label class="file-pick">파일 <span class="file-pick-row"><input type="file" name="files" multiple ${drive.connected ? "" : "disabled"}><span class="btn btn-sm file-btn" aria-hidden="true">파일 선택</span><span class="file-names">선택된 파일 없음</span></span></label>
-        <div class="wide evid-drop-row"><div class="drop" id="evid-drop" title="이름은 재원_적요_증빙종류_금액_YYMMDD 로 자동 변환됩니다"><b>파일을 여기로 끌어다 놓기</b> · 증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])}</div><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
+        <div class="wide evid-drop-row"><div class="drop" id="evid-drop" title="이름은 ${c.number.startsWith("적립-") ? "거래처_적요_증빙종류_금액_YYMMDD" : "재원_적요_증빙종류_금액_YYMMDD"} 로 자동 변환됩니다"><b>파일을 여기로 끌어다 놓기</b> · ${c.folderHint}</div><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
       </form>
-    </section>
-    <section class="xd-sec xd-foot">${(() => { const ev = evid.length; const dis = locked || ev; const vOk = !!r["지출완료일"]; return `<button type="button" class="btn btn-sm" data-act="voucher" data-row="${r._row}"${vOk ? "" : " disabled"} title="${vOk ? "지출결의서 미리보기 · A4 인쇄" : VOUCHER_OFF}">결의서</button><button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
-  bindEvidForm(r);
-  bindXdBody();
-  XD.formRow = r._row; XD.shownRow = r._row;
-  if (keepEntry) { const f = $("#evid-entry-form"); f.kind.value = keepEntry.kind; f.note.value = keepEntry.note; }
-  if (keep) { const f = $("#evid-form"); f.kind.value = keep.kind; if (keep.date) f.date.value = keep.date; f.note.value = keep.note; try { if (keep.files?.length && !f.files.disabled) f.files.files = keep.files; } catch { } }
-  body.scrollTop = scroll;
+    </section>`;
 }
 // 증빙 한 줄: 파일이 없으면(실물만 항목) '파일 없음' 표시와 [파일 첨부]
 const evHasFile = e => e.has_file ?? !!(e["파일명"] || e["드라이브파일ID"]);
@@ -1794,7 +1859,8 @@ function bindXdBody() {
   });
 }
 
-function bindEvidForm(r) {
+// 증빙 폼 동작 바인딩. c = { number(거래번호|적립번호), rerender(저장 뒤 드로어 다시 그리기) }
+function bindEvidForm(c) {
   const form = $("#evid-form"); if (!form) return;
   const fileInput = form.querySelector("[name=files]");
   const names = form.querySelector(".file-names");
@@ -1812,13 +1878,13 @@ function bindEvidForm(r) {
     if (!fd.get("kind").trim()) { showAlert("증빙종류를 입력하세요.", "warn"); form.querySelector("[name=kind]").focus(); return; }
     const btn = form.querySelector("button[type=submit]"); btn.disabled = true; btn.textContent = `업로드 중… (${files.length}개)`;
     try {
-      const res = await fetch(`/api/evidence/${encodeURIComponent(r["거래번호"])}`, { method: "POST", body: fd });
+      const res = await fetch(`/api/evidence/${encodeURIComponent(c.number)}`, { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       const d = await res.json();
       const up = d.items || [];
       showAlert(`${up.length}개 업로드 완료`, "ok", up.length ? { action: { label: "양식 인쇄", run: () => openMount(up, 0, null) } } : {});
       await load();
-      await renderExecDrawer(true);
+      await c.rerender();
     } catch (err) { showAlert("업로드 실패: " + err.message, "error"); btn.disabled = false; btn.textContent = "업로드"; }
   });
   // 증빙 항목 추가 (파일 없이 실물만): 증빙번호를 받고, 알림에서 바로 첨부 양식 인쇄
@@ -1829,10 +1895,10 @@ function bindEvidForm(r) {
     if (!kind) { showAlert("증빙종류를 입력하세요.", "warn"); ef.kind.focus(); return; }
     const btn = ef.querySelector("button[type=submit]"); btn.disabled = true; btn.textContent = "추가 중…";
     try {
-      const it = await api("POST", `/api/evidence/${encodeURIComponent(r["거래번호"])}/entry`, { 증빙종류: kind, 비고: note });
+      const it = await api("POST", `/api/evidence/${encodeURIComponent(c.number)}/entry`, { 증빙종류: kind, 비고: note });
       ef.kind.value = ""; ef.note.value = "";
       showAlert(`증빙 항목 ${it["증빙번호"]} 을 추가했습니다 (파일 없음)`, "ok", { action: { label: "양식 인쇄", run: () => openMount([it], 0, null) } });
-      await load(); await renderExecDrawer(true);
+      await load(); await c.rerender();
     } catch (err) { showAlert("항목 추가 실패: " + err.message, "error"); btn.disabled = false; btn.textContent = "항목 추가"; }
   });
   // [파일 첨부]: 실물만 항목에 파일 1개를 붙임 (같은 증빙번호·종류·비고, 드라이브 이름·폴더 규칙은 업로드와 같음)
@@ -1844,10 +1910,10 @@ function bindEvidForm(r) {
     const fd = new FormData(); fd.append("files", f); fd.append("row", String(row)); fd.append("증빙번호", e["증빙번호"]);
     const d = $("#evid-form")?.date.value; if (d) fd.append("date", d);
     try {
-      const res = await fetch(`/api/evidence/${encodeURIComponent(r["거래번호"])}`, { method: "POST", body: fd });
+      const res = await fetch(`/api/evidence/${encodeURIComponent(c.number)}`, { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
       showAlert(`증빙 ${e["증빙번호"]} 에 파일을 첨부했습니다`, "ok");
-      await load(); await renderExecDrawer(true);
+      await load(); await c.rerender();
       $(`#xd-body [data-evmount="${row}"]`)?.focus();
     } catch (err) { showAlert("첨부 실패: " + err.message, "error"); if (b?.isConnected) { b.disabled = false; b.textContent = "파일 첨부"; b.focus(); } }
   });
@@ -1862,7 +1928,7 @@ function bindEvidForm(r) {
     try {
       const res = await api("DELETE", `/api/evidence/${row}`, { expect: e ? { 거래번호: e["거래번호"], 증빙번호: e["증빙번호"], 파일명: e["파일명"] } : undefined });
       showAlert(res.warning || "증빙을 삭제했습니다.", res.warning ? "warn" : "ok");
-      await load(); await renderExecDrawer(true);
+      await load(); await c.rerender();
     } catch (err) { showAlert(err.message, "error"); }
   }));
 }
