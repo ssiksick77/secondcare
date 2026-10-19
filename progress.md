@@ -29,6 +29,7 @@ Updated: 2026-10-16
 - checks: configured, pass (smoke, test: calc 32, API 38, UI 38). The test step needs node and Playwright chromium; about 2.5 minutes, so run it with a timeout above 300 s. No lint or typecheck yet.
 - 공금 leftovers: labor screen's 인건비예산 fallback still sums 예산목 budgets (empty for 공금); 재원 list has no 종류 filter; existing live ledger will get 종류=국책 written on its first save after this version.
 - Uncommitted before adoption and untouched: `QA set/` (untracked) and `memo.md` (deleted in the working tree, was an empty file). Decide whether to commit or restore them.
+- 2026-10-19 fixed: startup sheet check leaked a read_only workbook handle and blocked every save since 10-18 13:32 (5926413). Entries made 10-18 afternoon to 10-19 morning were lost and must be re-entered by the user.
 - 학회 review leftovers: form conflict [새로 불러오기] button, leg Tab order, P3 list in docs/점검_2026-10-16_신청_학회.md.
 - 기타 review leftovers: P3 list in docs/점검_2026-10-16_신청_기타.md.
 - Server role check (연구원/담당자) is deferred; see ideas.md.
@@ -44,6 +45,8 @@ Updated: 2026-10-16
 - 2026-10-16 (user): currency list is fixed; one rate input per currency in use; all rates are won per 1 unit.
 - `scripts/check.sh` uses the import check from `run.bat` as the only step, because no other check command exists. Add real checks before feature work.
 - Skills are linked with Windows junctions and the agent file is copied, because symlinks need elevated permission here.
+- 2026-10-19 (user) 예산목 잔액(집행내역 표·결의서 재원 현황): 예산변동을 신청일자 기준으로 집행과 날짜 순으로 섞어 누적 (이월+당초 − 1차 변경일까지 사용액 + 1차 변경액 …). 신청일자는 필수, 빈 값은 장부 연도 1월 1일로 보정. My calls: same-day budget change applies before that day's transactions; ledger year = earliest 원인발생일/신청일자, else this year. 폼 경고·대시보드 가용잔액은 전체 예산현액 기준 그대로.
+- 2026-10-19 PostgreSQL 이전은 보류 (user: later). 신호가 생기면 SQLite 먼저 검토.
 
 ## Next action
 
