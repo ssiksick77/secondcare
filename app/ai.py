@@ -306,7 +306,7 @@ def report_facts(fund: str, year: str, month: str) -> str:
         d = str(r.get(dcol) or "")
         return (not fund or r.get("재원") == fund) and (not year or d.startswith(year)) and (not month or d[5:7] <= month.zfill(2))
     sub = dict(data)
-    sub["exec"] = [r for r in data["exec"] if in_scope(r, "원인발생일")]
+    sub["exec"] = [r for r in store.active_exec(data["exec"]) if in_scope(r, "원인발생일")]  # 취소 건 제외
     sub["req"] = [r for r in data["req"] if in_scope(r, "원인발생일")]
     if fund:
         sub["funds"] = [f for f in data["funds"] if f["재원코드"] == fund]

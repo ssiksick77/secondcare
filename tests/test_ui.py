@@ -233,7 +233,21 @@ def main() -> int:
         ck("보완 표시: 저장됨", st_ == "보완", st_)
         pg.evaluate(f"openExecDrawer({fx_row})"); pg.wait_for_timeout(800)
         dt_ = pg.inner_text("#exec-drawer")
-        ck("드로어: 보완 이력 표시", "보완 이력" in dt_ and "영수증 원본 누락" in dt_)
+        ck("드로어: 보완 이력 표시", "보완·취소 이력" in dt_ and "영수증 원본 누락" in dt_)
+        # ---- 집행 취소 (드로어 [취소] → 사유 선택 입력) ----
+        pg.evaluate("setTimeout(() => execAction(%d, 'cancel'), 0)" % fx_row); pg.wait_for_timeout(400)
+        ck("취소: 사유(선택) 대화상자", pg.evaluate("document.querySelector('#dlg-confirm').open && !document.querySelector('#confirm-input-wrap').hidden"))
+        pg.click("#confirm-ok")
+        st_c = None
+        for _ in range(25):
+            st_c = pg.evaluate(f"(DATA.exec.find(x=>x._row==={fx_row})||{{}})['상태']")
+            if st_c == "취소":
+                break
+            pg.wait_for_timeout(300)
+        ck("취소: 사유 없이도 저장, 상태 취소", st_c == "취소", st_c)
+        ck("취소: 표 배지·해제 링크·흐린 행", pg.evaluate(f"(() => {{ const tr = document.querySelector('#exec-table tbody tr[data-row=\"{fx_row}\"]'); return !!tr && tr.classList.contains('row-cancel') && tr.innerText.includes('취소') && !!tr.querySelector('[data-action=uncancel]'); }})()"))
+        ck("취소: 예산목 잔액 열 '-'", pg.evaluate(f"runningBalance(DATA.exec.find(x=>x._row==={fx_row})) === null"))
+        ck("취소: 빠른 필터 타일", "취소" in pg.inner_text("#exec-tiles"))
         ck("페이지 오류 없음", not errs, errs)
         b.close()
     return ck.done("화면")

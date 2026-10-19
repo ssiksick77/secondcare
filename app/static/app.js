@@ -13,8 +13,10 @@ const mmdd = d => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d.s
 const IDENT = { funds: ["재원코드"], exec: ["거래번호"], req: ["품의번호"], tags: ["태그명"], vendor: ["거래처명", "코드"], budget: ["재원", "변경회차", "신청일자"], deposit: ["일자", "거래처", "구분", "금액"] };
 const F = k => document.getElementById("f-" + k);
 // 단계 ↔ 날짜: 발생=원인발생일, 청구=지급청구일, (보완=수동 표시), 승인=지출완료일, 결의=결의일
-const STATUS_LABEL = { 발생: "발생", 청구: "청구", 보완: "보완", 완료: "승인", 결의: "완료" };  // 결의일이 등록되면 '완료'로 표시
-const STATUS_HELP = { 발생: "원인발생일만 있음. 다음: 청구(지급청구일)", 청구: "지급청구일 등록됨. 다음: 승인(지출완료일)", 보완: "서류·증빙 보완이 필요하다고 표시한 건 (청구 단계)", 완료: "지출완료일 등록됨(승인). 다음: 결의(결의일)", 결의: "결의일 등록됨, 완료" };
+const STATUS_LABEL = { 발생: "발생", 청구: "청구", 보완: "보완", 완료: "승인", 결의: "완료", 취소: "취소" };
+const isCancelled = r => r?.["상태"] === "취소";  // 취소 건: 표에는 남고 모든 합계·잔액·집계·결의서에서 빠진다 (2026-10-19)
+const activeExec = () => DATA.exec.filter(r => !isCancelled(r));  // 결의일이 등록되면 '완료'로 표시
+const STATUS_HELP = { 취소: "취소된 집행. 금액은 어떤 합계·잔액에도 들어가지 않음 (상세 패널에서 해제 가능)", 발생: "원인발생일만 있음. 다음: 청구(지급청구일)", 청구: "지급청구일 등록됨. 다음: 승인(지출완료일)", 보완: "서류·증빙 보완이 필요하다고 표시한 건 (청구 단계)", 완료: "지출완료일 등록됨(승인). 다음: 결의(결의일)", 결의: "결의일 등록됨, 완료" };
 // 상태 열의 다음 단계 버튼: [동작, 라벨, 설명]
 const NEXT_STEP = { 발생: ["claim", "청구", "지급청구일을 오늘로 등록"], 청구: ["complete", "승인", "지출완료일을 오늘로 등록"], 보완: ["complete", "승인", "지출완료일을 오늘로 등록 (보완 해제)"], 완료: ["resolve", "결의", "결의일을 오늘로 등록 (마지막 단계)"] };
 // 적립금 사용 행의 단계 (2026-10-19, 집행 단계 방식): 대기 → 발주(발주일) → 결제(결제일) → 수령(수령일). 적립 행은 단계 없음
@@ -287,6 +289,7 @@ function filtered(kind) {
       if (QUICK === "fix" && r["상태"] !== "보완") return false;
       if (QUICK === "done" && r["상태"] !== "완료") return false;
       if (QUICK === "resolved" && r["상태"] !== "결의") return false;
+      if (QUICK === "cancel" && r["상태"] !== "취소") return false;
       if (QUICK === "noevid" && hasEvidence(r)) return false;
       if (QUICK === "excluded" && !isExcludedExec(r)) return false;
     }
@@ -344,6 +347,7 @@ function renderList(kind) {
         // 두 줄: 윗줄 상태 + 다음 단계 체크, 아랫줄 그 단계의 날짜(+ 청구 단계에서는 보완 표시/해제 링크)
         const stDate = kind === "exec" ? { 청구: r["지급청구일"], 보완: r["지급청구일"], 완료: r["지출완료일"], 결의: r["결의일"] }[v] : null;
         const fixLink = kind === "exec" && v === "청구" ? `<button type="button" class="lnk" data-act="xact" data-action="fix" data-row="${r._row}" title="서류·증빙 보완 필요로 표시">보완</button>`
+          : kind === "exec" && v === "취소" ? `<button type="button" class="lnk" data-act="xact" data-action="uncancel" data-row="${r._row}" title="${esc(latestCancel(r["거래번호"])?.["사유"] ? "취소 사유: " + latestCancel(r["거래번호"])["사유"] + " — 눌러서 해제" : "취소 해제")}" aria-label="취소 해제">해제</button>`
           : kind === "exec" && v === "보완" ? `<button type="button" class="lnk fix" data-act="xact" data-action="unfix" data-row="${r._row}" title="${esc(latestFix(r["거래번호"])?.["사유"] ? "보완 사유: " + latestFix(r["거래번호"])["사유"] + " — 눌러서 해제" : "보완 표시 해제")}" aria-label="보완 해제">해제</button>` : "";
         const sub = kind === "exec" && (stDate || fixLink) ? `<div class="s">${stDate ? `<span title="${esc(stDate)}">${esc(mmdd(stDate))}</span>` : ""}${stDate && fixLink ? " · " : ""}${fixLink}</div>` : "";
         return `<td class="st-cell${v === "보완" ? " fix" : ""}"><div class="t"><span class="badge ${esc(v)}" title="${esc(kind === "exec" ? STATUS_HELP[v] || "" : "")}">${esc(kind === "exec" ? STATUS_LABEL[v] || v : v)}</span>${nx ? `<button type="button" class="next" data-act="xact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : (kind === "exec" ? '<span class="next ph" aria-hidden="true"></span>' : "")}</div>${sub || (kind === "exec" ? '<div class="s">&nbsp;</div>' : "")}</td>`;
@@ -357,7 +361,7 @@ function renderList(kind) {
       ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}">집행전환</button>`
       : kind === "labor" ? (r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
     const editBtn = kind === "labor" && r["상태"] === "확정" ? "" : `<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button>`;
-    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === XD.kind && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}${SEL_HOOK[kind]?.rowCls(r) || ""}">${SEL_HOOK[kind]?.cell(r) || ""}${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${noAct ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;
+    return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === XD.kind && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}${kind === "exec" && r["상태"] === "취소" ? " row-cancel" : ""}${SEL_HOOK[kind]?.rowCls(r) || ""}">${SEL_HOOK[kind]?.cell(r) || ""}${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${noAct ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;
   }
   let foot = "";
   if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor" || kind === "request")) {
@@ -424,14 +428,14 @@ try { const st = localStorage.getItem("ledger-subtab"); if (st && $("#sub-" + st
 function renderTagDashboard(fund, year) {
   const linked = new Set(DATA.deposit.map(r => r["연결거래번호"]).filter(Boolean));
   const inYear = d => !year || (d || "").startsWith(year);
-  const rows = DATA.exec.filter(r => !linked.has(r["거래번호"]) && (!fund || r["재원"] === fund) && inYear(r["원인발생일"]))
+  const rows = activeExec().filter(r => !linked.has(r["거래번호"]) && (!fund || r["재원"] === fund) && inYear(r["원인발생일"]))
     .map(r => ({ tag: r["태그"], d: r["원인발생일"], amt: r["금액"] || 0, src: "exec" }));
   if (!fund) rows.push(...DATA.deposit.filter(r => r["구분"] === "사용" && inYear(r["일자"])).map(r => ({ tag: r["태그"], d: r["일자"], amt: r["금액"] || 0, src: "dep" })));
   $("#tag-note").textContent = (fund ? "재원 필터 적용 중: 적립금 사용 건(재원 없음)은 제외됩니다. " : "집행내역(적립 선결제 건 제외) + 적립금 사용 건. ")
     + (year ? `${year}년 기준.` : "전체 기간.");
   {
-    const execAll = DATA.exec.filter(r => (!fund || r["재원"] === fund) && inYear(r["원인발생일"])).reduce((a, r) => a + (r["금액"] || 0), 0);
-    const linkedAmt = DATA.exec.filter(r => linked.has(r["거래번호"]) && (!fund || r["재원"] === fund) && inYear(r["원인발생일"])).reduce((a, r) => a + (r["금액"] || 0), 0);
+    const execAll = activeExec().filter(r => (!fund || r["재원"] === fund) && inYear(r["원인발생일"])).reduce((a, r) => a + (r["금액"] || 0), 0);
+    const linkedAmt = activeExec().filter(r => linked.has(r["거래번호"]) && (!fund || r["재원"] === fund) && inYear(r["원인발생일"])).reduce((a, r) => a + (r["금액"] || 0), 0);
     const depUse = fund ? 0 : DATA.deposit.filter(r => r["구분"] === "사용" && inYear(r["일자"])).reduce((a, r) => a + (r["금액"] || 0), 0);
     $("#tag-recon").textContent = `조정: 예산 집계 집행액 ${fmt(execAll)} − 적립 선결제 ${fmt(linkedAmt)} + 적립금 사용 ${fmt(depUse)} = 태그 집계 ${fmt(execAll - linkedAmt + depUse)}원`;
   }
@@ -489,7 +493,7 @@ function renderDashboard() {
   const upTo = r => !month || (r["원인발생일"] || "").slice(5, 7) <= month;
   const inMonth = r => month && (r["원인발생일"] || "").slice(5, 7) === month;
   // 잔액·가용잔액·집행률은 파일 전체 기준(sa), 연·월 필터는 '집행액'(s)·'M월 집행'(sm) 열에만 적용. 대기 품의는 날짜 무관 전부 차감 (2026-10-13 결정)
-  const execsAll = DATA.exec.filter(r => !fund || r["재원"] === fund);
+  const execsAll = activeExec().filter(r => !fund || r["재원"] === fund);
   const execs = execsAll.filter(r => inYear(r) && upTo(r));
   const reqs = DATA.req.filter(r => r["상태"] === "대기" && (!fund || r["재원"] === fund) && !isExcludedExec(r));  // 목록 밖 재원·예산목 품의는 집계 제외
   const budgets = DATA.budget.filter(r => !fund || r["재원"] === fund);
@@ -855,7 +859,7 @@ function runningBalance(r) {
       const f = list[0]["재원"], i = list[0]["예산목"];
       list.sort((a, c) => (a["원인발생일"] || "").localeCompare(c["원인발생일"] || "") || a._row - c._row);
       let acc = 0;
-      list.forEach(x => { acc += x["금액"] || 0; const b = isUntrackedFund(f) ? 0 : budgetUpTo(f, i, x["원인발생일"]); RUN_BAL.set(x._row, b ? b - acc : null); });
+      list.forEach(x => { if (isCancelled(x)) { RUN_BAL.set(x._row, null); return; } acc += x["금액"] || 0; const b = isUntrackedFund(f) ? 0 : budgetUpTo(f, i, x["원인발생일"]); RUN_BAL.set(x._row, b ? b - acc : null); });
     });
   }
   return RUN_BAL.get(r._row) ?? null;
@@ -865,13 +869,13 @@ function availableBudget(fund, item, opts = {}) {
   if (isPoolFund(fund)) {  // 공금: 예산목과 무관한 재원 잔액
     const b = poolDeposit(fund);
     if (!b) return null;
-    const s = DATA.exec.filter(r => r["재원"] === fund && r._row !== opts.excludeExec).reduce((a, r) => a + (r["금액"] || 0), 0);
+    const s = activeExec().filter(r => r["재원"] === fund && r._row !== opts.excludeExec).reduce((a, r) => a + (r["금액"] || 0), 0);
     const p = DATA.req.filter(r => r["재원"] === fund && r["상태"] === "대기" && r._row !== opts.excludeReq).reduce((a, r) => a + (r["금액"] || 0), 0);
     return b - s - p;
   }
   const b = DATA.budget.filter(r => r["재원"] === fund).reduce((a, r) => a + (r[item] || 0), 0);
   if (!b) return null;  // 예산 미입력(재원 또는 예산목)은 '-' 로 표시하고 경고 생략 (대시보드 '예산 미입력'과 동일 기준)
-  const s = DATA.exec.filter(r => r["재원"] === fund && r["예산목"] === item && r._row !== opts.excludeExec).reduce((a, r) => a + (r["금액"] || 0), 0);
+  const s = activeExec().filter(r => r["재원"] === fund && r["예산목"] === item && r._row !== opts.excludeExec).reduce((a, r) => a + (r["금액"] || 0), 0);
   const p = DATA.req.filter(r => r["재원"] === fund && r["예산목"] === item && r["상태"] === "대기" && r._row !== opts.excludeReq).reduce((a, r) => a + (r["금액"] || 0), 0);
   return b - s - p;
 }
@@ -1534,6 +1538,7 @@ function renderExecTiles() {
     ["done", "승인 (결의 대기)", n(r => r["상태"] === "완료")],
     ["noevid", "증빙 없음", n(r => !hasEvidence(r))],
     ["resolved", "완료", n(r => r["상태"] === "결의")],
+    ["cancel", "취소", n(r => r["상태"] === "취소")],
   ];
   $("#exec-tiles").innerHTML = tiles.map(([k, l, c]) => `<div class="card ${QUICK === k ? "on" : ""}" role="button" tabindex="0" data-quick="${k}" aria-pressed="${QUICK === k}"><div class="k">${l}</div><div class="v">${c}건</div></div>`).join("");
 }
@@ -1544,6 +1549,7 @@ $$("[data-filter][data-kind=exec]").forEach(el => el.addEventListener("input", r
 // 보완 이력 (보완이력 시트): 거래번호별 최신순
 const fixLogOf = no => (DATA.fixlog || []).filter(x => x["거래번호"] === no).sort((a, b) => String(b["일시"]).localeCompare(String(a["일시"])) || b._row - a._row);
 const latestFix = no => fixLogOf(no).find(x => x["구분"] === "표시") || null;
+const latestCancel = no => fixLogOf(no).find(x => x["구분"] === "취소") || null;
 // 적립금 사용 행의 단계 처리 ([오늘 등록]·상태 열 체크). 서버가 앞 단계 빈 날짜를 채우고 뒤 단계가 있으면 취소를 거부한다
 async function depAction(row, action, btn) {
   const r = DATA.deposit.find(x => x._row === row); if (!r) return;
@@ -1578,13 +1584,22 @@ async function depSetDate(row, col, value) {
 async function execAction(row, action, btn) {
   const r = DATA.exec.find(x => x._row === row); if (!r) return;
   const md = (() => { const [, m, d] = today().split("-"); return `${parseInt(m)}/${parseInt(d)}`; })();
-  const label = { claim: `청구 처리 · 지급청구일 ${md}`, resolve: `결의 처리 · 결의일 ${md} (완료)`, unresolve: "결의 취소", complete: `승인 처리 · 지출완료일 ${md}`, fix: "보완 표시", unfix: "보완 해제", uncomplete: "승인 취소 · 지출완료일 삭제" }[action];
+  const label = { cancel: "취소", uncancel: "취소 해제", claim: `청구 처리 · 지급청구일 ${md}`, resolve: `결의 처리 · 결의일 ${md} (완료)`, unresolve: "결의 취소", complete: `승인 처리 · 지출완료일 ${md}`, fix: "보완 표시", unfix: "보완 해제", uncomplete: "승인 취소 · 지출완료일 삭제" }[action];
   if (action === "uncomplete" && !await confirmDlg({ title: "승인 취소", body: `${r["거래번호"]} 의 지출완료일(${r["지출완료일"]})을 지우고 청구 상태로 되돌립니다.`, verb: "승인 취소", danger: true })) return;
   let extra = null;  // 보완: 사유를 받아 보완이력에 남긴다 (표시는 필수, 해제는 선택)
   if (action === "fix") {
     const reason = await confirmDlg({ title: `보완 표시 · ${r["거래번호"]}`, body: `${r["거래처"] || "-"} · ${fmt(r["금액"])}원 · ${r["적요"] || ""}\n\n무엇을 보완해야 하는지 적으세요. 보완 이력에 남고 상세 패널에서 볼 수 있습니다.`, verb: "보완 표시", input: { label: "보완 사유", value: "", required: true, error: "보완 사유를 입력하세요." } });
     if (reason === null) return;
     extra = { 사유: String(reason).trim() };
+  } else if (action === "cancel") {
+    const memo = await confirmDlg({ title: `집행 취소 · ${r["거래번호"]}`, body: `${r["거래처"] || "-"} · ${fmt(r["금액"])}원 · ${r["적요"] || ""}\n\n취소하면 이 금액은 집행액·잔액·대시보드·결의서에서 빠집니다. 행은 '취소' 상태로 남고 언제든 해제할 수 있습니다.`, verb: "취소", danger: true, input: { label: "취소 사유 (선택)", value: "", required: false } });
+    if (memo === null) return;
+    extra = { 사유: String(memo).trim() };
+  } else if (action === "uncancel") {
+    const last = latestCancel(r["거래번호"]);
+    const memo = await confirmDlg({ title: `취소 해제 · ${r["거래번호"]}`, body: `${last ? `취소 사유: ${last["사유"] || "-"} (${last["일시"]})\n\n` : ""}해제하면 날짜대로 상태가 돌아오고 금액이 다시 집계됩니다.`, verb: "취소 해제", input: { label: "메모 (선택)", value: "", required: false } });
+    if (memo === null) return;
+    extra = { 사유: String(memo).trim() };
   } else if (action === "unfix") {
     const last = latestFix(r["거래번호"]);
     const memo = await confirmDlg({ title: `보완 해제 · ${r["거래번호"]}`, body: `${last ? `보완 사유: ${last["사유"]} (${last["일시"]})\n\n` : ""}보완이 끝났으면 해제합니다. 처리 내용은 선택 사항입니다.`, verb: "보완 해제", input: { label: "처리 내용 (선택)", value: "", required: false } });
@@ -1777,8 +1792,8 @@ async function renderExecDrawer(fetchEvid) {
       <h3>처리 단계 <span class="badge ${esc(st)}" title="${esc(STATUS_HELP[st] || "")}">${esc(STATUS_LABEL[st] || st)}</span></h3>
       <ol class="xd-timeline">${steps}</ol>
     </section>
-    ${(() => { const log = fixLogOf(r["거래번호"]); if (!log.length && st !== "보완") return ""; return `<section class="xd-sec xd-fixlog" aria-label="보완 이력"><h3>보완 이력${st === "보완" && log[0] ? ` <span class="muted">· 현재 보완 필요</span>` : ""}</h3>
-      <ul class="xd-fixlist">${log.map(x => `<li class="${x["구분"] === "표시" ? "mark" : "clear"}"><span class="fl-when">${esc(x["일시"])}</span><span class="fl-kind">${esc(x["구분"])}</span><span class="fl-why">${esc(x["사유"] || "-")}</span></li>`).join("") || '<li class="muted">기록 없음</li>'}</ul></section>`; })()}
+    ${(() => { const log = fixLogOf(r["거래번호"]); if (!log.length && st !== "보완") return ""; return `<section class="xd-sec xd-fixlog" aria-label="보완·취소 이력"><h3>보완·취소 이력${st === "보완" && log[0] ? ` <span class="muted">· 현재 보완 필요</span>` : st === "취소" ? ` <span class="muted">· 현재 취소됨</span>` : ""}</h3>
+      <ul class="xd-fixlist">${log.map(x => `<li class="${x["구분"] === "표시" || x["구분"] === "취소" ? "mark" : "clear"}"><span class="fl-when">${esc(x["일시"])}</span><span class="fl-kind">${esc(x["구분"])}</span><span class="fl-why">${esc(x["사유"] || "-")}</span></li>`).join("") || '<li class="muted">기록 없음</li>'}</ul></section>`; })()}
     <section class="xd-sec xd-info">
       <h3>집행 정보 <span class="sp"></span><button type="button" class="btn btn-sm" data-act="edit" data-kind="exec" data-row="${r._row}" title="재원·예산목·금액·거래처·적요는 수정 창에서">수정</button></h3>
       ${locked ? `<p class="toolbar-note xd-lock">${esc(o.label)} 에서 생긴 집행입니다. 재원·예산목·금액·거래처·원인발생일은 원본에서 처리합니다.</p>` : ""}
@@ -1788,7 +1803,9 @@ async function renderExecDrawer(fetchEvid) {
       </div>
     </section>
     ${evidSectionsHtml({ number: r["거래번호"], evid, drive, dateDefault: r["원인발생일"], folderHint: `증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])}`, folderUrl: r["증빙폴더"] })}
-    <section class="xd-sec xd-foot">${(() => { const ev = evid.length; const dis = locked || ev; const vOk = !!r["지출완료일"]; return `<button type="button" class="btn btn-sm" data-act="voucher" data-row="${r._row}"${vOk ? "" : " disabled"} title="${vOk ? "지출결의서 미리보기 · A4 인쇄" : VOUCHER_OFF}">결의서</button><button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
+    <section class="xd-sec xd-foot">${(() => { const ev = evid.length; const dis = locked || ev; const vOk = !!r["지출완료일"] && st !== "취소"; return `<button type="button" class="btn btn-sm" data-act="voucher" data-row="${r._row}"${vOk ? "" : " disabled"} title="${st === "취소" ? "취소된 집행" : vOk ? "지출결의서 미리보기 · A4 인쇄" : VOUCHER_OFF}">결의서</button>${st === "취소"
+      ? `<button type="button" class="btn btn-sm" data-act="xact" data-action="uncancel" data-row="${r._row}" title="취소를 해제하고 날짜대로 상태를 되돌림">취소 해제</button>`
+      : `<button type="button" class="btn btn-sm" data-act="xact" data-action="cancel" data-row="${r._row}"${locked ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : "이 집행을 취소 (금액은 집계에서 빠지고 행은 남음, 해제 가능)"}">취소</button>`}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
   bindEvidForm({ number: r["거래번호"], rerender: () => renderExecDrawer(true) });
   bindXdBody();
   XD.formRow = r._row; XD.shownRow = r._row;
@@ -2075,7 +2092,7 @@ const vcNum = n => n < 0 ? "−" + fmt(-n) : fmt(n);   // 음수는 U+2212
 // 예산은 이 거래의 원인발생일까지 신청된 예산변동만 (runningBalance 와 같은 기준)
 function voucherFund(r) {
   const fund = r["재원"], upTo = x => ((x["원인발생일"] || "").localeCompare(r["원인발생일"] || "") || x._row - r._row) <= 0;
-  const execs = DATA.exec.filter(x => x["재원"] === fund && upTo(x));
+  const execs = activeExec().filter(x => x["재원"] === fund && upTo(x));
   if (isUntrackedFund(fund)) return { rows: [], own: false, before: 0, cur: 0, after: 0, untracked: true };  // 잔액 미관리: 재원 현황 표 대신 안내 한 줄
   if (isPoolFund(fund)) {  // 공금: 예산목 없이 재원 잔액 한 줄 (이 날짜까지의 입금 − 이 거래까지의 집행)
     const cur = r["금액"] || 0, after = budgetUpTo(fund, null, r["원인발생일"]) - execs.reduce((a, x) => a + (x["금액"] || 0), 0);
@@ -2140,6 +2157,7 @@ function voucherHtml(v, withIds) {
 let VOUCHER = null, VOUCHER_BTN = null;
 async function openVoucher(row, btn) {
   const r = DATA.exec.find(x => x._row === row); if (!r) return;
+  if (isCancelled(r)) { showAlert("취소된 집행은 결의서를 만들 수 없습니다.", "warn"); return; }
   if (!r["지출완료일"]) { showAlert(VOUCHER_OFF + ".", "warn"); return; }
   try {
     const [ev, st] = await Promise.all([api("GET", `/api/evidence/${encodeURIComponent(r["거래번호"])}`), api("GET", "/api/settings")]);

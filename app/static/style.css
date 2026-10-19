@@ -178,6 +178,8 @@ table.grid tbody tr { transition: background-color .12s ease-out; }
 table.grid tbody tr:hover td { background: var(--bg-hover); }
 table.grid tbody tr.selected td { background: var(--bg-select); }
 table.grid tbody tr.row-alert td { background: var(--alert-bg); }
+table.grid tbody tr.row-cancel td { color: var(--ink-3); }  /* 취소 건: 흐리게 (집계 제외) */
+table.grid tbody tr.row-cancel td.amt { text-decoration: line-through; text-decoration-color: var(--ink-3); }
 table.grid tbody tr.row-alert:hover td { background: #F6E2E0; }
 table.grid tr.total td { font-weight: 700; background: var(--bg-table); border-top: 1px solid var(--margin); border-bottom: 3px double var(--margin); color: var(--ink); }
 table.grid tr.sub td { color: var(--ink-2); }

@@ -173,7 +173,7 @@ def build_dashboard(data: dict) -> dict:
     vendors = defaultdict(float)
     unpaid = 0
     excluded = {"exec": [], "req": []}
-    for r in data["exec"]:
+    for r in store.active_exec(data["exec"]):  # 취소 건은 모든 집계에서 뺀다 (2026-10-19)
         f, i = r["재원"], r["예산목"]
         why = excluded_reason(r, fund_set, items)
         if why:
@@ -215,7 +215,7 @@ def build_dashboard(data: dict) -> dict:
                           "집행률": (s / b) if b else None, "품의대기": p, "가용잔액": b - s - p})
     # 태그 집계: 집행내역(적립 선결제 건 제외) + 적립금 사용
     linked = {r["연결거래번호"] for r in data["deposit"] if r.get("연결거래번호")}
-    tag_rows = [(r["태그"], r["원인발생일"], r["금액"]) for r in data["exec"] if r["거래번호"] not in linked]
+    tag_rows = [(r["태그"], r["원인발생일"], r["금액"]) for r in store.active_exec(data["exec"]) if r["거래번호"] not in linked]
     tag_rows += [(r["태그"], r["일자"], r["금액"]) for r in data["deposit"] if r["구분"] == "사용"]  # 구분 '적립'/'사용' 외 행은 집계 제외
     tag_cat = {t["태그명"]: t["분류"] for t in data.get("tags", [])}
     tag_table = {}

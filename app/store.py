@@ -72,9 +72,10 @@ LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(�
 MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
 EXEC_COLS = ["거래번호", "관리번호", "연결품의번호", "원인발생일", "지급청구일", "지출완료일", "결의일", "재원", "예산목", "세목", "결제수단",
              "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록"]
-EXEC_STATUS = ["발생", "청구", "보완", "완료", "결의"]  # 날짜에서 계산, '보완'만 수동. 순서: 발생→요구→(보완)→완료→결의 (2026-10-14)
+EXEC_STATUS = ["발생", "청구", "보완", "완료", "결의", "취소"]  # 날짜에서 계산, '보완'·'취소'만 수동. 순서: 발생→요구→(보완)→완료→결의 (2026-10-14). 취소(2026-10-19)는 모든 집계에서 뺀다
 # 화면 표시명 (app.js STATUS_LABEL 과 같음): 저장값 '완료'(지출완료일) = 승인, '결의'(결의일) = 완료. 저장값은 바꾸지 않고 API 에 '상태표시'로 함께 내보냄
-EXEC_STATUS_LABEL = {"발생": "발생", "청구": "청구", "보완": "보완", "완료": "승인", "결의": "완료"}
+EXEC_STATUS_LABEL = {"발생": "발생", "청구": "청구", "보완": "보완", "완료": "승인", "결의": "완료", "취소": "취소"}
+EXEC_CANCELLED = "취소"
 # 연결품의번호: 품의→집행 전환 때 기록하는 시스템 열 (비고의 '품의 X' 문구는 호환용으로 남기고 자유 편집). 화면·API 수정으로는 바뀌지 않음
 EXEC_LINK_COL = "연결품의번호"
 REQ_NOTE_RE = re.compile(r"^품의 (\S+)")  # 이전 장부: 집행 비고 '품의 X' → 연결품의번호 이관
@@ -857,7 +858,9 @@ def _req_state(wb) -> _ReqState:
 
 
 def exec_status(rec: dict) -> str:
-    """발생(청구일 없음) → 청구(지급청구일) → 보완(수동) → 완료(지출완료일) → 결의(결의일). 날짜가 우선."""
+    """발생(청구일 없음) → 청구(지급청구일) → 보완(수동) → 완료(지출완료일) → 결의(결의일). 날짜가 우선. 취소(수동)는 날짜와 무관하게 유지."""
+    if str(rec.get("상태") or "") == EXEC_CANCELLED:
+        return EXEC_CANCELLED
     if rec.get("결의일"):
         return "결의"
     if rec.get("지출완료일"):
@@ -2370,6 +2373,28 @@ def exec_action(row: int, action: str, expect: dict | None = None, extra: dict |
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
         _check_expect("exec", rec, expect)
         today = dt.date.today().isoformat()
+        cancelled = str(rec.get("상태") or "") == EXEC_CANCELLED
+        if action == "cancel":
+            if cancelled:
+                raise ValueError("이미 취소된 집행입니다.")
+            if rec["거래번호"] in _labor_refs(wb) or rec["거래번호"] in _number_refs(wb, "거래번호"):
+                raise ValueError("인건비·적립금에서 생긴 집행은 원본 화면(인건비 원장 확정 취소 / 적립금)에서 처리하세요.")
+            rec["상태"] = EXEC_CANCELLED
+            _fixlog_add(wb, rec["거래번호"], "취소", str(extra.get("사유") or "").strip())
+            _write_row(ws, EXEC_COLS, row, rec)
+            _save(wb)
+            return rec
+        if action == "uncancel":
+            if not cancelled:
+                raise ValueError("취소된 집행이 아닙니다.")
+            rec["상태"] = ""
+            _fixlog_add(wb, rec["거래번호"], "취소해제", str(extra.get("사유") or "").strip())
+            rec["상태"] = exec_status(rec)
+            _write_row(ws, EXEC_COLS, row, rec)
+            _save(wb)
+            return rec
+        if cancelled:
+            raise ValueError("취소된 집행입니다. 먼저 취소를 해제하세요.")
         if action == "claim":
             if rec.get("지출완료일") or rec.get("결의일"):
                 raise ValueError("이미 완료·결의된 건입니다. 뒤 단계를 취소한 뒤 청구일을 바꾸세요.")
@@ -2450,6 +2475,11 @@ def deposit_action(row: int, action: str, expect: dict | None = None) -> dict:
         _write_row(ws, DEP_COLS, row, rec)
         _save(wb)
         return rec
+
+
+def active_exec(rows: list[dict]) -> list[dict]:
+    """취소되지 않은 집행 (집계용). 상태가 아직 계산 전인 행은 시트 값으로 판단."""
+    return [r for r in rows if exec_status(r) != EXEC_CANCELLED]
 
 
 def _fixlog_add(wb, no: str, kind: str, reason: str):
