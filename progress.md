@@ -47,7 +47,8 @@ Updated: 2026-10-16
 - Skills are linked with Windows junctions and the agent file is copied, because symlinks need elevated permission here.
 - 2026-10-19 (user) 예산목 잔액(집행내역 표·결의서 재원 현황): 예산변동을 신청일자 기준으로 집행과 날짜 순으로 섞어 누적 (이월+당초 − 1차 변경일까지 사용액 + 1차 변경액 …). 신청일자는 필수, 빈 값은 장부 연도 1월 1일로 보정. My calls: same-day budget change applies before that day's transactions; ledger year = earliest 원인발생일/신청일자, else this year. 폼 경고·대시보드 가용잔액은 전체 예산현액 기준 그대로.
 - 2026-10-19 PostgreSQL 이전은 보류 (user: later). 신호가 생기면 SQLite 먼저 검토.
+- 2026-10-19 (user) 적립금 증빙: 모든 적립금 행(적립·사용·주문 생성 행 포함)에 증빙 허용. 번호 `적립-YYYY-NNN`(my proposal, accepted), 드라이브 `증빙관리/YYYY/적립금/거래처명/적립번호` (user chose this path). My calls: 적립금 행에 증빙목록·증빙폴더 열은 두지 않음(화면은 증빙 시트에서 집계), 연결 집행이 있는 적립 행도 자체 증빙을 가짐(드로어에 연결 집행 증빙 수만 표시), 증빙 있는 적립금 행 삭제 금지, MCP 적립 증빙 도구 없음.
 
 ## Next action
 
-Pick the next feature with the user: LEDGER_HOST + server role check, or the 학회·기타 review leftovers. Extend tests/ with each change (a voucher render test is a good candidate).
+Reserved by the user (2026-10-19): 적립금 상태를 발주일/결제일/수령일로 관리 (ideas.md). Start it with step-by-step questions. After that: LEDGER_HOST + server role check, or the 학회·기타 review leftovers. Extend tests/ with each change (a voucher render test is a good candidate).

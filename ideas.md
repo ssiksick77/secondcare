@@ -16,3 +16,5 @@ Who reads what:
 - [later][fix]  2026-10-14: date parser accepts "2026/1/5" but not "2026-1-5" — noticed while editing the report screen
 -->
 - [later][idea] 2026-10-16: 연구원/담당자 역할을 서버가 검사 — 학회 탭 점검 D8, 사용자가 보류. LEDGER_HOST(타 PC 접속) 과제와 함께 다룰 것
+
+- [예약, 2026-10-19 사용자] 적립금도 날짜로 상태 관리: 발주일/결제일/수령일. 적립금 증빙 작업이 끝난 뒤 착수, 단계별 질문으로 범위 확정(상태 이름·전환 규칙·주문 생성 행과의 관계·표 표시).
