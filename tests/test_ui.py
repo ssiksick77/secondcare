@@ -85,6 +85,11 @@ def main() -> int:
                 pg.click("#dlg-confirm button:has-text('버리')"); pg.wait_for_timeout(200)
 
         ck("신청 표: 사유 열", "사유" in pg.inner_text("#request-table thead"))
+        pg.click("#request-tabs [data-rtype='소모품']"); pg.wait_for_timeout(300)  # 주문 보기는 담당자 모드 + 소모품 탭에서만
+        pg.evaluate("switchReqSub('주문')"); pg.wait_for_timeout(500)
+        ck("주문 표: 구매내역 열 (대표품목 외 n건)", "구매내역" in pg.inner_text("#order-table thead") and "외 " in pg.inner_text("#order-table tbody"), pg.inner_text("#order-table tbody")[:200])
+        pg.evaluate("switchReqSub('신청')"); pg.wait_for_timeout(300)
+        pg.click("#request-tabs [data-rtype='학회']"); pg.wait_for_timeout(300)
         # ---- 기타 ----
         pg.goto(sv.base + "/request"); pg.wait_for_timeout(800)
         pg.click("#request-tabs [data-rtype='기타']"); pg.wait_for_timeout(300)

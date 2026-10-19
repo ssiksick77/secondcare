@@ -937,13 +937,14 @@ $("#dlg-order-form").addEventListener("submit", async e => {
 // 배송 전 주문은 연도와 무관하게 보임 (하위 탭 배지와 같은 기준)
 const ORDF = { vendor: "", state: "", q: "" };
 const ordNos = o => String(o["신청번호목록"] || "").split(",").map(x => x.trim()).filter(Boolean);
+const ordItems = o => ordNos(o).map(n => (DATA.request || []).find(x => x["신청번호"] === n)?.["품목"] || "").filter(Boolean);
 const ordFiltered = () => !!(ORDF.vendor || ORDF.state || ORDF.q.trim());
 function ordRows() {
   const all = DATA.order || [], y = FILTERS.request.year, q = ORDF.q.trim().toLowerCase();
   return all.filter(o => (!y || ORDF.state === "open" || (o["주문일"] || "").startsWith(y))
       && (!ORDF.vendor || o["거래처"] === ORDF.vendor)
       && (!ORDF.state || (ORDF.state === "done") === !!o["배송일"])
-      && (!q || String(o["주문번호"] || "").toLowerCase().includes(q) || ordNos(o).some(n => n.toLowerCase().includes(q))))
+      && (!q || String(o["주문번호"] || "").toLowerCase().includes(q) || ordNos(o).some(n => n.toLowerCase().includes(q)) || ordItems(o).some(t => t.toLowerCase().includes(q))))
     .sort((a, b) => (b["주문일"] || "").localeCompare(a["주문일"] || "") || b._row - a._row);
 }
 function renderOrders() {
@@ -964,13 +965,17 @@ function renderOrders() {
   const empty = all.length
     ? `조건에 맞는 주문이 없습니다. ${ordFiltered() ? "검색어·필터를 지워 보세요." : "연도를 '전체'로 바꿔 보세요."}`
     : `주문이 없습니다. <button type="button" class="lnk" data-ordgo="list">신청 보기</button>에서 승인된 소모품을 체크하고 [주문 생성]을 누르세요.`;
-  $("#order-table").innerHTML = `<thead><tr><th data-col="주문번호">주문번호</th><th class="ctr" data-col="주문일">주문일</th><th class="ctr" data-col="배송일">배송일</th><th data-col="구매처">구매처</th><th class="num amt" data-col="주문금액">주문금액</th><th class="num" data-col="결제금액">결제금액</th><th class="ctr" data-col="적립금">적립금</th><th class="ctr" data-col="건수">건수</th><th data-col="신청번호">신청번호</th><th class="actions" data-col="작업">작업</th></tr></thead><tbody>${rows.map(o => {
+  $("#order-table").innerHTML = `<thead><tr><th data-col="주문번호">주문번호</th><th class="ctr" data-col="주문일">주문일</th><th class="ctr" data-col="배송일">배송일</th><th data-col="구매처">구매처</th><th class="num amt" data-col="주문금액">주문금액</th><th class="num" data-col="결제금액">결제금액</th><th class="ctr" data-col="적립금">적립금</th><th class="ctr" data-col="건수">건수</th><th data-col="구매내역">구매내역</th><th class="actions" data-col="작업">작업</th></tr></thead><tbody>${rows.map(o => {
     const nos = ordNos(o), done = !!o["배송일"], no = o["주문번호"] || "";
     return `<tr data-orow="${o._row}"><td title="${esc(no)}">${esc(no)}</td>${date(o["주문일"])}`
       + (done ? date(o["배송일"]) : `<td class="ctr"><button type="button" class="lnk" data-ord="deliver" data-row="${o._row}" aria-label="주문 ${esc(no)} 배송일 등록" title="배송일 등록 (해당 신청은 완료)">등록</button></td>`)
       + `<td>${esc(o["거래처"])}</td><td class="num amt">${fmt(o["주문금액"])}</td><td class="num">${fmt(o["결제금액"])}</td>`
       + `<td class="ctr">${o["적립금사용"] === "Y" ? '<span class="badge 사용">사용</span>' : '<span class="muted">-</span>'}</td><td class="ctr">${nos.length}</td>`
-      + `<td class="nos" title="${esc(nos.join(", "))}">${nos.map(reqLink).join(", ")}</td>`
+      + (() => {  // 구매내역: 첫 신청의 품목 + "외 n건" (사용자 결정 2026-10-19). 누르면 그 신청 상세, 툴팁에 전체 목록
+        const first = (DATA.request || []).find(x => x["신청번호"] === nos[0]), tip = nos.map(n => { const r = (DATA.request || []).find(x => x["신청번호"] === n); return r ? `${n} ${r["품목"] || ""}` : n; }).join(" / ");
+        const label = first ? `${first["품목"] || nos[0]}${nos.length > 1 ? ` 외 ${nos.length - 1}건` : ""}` : nos.length ? `${nos[0]}${nos.length > 1 ? ` 외 ${nos.length - 1}건` : ""}` : "-";
+        return `<td class="nos" title="${esc(tip)}">${first ? `<button type="button" class="lnk" data-ordreq="${esc(nos[0])}">${esc(label)}</button>` : esc(label)}</td>`;
+      })()
       + `<td class="actions"><button type="button" class="btn btn-sm" data-ord="sheet" data-row="${o._row}" aria-label="주문 ${esc(no)} 발주서">발주서</button>${done
         ? `<button type="button" class="btn btn-sm ord-act2" data-ord="undeliver" data-row="${o._row}" aria-label="주문 ${esc(no)} 배송일 지우기" title="배송일만 지움 (다시 배송 전)">배송일 지우기</button>`
         : `<button type="button" class="btn btn-sm btn-danger ord-act2" data-ord="cancel" data-row="${o._row}" aria-label="주문 ${esc(no)} 취소" title="신청을 주문에서 빼고 적립금 사용 기록 삭제">주문 취소</button>`}</td></tr>`;
