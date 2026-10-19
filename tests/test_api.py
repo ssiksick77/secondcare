@@ -51,6 +51,17 @@ def main() -> int:
         s, r = sv.call("PUT", f"/api/request/{conf_row}", {"rec": rec})
         ck("학회: 비고만 변경 → 승인 유지", s == 200 and not r.get("reapproval"), (s, r))
 
+        # ---- 신청번호: 구분 코드 (E 장비 / S 소모품 / C 학회 / Z 기타), 이전 R- 번호는 보정 때 바뀜 ----
+        import re as _re
+        s, r = sv.call("GET", "/api/all")
+        ck("신청번호 보정: R- 없음, 모두 코드 모양", r["request"] and all(_re.fullmatch(r"[ESCZ]-\d{4}-\d{3}", x["신청번호"]) for x in r["request"]), [x["신청번호"] for x in r["request"]][:6])
+        nums = {x["신청번호"] for x in r["request"]}
+        ck("주문 신청번호목록 참조가 새 번호로", all(all(n.strip() in nums for n in (o["신청번호목록"] or "").split(",") if n.strip()) for o in r["order"]), [o["신청번호목록"] for o in r["order"]][:3])
+        ck("학회 신청번호 = C-", sv.rec("request", conf_row)["신청번호"].startswith("C-2026-"), sv.rec("request", conf_row)["신청번호"])
+        s, r = sv.call("POST", "/api/request", {"구분": "장비", "신청인": "검사", "품목": "번호 검사", "단가": 1000, "수량": 1})
+        ck("장비 신청번호 = E-", s == 200 and r["신청번호"].startswith("E-2026-"), (s, r.get("신청번호")))
+        s, r2 = sv.call("POST", "/api/request", {"구분": "소모품", "신청인": "검사", "품목": "번호 검사", "단가": 1000, "수량": 1, "온라인코드": "1234567", "구매처": "가상문구A"})
+        ck("소모품 신청번호 = S-", s == 200 and r2["신청번호"].startswith("S-2026-"), (s, r2.get("신청번호")))
         # ---- 기타·장비 공통 ----
         s, r = sv.call("POST", "/api/request", {"구분": "기타", "신청인": "검사", "품목": "구독", "규격": "월 3석", "단가": 90000, "수량": 12, "온라인코드": "X1", "상품코드": "P1", "상품링크": "https://x.y"})
         ck("기타: 쇼핑몰 코드 비움·금액 = 단가×수량", s == 200 and r.get("온라인코드") == "" and r.get("상품코드") == "" and r.get("상품링크") == "" and r.get("금액") == 1080000, (s, r))

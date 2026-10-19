@@ -41,7 +41,8 @@ COLS.request = [
   { k: "신청인" },
   { k: "신청일", t: "date" },
   { k: "관련과제" },
-  { k: "품목", t: "title", get label() { return reqType() === "학회" ? "학회명" : "품목"; }, subCalc: r => { if (r["구분"] === "학회") { const d = reqDetail(r), span = [d["시작일"], d["종료일"]].filter(Boolean).join(" ~ "); return [span, d["장소"]].filter(Boolean).join(" · ") || reqExcerpt(r["사유"], 40); } return r["규격"] || reqExcerpt(r["사유"], 40); } },
+  { k: "품목", t: "title", get label() { return reqType() === "학회" ? "학회명" : "품목"; }, subCalc: r => { if (r["구분"] === "학회") { const d = reqDetail(r), span = [d["시작일"], d["종료일"]].filter(Boolean).join(" ~ "); return [span, d["장소"]].filter(Boolean).join(" · "); } return r["규격"] || ""; } },  // 사유는 별도 열 (사용자 결정 2026-10-19)
+  { k: "사유", wrap: true, title: "용도·필요한 이유" },
   { k: "구매처", get hide() { return reqType() !== "소모품"; } },  // 소모품 탭에서만 표시
   { k: "수량", t: "num", get hide() { return reqType() === "학회"; } },  // 학회는 수량이 늘 1
   { k: "금액", t: "num", amt: true },

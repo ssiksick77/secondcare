@@ -84,6 +84,7 @@ def main() -> int:
             if pg.evaluate("document.querySelector('#dlg-confirm').open"):
                 pg.click("#dlg-confirm button:has-text('버리')"); pg.wait_for_timeout(200)
 
+        ck("신청 표: 사유 열", "사유" in pg.inner_text("#request-table thead"))
         # ---- 기타 ----
         pg.goto(sv.base + "/request"); pg.wait_for_timeout(800)
         pg.click("#request-tabs [data-rtype='기타']"); pg.wait_for_timeout(300)

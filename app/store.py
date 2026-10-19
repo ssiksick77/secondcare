@@ -101,6 +101,8 @@ REQUEST_COLS = ["신청번호", "구분", "상태", "신청인", "신청일", "�
 ORDER_COLS = ["주문번호", "주문일", "배송일", "거래처", "주문금액", "결제금액", "적립금사용", "신청번호목록", "비고"]
 RATT_COLS = ["신청번호", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
 REQUEST_TYPES = ["장비", "소모품", "학회", "기타"]
+REQUEST_TYPE_CODE = {"장비": "E", "소모품": "S", "학회": "C", "기타": "Z"}  # 신청번호 앞자리 (사용자 결정 2026-10-19). 이전 장부의 R- 번호는 보정 때 바꾼다
+REQ_NO_RE = re.compile(r"^([ESCZR])-(\d{4})-(\d+)$")
 REQUEST_STATUS = ["신청", "승인", "반려", "품의전환", "완료"]
 REQUEST_LOCKED = ("품의전환", "완료")  # 비고만 수정 가능
 # 신청 행에서 화면 수정으로 바꿀 수 없는 열 (동작·주문·첨부로만 바뀜)
@@ -437,6 +439,8 @@ def _ensure_structure(wb) -> bool:
     if _ensure_dep_numbers(wb):
         changed = True
     if _ensure_dep_stages(wb):
+        changed = True
+    if _ensure_request_numbers(wb):
         changed = True
 
     for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30)),
@@ -956,10 +960,10 @@ def _number_refs(wb, key: str) -> set[str]:
         for r in _rows(wb[SHEET_RATT], RATT_COLS):
             refs.add(str(r.get("신청번호") or ""))
         for r in _rows(wb[SHEET_ORDER], ORDER_COLS):
-            refs.update(re.findall(r"R-\d{4}-\d+", str(r.get("신청번호목록") or "")))
+            refs.update(re.findall(r"[ESCZR]-\d{4}-\d+", str(r.get("신청번호목록") or "")))
         for sheet, cols in ((SHEET_REQ, REQ_COLS), (SHEET_EXEC, EXEC_COLS)):
             for r in _rows(wb[sheet], cols):
-                refs.update(re.findall(r"R-\d{4}-\d+", str(r.get("비고") or "")))
+                refs.update(re.findall(r"[ESCZR]-\d{4}-\d+", str(r.get("비고") or "")))
     elif key == "주문번호":
         for r in _rows(wb[SHEET_RQ], REQUEST_COLS):
             refs.add(str(r.get("주문번호") or ""))
@@ -1002,32 +1006,76 @@ def _meta_set(wb, key: str, value):
     ws.cell(r, 2, value)
 
 
-def _hw_key(year: str) -> str:
-    return f"신청번호최고-{year}"
+def _hw_key(code: str, year: str) -> str:
+    return f"신청번호최고-{code}-{year}"
 
 
 def _bump_request_hw(wb, number: str):
-    """신청번호의 연도별 최고값을 메타 시트에 기록 (지운 마지막 번호·드라이브 폴더가 다시 쓰이지 않도록)."""
-    m = re.match(r"^R-(\d{4})-(\d+)$", str(number or ""))
+    """신청번호의 구분·연도별 최고값을 메타 시트에 기록 (지운 마지막 번호·드라이브 폴더가 다시 쓰이지 않도록)."""
+    m = REQ_NO_RE.match(str(number or ""))
     if not m:
         return
-    cur = int(_to_num(_meta_get(wb, _hw_key(m[1]))))
-    if int(m[2]) > cur:
-        _meta_set(wb, _hw_key(m[1]), int(m[2]))
+    cur = int(_to_num(_meta_get(wb, _hw_key(m[1], m[2]))))
+    if int(m[3]) > cur:
+        _meta_set(wb, _hw_key(m[1], m[2]), int(m[3]))
 
 
-def _assign_request_number(wb, ws, rec):
-    """R-YYYY-NNN (신청일 연도, 연도별 일련번호). 참조된 번호와 메타 시트의 연도별 최고값 이하는 재사용하지 않음."""
+def _assign_request_number(wb, ws, rec, seen_extra: list | None = None):
+    """{구분코드}-YYYY-NNN (E 장비 / S 소모품 / C 학회 / Z 기타, 신청일 연도, 구분·연도별 일련번호).
+    참조된 번호와 메타 시트의 최고값 이하는 재사용하지 않음. 구분을 나중에 바꿔도 번호는 그대로."""
     d = _to_date(rec.get("신청일")) or dt.date.today().isoformat()
     year = d[:4]
-    mx = int(_to_num(_meta_get(wb, _hw_key(year))))
-    seen = [str(r.get("신청번호") or "") for r in _rows(ws, REQUEST_COLS)] + list(_number_refs(wb, "신청번호"))
+    code = REQUEST_TYPE_CODE.get(str(rec.get("구분") or ""), "Z")
+    mx = int(_to_num(_meta_get(wb, _hw_key(code, year))))
+    seen = [str(r.get("신청번호") or "") for r in _rows(ws, REQUEST_COLS)] + list(_number_refs(wb, "신청번호")) + list(seen_extra or [])
     for v in seen:
-        m = re.match(r"^R-(\d{4})-(\d+)$", v)
-        if m and m[1] == year:
-            mx = max(mx, int(m[2]))
-    rec["신청번호"] = f"R-{year}-{mx + 1:03d}"
-    _meta_set(wb, _hw_key(year), mx + 1)
+        m = REQ_NO_RE.match(v)
+        if m and m[1] == code and m[2] == year:
+            mx = max(mx, int(m[3]))
+    rec["신청번호"] = f"{code}-{year}-{mx + 1:03d}"
+    _meta_set(wb, _hw_key(code, year), mx + 1)
+
+
+def _ensure_request_numbers(wb) -> bool:
+    """신청 보정: 이전 모양(R-YYYY-NNN) 번호를 구분 코드 번호로 바꾸고, 신청첨부·주문 신청번호목록·품의/집행 비고의 참조도 함께 바꾼다.
+    신청일 순(같으면 행 순). 변경 여부 반환. 드라이브의 첨부 폴더 이름(신청/YYYY/R-…)은 그대로 둔다 (파일은 ID 로 연결)."""
+    if SHEET_RQ not in wb.sheetnames:
+        return False
+    ws = wb[SHEET_RQ]
+    rows = _rows(ws, REQUEST_COLS)
+    old = [r for r in rows if str(r.get("신청번호") or "").startswith("R-")]
+    if not old:
+        return False
+    heads = _headers(ws)
+    ci = heads.index("신청번호") + 1
+    old.sort(key=lambda r: (str(r.get("신청일") or ""), r["_row"]))
+    renamed: dict[str, str] = {}
+    for r in old:
+        new = dict(r)
+        _assign_request_number(wb, ws, new, seen_extra=list(renamed.values()))
+        ws.cell(r["_row"], ci, new["신청번호"])
+        renamed[r["신청번호"]] = new["신청번호"]
+    def swap(text):
+        return re.sub(r"R-\d{4}-\d+", lambda m: renamed.get(m[0], m[0]), str(text or ""))
+    if SHEET_RATT in wb.sheetnames:
+        wa = wb[SHEET_RATT]
+        for a in _rows(wa, RATT_COLS):
+            if a.get("신청번호") in renamed:
+                _write_row(wa, RATT_COLS, a["_row"], {"신청번호": renamed[a["신청번호"]]})
+    if SHEET_ORDER in wb.sheetnames:
+        wo = wb[SHEET_ORDER]
+        for o in _rows(wo, ORDER_COLS):
+            t = swap(o.get("신청번호목록"))
+            if t != str(o.get("신청번호목록") or ""):
+                _write_row(wo, ORDER_COLS, o["_row"], {"신청번호목록": t})
+    for sheet, cols in ((SHEET_REQ, REQ_COLS), (SHEET_EXEC, EXEC_COLS)):
+        if sheet in wb.sheetnames:
+            w = wb[sheet]
+            for r in _rows(w, cols):
+                t = swap(r.get("비고"))
+                if t != str(r.get("비고") or ""):
+                    _write_row(w, cols, r["_row"], {"비고": t})
+    return True
 
 
 def split_suppliers(v) -> list[str]:
