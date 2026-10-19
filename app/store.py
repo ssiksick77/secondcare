@@ -360,6 +360,15 @@ def _load():
         raise LedgerLocked(LOAD_LOCKED_MSG) from None
 
 
+def sheet_names() -> list[str]:
+    """시트 이름만 읽는다. read_only 워크북은 close() 전까지 파일 핸들을 쥐고 있어 저장(os.replace)을 막으므로 반드시 닫는다."""
+    wb = openpyxl.load_workbook(XLSX_PATH, read_only=True)
+    try:
+        return wb.sheetnames
+    finally:
+        wb.close()
+
+
 def _ensure_structure(wb) -> bool:
     """필요한 시트/열이 없으면 추가. 변경 여부 반환."""
     changed = False

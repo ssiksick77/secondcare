@@ -640,8 +640,7 @@ if __name__ == "__main__":
         input("아무 키나 누르면 종료합니다...")
         raise SystemExit(1)
     try:
-        import openpyxl as _ox
-        _names = _ox.load_workbook(store.XLSX_PATH, read_only=True).sheetnames
+        _names = store.sheet_names()
         missing = [s for s in (store.SHEET_BUDGET, store.SHEET_EXEC, store.SHEET_REQ) if s not in _names]
         if missing:
             print(f"[오류] 장부에 필수 시트가 없습니다: {', '.join(missing)}\n  → 센터 지출장부 양식 파일인지 확인하세요.")
@@ -656,7 +655,7 @@ if __name__ == "__main__":
     try:
         before = set(_names)
         store.init_file()
-        after = set(_ox.load_workbook(store.XLSX_PATH, read_only=True).sheetnames)
+        after = set(store.sheet_names())
         added = sorted(after - before)
         if added:
             print(f"[안내] 장부 구조를 보정했습니다: 시트 추가 {added}. 보정 전 파일은 app/backup 에 백업됨.")

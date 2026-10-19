@@ -9,6 +9,16 @@ from _env import Server, Check  # noqa: E402
 def main() -> int:
     ck = Check()
     with Server("api") as sv:
+        # ---- 시트 이름 확인(시작 검사)이 장부 파일 핸들을 남기면 저장(os.replace)이 막힌다 ----
+        # GC 시점에 따라 우연히 풀리므로 gc 를 끈 별도 프로세스에서 확인
+        import subprocess
+        xlsx = os.path.join(sv.dir, "ledger.xlsx")
+        probe = ("import gc, os, shutil, store; gc.disable(); store.sheet_names(); p = str(store.XLSX_PATH); "
+                 "shutil.copyfile(p, p + '.swap'); os.replace(p + '.swap', p)")
+        pr = subprocess.run([sys.executable, "-c", probe], cwd=os.path.join(os.path.dirname(sv.dir), "..", "..", "app"),
+                            env=dict(os.environ, LEDGER_XLSX=xlsx), capture_output=True, text=True)
+        ck("시트 이름 확인 후 장부 파일 교체 가능 (핸들 미점유)", pr.returncode == 0, pr.stderr[-300:])
+
         # ---- 학회: 계산 결과가 있으면 금액 = out.합계 ----
         calc = {"v": 2, "in": {"fx": 1380}, "out": {"합계": 1500000}, "합계": 1500000}
         base = {"구분": "학회", "신청인": "검사", "품목": "검사 학회", "상세": {"국내외": "국외", "시작일": "2026-11-10", "종료일": "2026-11-12", **calc}}
