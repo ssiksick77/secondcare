@@ -188,6 +188,20 @@ def main() -> int:
             pg.wait_for_timeout(300)
         ck("적립 증빙 항목 추가 → 목록·표 개수", n_ == 1 and pg.inner_text(f"#deposit-table tbody tr[data-row='{dep_row}'] td[data-col='증빙']").strip() == "1", n_)
         pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+        # ---- 적립금 단계 타임라인 (사용 행) ----
+        pg.click(f"#deposit-table tbody tr[data-row='{dep_row}'] td[data-col='거래처']"); pg.wait_for_timeout(900)
+        tl = pg.inner_text("#xd-body")
+        ck("적립금 드로어: 처리 단계(발주 완료·결제 다음)", "처리 단계" in tl and pg.evaluate("document.querySelector('#xd-body .xd-step.done[data-col=발주일]') !== null && document.querySelector('#xd-body .xd-step.next[data-col=결제일]') !== null"))
+        pg.click("#xd-body .xd-step.next button[data-act=dact]")
+        st2 = None
+        for _ in range(25):
+            st2 = pg.evaluate(f"(DATA.deposit.find(x=>x._row==={dep_row})||{{}})['상태']")
+            if st2 == "결제":
+                break
+            pg.wait_for_timeout(300)
+        ck("오늘 등록 → 결제", st2 == "결제", st2)
+        ck("적립금 표 상태 배지", "결제" in pg.inner_text(f"#deposit-table tbody tr[data-row='{dep_row}'] td[data-col='상태']"))
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
         # ---- 보완 표시 사유 입력·이력 ----
         s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구활동비", "원인발생일": "2026-03-06", "거래처": "검사", "금액": 5000, "적요": "보완 검사", "지급청구일": "2026-03-06"})
         fx_row = r.get("_row")

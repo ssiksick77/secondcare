@@ -217,6 +217,10 @@ table.grid.clickable tbody tr { cursor: pointer; }
 .badge.대기::before, .badge.예정::before { background: var(--warn); }
 .badge.대기, .badge.예정 { color: var(--warn); }
 .badge.적립::before, .badge.결의::before { background: var(--margin); }
+.badge.발주::before { background: var(--primary); }  /* 적립금 사용 단계: 대기(주의색) → 발주 → 결제 → 수령(완료색) */
+.badge.결제::before { background: var(--margin); }
+.badge.수령::before { background: var(--ok); }
+.badge.수령 { color: var(--ok); }
 .badge.적립, .badge.결의 { color: var(--margin); }
 .badge.사용::before { background: #B86A00; } .badge.사용 { color: #8A4F00; }
 /* 신청 상태: 신청(회색) → 승인(초록) / 반려(붉은색) → 품의전환(남색) → 완료(초록) */

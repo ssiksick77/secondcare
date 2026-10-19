@@ -17,6 +17,10 @@ const STATUS_LABEL = { 발생: "발생", 청구: "청구", 보완: "보완", 완
 const STATUS_HELP = { 발생: "원인발생일만 있음. 다음: 청구(지급청구일)", 청구: "지급청구일 등록됨. 다음: 승인(지출완료일)", 보완: "서류·증빙 보완이 필요하다고 표시한 건 (청구 단계)", 완료: "지출완료일 등록됨(승인). 다음: 결의(결의일)", 결의: "결의일 등록됨, 완료" };
 // 상태 열의 다음 단계 버튼: [동작, 라벨, 설명]
 const NEXT_STEP = { 발생: ["claim", "청구", "지급청구일을 오늘로 등록"], 청구: ["complete", "승인", "지출완료일을 오늘로 등록"], 보완: ["complete", "승인", "지출완료일을 오늘로 등록 (보완 해제)"], 완료: ["resolve", "결의", "결의일을 오늘로 등록 (마지막 단계)"] };
+// 적립금 사용 행의 단계 (2026-10-19, 집행 단계 방식): 대기 → 발주(발주일) → 결제(결제일) → 수령(수령일). 적립 행은 단계 없음
+const DEP_STATUS_HELP = { 대기: "단계 날짜 없음. 다음: 발주(발주일)", 발주: "발주일 등록됨. 다음: 결제(결제일)", 결제: "결제일 등록됨. 다음: 수령(수령일)", 수령: "수령일 등록됨, 완료" };
+const DEP_NEXT_STEP = { 대기: ["order", "발주", "발주일을 오늘로 등록"], 발주: ["pay", "결제", "결제일을 오늘로 등록"], 결제: ["receive", "수령", "수령일을 오늘로 등록 (마지막 단계)"] };
+const DEP_STAGES = [["발주", "발주일", "order"], ["결제", "결제일", "pay"], ["수령", "수령일", "receive"]];  // [라벨, 날짜 열, '오늘 등록' 동작]
 const DATE_STAGE = { 원인발생일: "발생", 지급청구일: "청구", 지출완료일: "승인", 결의일: "결의" };  // 폼 필드 (예산목 이름에 괄호·점이 있어 CSS 선택자 불가)
 // 행 식별값 + 전체 스냅샷: 서버가 다른 창/MCP 에서 먼저 바뀐 행을 덮어쓰지 않도록 검사
 const expectOf = (kind, r) => r ? { ...Object.fromEntries((IDENT[kind] || []).map(c => [c, r[c]])), _snapshot: Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith("_"))) } : undefined;
@@ -37,7 +41,7 @@ const COLS = {
     { k: "금액", t: "num", amt: true }, { k: "태그" }, { k: "품의자" }, { k: "비고", wrap: true },
   ],
   budget: null, // meta 로드 후 생성
-  deposit: [{ k: "적립번호", title: "적립금 거래 번호 (적립-연도-일련번호). 행을 누르면 상세·증빙" }, { k: "일자", t: "date" }, { k: "거래처" }, { k: "구분", t: "badge" }, { k: "금액", t: "num", amt: true }, { k: "적요", wrap: true },
+  deposit: [{ k: "적립번호", title: "적립금 거래 번호 (적립-연도-일련번호). 행을 누르면 상세·증빙" }, { k: "일자", t: "date" }, { k: "거래처" }, { k: "구분", t: "badge" }, { k: "상태", t: "badge", title: "사용 행의 단계: 대기 → 발주 → 결제 → 수령 (발주일·결제일·수령일로 계산). 체크를 누르면 다음 단계를 오늘로 등록" }, { k: "금액", t: "num", amt: true }, { k: "적요", wrap: true },
     { k: "사용자" }, { k: "증빙번호", title: "영수증·주문 번호 등 손으로 적는 번호 (증빙 파일은 '증빙' 열)" }, { k: "연결거래번호" }, { k: "증빙", t: "num", calc: r => evidCountNo(r["적립번호"]), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true }],
   funds: [{ k: "재원코드" }, { k: "종류" }, { k: "잔액미관리", label: "잔액", ctr: true, html: r => r["잔액미관리"] === "Y" ? '<span class="muted" title="재원 출처로만 쓰고 예산·잔액을 관리하지 않음">미관리</span>' : "관리" }, { k: "과제명", wrap: true }, { k: "시작일", t: "date" }, { k: "종료일", t: "date" }, { k: "비고", wrap: true }, { k: "인건비예산", t: "num", title: "인건비 화면의 지급처 예산 (비우면 예산목 합계)" }],
   tags: [{ k: "태그명" }, { k: "분류" }, { k: "설명", wrap: true }, { k: "사용건수", t: "num", calc: r => tagUsage(r["태그명"]) }],
@@ -94,7 +98,8 @@ function formFields(kind) {
     { k: "일자", type: "date", req: true }, { k: "거래처", type: "datalist", req: true },
     { k: "구분", type: "select", opts: DATA.meta.dep_types, req: true },
     { k: "금액", type: "num", req: true }, { k: "사용자", type: "datalist" }, { k: "증빙번호", type: "text", hint: "영수증·전표 번호" },
-    tagField({ dep: "사용", hint: "사용 건의 내부 계정" }), { k: "적요", type: "text", cls: "mid" }, { k: "비고", type: "text", cls: "wide" },
+    tagField({ dep: "사용", hint: "사용 건의 내부 계정" }),
+    { k: "발주일", type: "date", dep: "사용", hint: "비우면 일자" }, { k: "결제일", type: "date", dep: "사용" }, { k: "수령일", type: "date", dep: "사용" }, { k: "적요", type: "text", cls: "mid" }, { k: "비고", type: "text", cls: "wide" },
     { k: "_record_exec", type: "check", label: "집행내역에 기록 (선결제 금액을 예산에서 차감)", cls: "wide", onlyNew: true, dep: "적립" },
     { k: "_재원", type: "select", opts: ["", ...funds], label: "재원", dep: "적립", req: "exec" },
     { k: "_예산목", type: "select", opts: ["", ...items], label: "예산목", dep: "적립", req: "exec" },
@@ -323,6 +328,11 @@ function renderList(kind) {
       if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미입력">-</span>' : fmt(v)}</td>`;
       if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit" || kind === "request")) {
         return `<td title="${esc(v)}">${esc(mmdd(v))}</td>`;  // 내역 탭은 MM/DD, 전체 날짜는 툴팁
+      }
+      if (c.t === "badge" && kind === "deposit" && c.k === "상태") {
+        if (!v) return '<td class="st-cell"><div class="t"><span class="muted" title="적립 행은 단계가 없습니다">–</span></div></td>';
+        const nx = DEP_NEXT_STEP[v], stDate = { 발주: r["발주일"], 결제: r["결제일"], 수령: r["수령일"] }[v];
+        return `<td class="st-cell"><div class="t"><span class="badge ${esc(v)}" title="${esc(DEP_STATUS_HELP[v] || "")}">${esc(v)}</span>${nx ? `<button type="button" class="next" data-act="dact" data-action="${nx[0]}" data-row="${r._row}" title="다음 단계로: ${esc(nx[1])} (${esc(nx[2])})" aria-label="다음 단계로: ${esc(nx[1])}"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 6.5l2.5 2.5 4.5-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>` : '<span class="next ph" aria-hidden="true"></span>'}</div><div class="s">${stDate ? `<span title="${esc(stDate)}">${esc(mmdd(stDate))}</span>` : "&nbsp;"}</div></td>`;
       }
       if (c.t === "badge") {
         const nx = kind === "exec" ? NEXT_STEP[v] : null;
@@ -1111,6 +1121,7 @@ document.addEventListener("click", e => {
     return;
   }
   if (b.dataset.act === "xact") return execAction(Number(b.dataset.row), b.dataset.action, b);
+  if (b.dataset.act === "dact") return depAction(Number(b.dataset.row), b.dataset.action, b);
   if (b.dataset.act === "origin") return gotoOrigin(Number(b.dataset.row));
   if (b.dataset.act === "voucher") return openVoucher(Number(b.dataset.row), b);
   if (b.dataset.act === "show-excluded") { switchTab("exec"); QUICK = "excluded"; FILTERS.exec = {}; $$("[data-filter][data-kind=exec]").forEach(el => { if (el.type === "checkbox") el.checked = false; else el.value = ""; }); renderExecTiles(); renderList("exec"); showAlert("예산 집계에서 제외된 집행만 표시 중입니다. 빠른 필터 타일을 누르거나 새로고침하면 해제됩니다.", "ok"); return; }
@@ -1527,6 +1538,37 @@ $$("[data-filter][data-kind=exec]").forEach(el => el.addEventListener("input", r
 // 보완 이력 (보완이력 시트): 거래번호별 최신순
 const fixLogOf = no => (DATA.fixlog || []).filter(x => x["거래번호"] === no).sort((a, b) => String(b["일시"]).localeCompare(String(a["일시"])) || b._row - a._row);
 const latestFix = no => fixLogOf(no).find(x => x["구분"] === "표시") || null;
+// 적립금 사용 행의 단계 처리 ([오늘 등록]·상태 열 체크). 서버가 앞 단계 빈 날짜를 채우고 뒤 단계가 있으면 취소를 거부한다
+async function depAction(row, action, btn) {
+  const r = DATA.deposit.find(x => x._row === row); if (!r) return;
+  const md = (() => { const [, m, d] = today().split("-"); return `${parseInt(m)}/${parseInt(d)}`; })();
+  const label = { order: `발주 처리 · 발주일 ${md}`, pay: `결제 처리 · 결제일 ${md}`, receive: `수령 처리 · 수령일 ${md} (완료)`, unorder: "발주 취소", unpay: "결제 취소", unreceive: "수령 취소" }[action] || action;
+  const inDrawer = !!btn?.closest("#exec-drawer");
+  if (btn) btn.disabled = true;
+  try {
+    await api("POST", `/api/deposit/${row}/action`, { action, expect: expectOf("deposit", r) });
+    showAlert(`${r["적립번호"] || r["거래처"]} ${label}`, "ok", { undo: true });
+    await load();
+    if (XD.kind === "deposit" && XD.row === row) { await renderDepDrawer(false); if (inDrawer) xdRefocus(".xd-step.next button[data-act=dact]"); }
+  } catch (e) { showAlert(e.message, "error"); if (btn) btn.disabled = false; }
+}
+// 적립금 드로어의 단계 날짜 칸 수정 (비우면 단계 취소, 뒤 단계가 있으면 거부)
+async function depSetDate(row, col, value) {
+  const r = DATA.deposit.find(x => x._row === row); if (!r) return false;
+  const i = DEP_STAGES.findIndex(st => st[1] === col); if (i < 0) return false;
+  const lab = DEP_STAGES[i][0];
+  if (!value) { if (DEP_STAGES.slice(i + 1).some(st => r[st[1]])) { showAlert("뒤 단계를 먼저 취소하세요", "warn"); return false; } }
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) { showAlert("날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).", "warn"); return false; }
+  const rec = { ...r }; delete rec._row; delete rec._locked_by; rec[col] = value;
+  if (value) DEP_STAGES.slice(0, i).forEach(st => { if (!rec[st[1]]) rec[st[1]] = value; });  // 앞 단계 빈 날짜는 같은 날로
+  try {
+    await api("PUT", `/api/deposit/${row}`, { rec, expect: expectOf("deposit", r) });
+    showAlert(`${r["적립번호"] || r["거래처"]} ${value ? (r[col] ? `${lab} 날짜 변경 · ${col} ${mmdd(value)}` : `${lab} 처리 · ${col} ${mmdd(value)}`) : `${lab} 취소 · ${col} 삭제`}`, "ok", { undo: true });
+    await load();
+    if (XD.kind === "deposit" && XD.row === row) await renderDepDrawer(false);
+    return true;
+  } catch (e) { showAlert(e.message, "error"); return false; }
+}
 async function execAction(row, action, btn) {
   const r = DATA.exec.find(x => x._row === row); if (!r) return;
   const md = (() => { const [, m, d] = today().split("-"); return `${parseInt(m)}/${parseInt(d)}`; })();
@@ -1648,7 +1690,7 @@ async function execSetField(row, field, value) {
 // 값 자리(host)를 그 자리 편집기로 바꿈. Enter(textarea 는 Ctrl+Enter)·blur 저장, Esc 취소, 값이 같으면 요청 없음
 function xdOpenEditor(host) {
   const row = XD.row, field = host.dataset.field, type = host.dataset.type, pick = !!host.dataset.pick;
-  const r = DATA.exec.find(x => x._row === row); if (!r) return;
+  const r = (XD.kind === "deposit" ? DATA.deposit : DATA.exec).find(x => x._row === row); if (!r) return;
   const orig = r[field] == null ? "" : String(r[field]);
   let ed;
   if (type === "select" || (type === "tag" && DATA.tags.length)) {
@@ -1671,7 +1713,7 @@ function xdOpenEditor(host) {
     const v = type === "textarea" ? ed.value.replace(/\s+$/, "") : ed.value.trim();
     if (v === orig || (pick && !v)) { restore(viaKey); return; }
     busy = true;
-    const ok = type === "date" ? await execSetDate(row, field, v) : await execSetField(row, field, v);
+    const ok = type === "date" ? await (XD.kind === "deposit" ? depSetDate : execSetDate)(row, field, v) : await execSetField(row, field, v);
     busy = false;
     if (ok) { closed = true; if (viaKey || document.activeElement === document.body) xdRefocus(`.xd-val[data-field="${field}"]`); }
     else if (ed.isConnected) ed.focus();  // 실패: 입력값 그대로 편집기 유지
@@ -1780,7 +1822,25 @@ async function renderDepDrawer(fetchEvid) {
   const kv = (k, v) => `<b>${k}</b><span class="xd-ro">${esc(v == null || v === "" ? "-" : v)}</span>`;
   const lockedBy = r._locked_by;  // 주문이 남긴 사용 행: 핵심 열·삭제 잠금
   const linkNo = r["연결거래번호"], linkEv = linkNo ? evidCountNo(linkNo) : 0;
+  // 단계 타임라인 (사용 행만): 마지막으로 날짜가 있는 단계의 다음이 '다음 단계'. 날짜 칸은 눌러서 수정, 비우면 취소
+  const st = r["상태"] || "";
+  let timeline = "";
+  if (r["구분"] === "사용") {
+    const last = DEP_STAGES.reduce((a, s_, i) => r[s_[1]] ? i : a, -1), next = last + 1;
+    const dateVal = (lab, col, v) => `<span class="xd-val xd-date${v ? "" : " empty"}" role="button" tabindex="0" data-field="${col}" data-type="date" data-label="${lab} ${col}" title="${col}: 눌러서 날짜 수정 (지우면 단계 취소)" aria-label="${lab} ${col} ${v || "없음"}, 눌러서 수정">${esc(v || "–")}</span>`;
+    const steps = DEP_STAGES.map(([lab, col, act], i) => {
+      const v = r[col] || "", done = !!v, isNext = i === next;
+      let below;
+      if (done || i < next) below = dateVal(lab, col, v);
+      else if (isNext) below = `<button type="button" class="btn btn-sm btn-primary" data-act="dact" data-action="${act}" data-row="${r._row}" title="${col}을 오늘(${today()})로 등록">오늘 등록</button>`
+        + `<button type="button" class="xd-pick" data-pick="1" data-field="${col}" data-type="date" data-label="${lab} ${col}" aria-label="${lab} ${col} 날짜 지정">날짜 지정</button>`;
+      else below = `<span class="xd-date empty" aria-hidden="true">–</span>`;
+      return `<li class="xd-step ${done ? "done" : isNext ? "next" : "todo"}" data-col="${col}"><span class="xd-dot" aria-hidden="true"></span><span class="xd-step-l">${lab}<span class="sr-only">${done ? " 단계 완료" : isNext ? " 단계 (다음 처리)" : " 단계 (대기)"}</span></span><div class="xd-step-d">${below}</div></li>`;
+    }).join("");
+    timeline = `<section class="xd-sec xd-tl-sec" aria-label="처리 단계"><h3>처리 단계 <span class="badge ${esc(st)}" title="${esc(DEP_STATUS_HELP[st] || "")}">${esc(st)}</span></h3><ol class="xd-timeline">${steps}</ol></section>`;
+  }
   body.innerHTML = `
+    ${timeline}
     <section class="xd-sec xd-info">
       <h3>적립금 정보 <span class="badge">${esc(r["구분"])}</span><span class="sp"></span><button type="button" class="btn btn-sm" data-act="edit" data-kind="deposit" data-row="${r._row}">수정</button></h3>
       ${lockedBy ? `<p class="toolbar-note xd-lock">주문 ${esc(lockedBy)} 에 연결된 적립금 기록입니다. 금액·거래처·구분·증빙번호는 주문 보기에서 처리합니다.</p>` : ""}
@@ -1788,6 +1848,7 @@ async function renderDepDrawer(fetchEvid) {
       <div class="kv">
         ${kv("일자", r["일자"])}${kv("거래처", r["거래처"])}${kv("금액", fmt(r["금액"]) + "원")}${kv("적요", r["적요"])}
         ${kv("사용자", r["사용자"])}${kv("증빙번호(수기)", r["증빙번호"])}${kv("태그", r["태그"])}${kv("비고", r["비고"])}
+        ${r["구분"] === "사용" ? "" : kv("단계", "적립 행은 단계 없음")}
       </div>
     </section>
     ${evidSectionsHtml({ number: no, evid, drive, dateDefault: r["일자"], folderHint: `증빙관리/${esc((r["일자"] || "").slice(0, 4))}/적립금/${esc(r["거래처"])}/${esc(no)}` })}

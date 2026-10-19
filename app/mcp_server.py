@@ -212,9 +212,12 @@ def add_budget(재원: str, 변경회차: str, 금액: dict[str, float], 신청�
 @write_tool()
 @_safe
 def add_deposit(일자: str, 거래처: str, 구분: str, 금액: float, 적요: str = "", 사용자: str = "", 증빙번호: str = "",
-                비고: str = "", 태그: str = "", record_exec: bool = False, 재원: str = "", 예산목: str = "") -> str:
-    """적립금 적립/사용을 기록한다. 구분은 '적립' 또는 '사용'. 적립이면서 record_exec=True 이면 재원·예산목으로 집행내역에도 선결제 한 건을 기록한다."""
-    rec = dict(일자=일자, 거래처=거래처, 구분=구분, 금액=금액, 적요=적요, 사용자=사용자, 증빙번호=증빙번호, 비고=비고, 태그=태그)
+                비고: str = "", 태그: str = "", record_exec: bool = False, 재원: str = "", 예산목: str = "",
+                발주일: str = "", 결제일: str = "", 수령일: str = "") -> str:
+    """적립금 적립/사용을 기록한다. 구분은 '적립' 또는 '사용'. 적립이면서 record_exec=True 이면 재원·예산목으로 집행내역에도 선결제 한 건을 기록한다.
+    사용 행은 발주일(비우면 일자)·결제일·수령일로 단계(대기/발주/결제/수령)가 정해진다. 적립 행은 단계 없음."""
+    rec = dict(일자=일자, 거래처=거래처, 구분=구분, 금액=금액, 적요=적요, 사용자=사용자, 증빙번호=증빙번호, 비고=비고, 태그=태그,
+               발주일=발주일, 결제일=결제일, 수령일=수령일)
     if record_exec:
         rec.update(_record_exec=True, _재원=재원, _예산목=예산목)
     return _j(store.create("deposit", rec))

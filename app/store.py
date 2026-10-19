@@ -81,7 +81,9 @@ LINKED_LOCKED = ["재원", "예산목", "금액", "거래처", "원인발생일"
 REQ_COLS = ["품의번호", "원인발생일", "지출예정일", "재원", "예산목", "세목", "세세목", "거래처",
             "결제수단", "적요", "금액", "태그", "품의자", "비고", "상태"]
 DEP_NO = "적립번호"  # 적립-YYYY-NNN: 적립금 행 식별·증빙 연결 (2026-10-19). 이전 장부에는 _ensure_structure 가 맨 끝 열로 붙인다
-DEP_COLS = [DEP_NO, "일자", "거래처", "구분", "금액", "적요", "사용자", "증빙번호", "연결거래번호", "비고", "태그"]
+DEP_COLS = [DEP_NO, "일자", "거래처", "구분", "금액", "적요", "사용자", "증빙번호", "연결거래번호", "비고", "태그", "발주일", "결제일", "수령일", "상태"]
+DEP_STAGE_COLS = ["발주일", "결제일", "수령일"]  # 사용 행의 단계 (2026-10-19 사용자 결정, 집행 단계 방식). 적립 행은 단계 없음
+DEP_STATUS = ["대기", "발주", "결제", "수령"]  # 날짜에서 계산. 적립 행은 빈 값
 TAG_COLS = ["태그명", "분류", "설명"]
 EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
 FIXLOG_COLS = ["거래번호", "일시", "구분", "사유"]  # 구분: 표시 / 해제. 일시: YYYY-MM-DD HH:MM
@@ -126,7 +128,7 @@ LINK_RE = re.compile(r"^https?://\S", re.I)
 BUDGET_HEAD_ROW = 8
 BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS + ["입금"]  # 새 장부: A~D + E~O (+ 입금: 공금 재원 전용, 맨 끝 열). 읽기·쓰기는 8행 머리글 이름 기준 (열 순서 무관)
 
-DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일",
+DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일", "발주일", "결제일", "수령일",
              "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일"}
 NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기", "부가세액", "입금"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
@@ -421,6 +423,8 @@ def _ensure_structure(wb) -> bool:
         changed = True
     if _ensure_dep_numbers(wb):
         changed = True
+    if _ensure_dep_stages(wb):
+        changed = True
 
     for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30)),
                                (SHEET_SALARY, SALARY_COLS, (14, 10, 10, 14, 30)),
@@ -441,7 +445,7 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10),
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
                                    (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12)):
         ws = wb[sheet]
@@ -717,6 +721,8 @@ def read_all() -> dict:
             r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
         for r in data["payee"]:
             r["인건비예산"] = None if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산") else r["인건비예산"]
+        for r in data["deposit"]:  # 적립금 상태는 날짜에서 계산 (사용 행만)
+            r["상태"] = dep_status(r)
         for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
             r["상태"] = exec_status(r)
             r["상태표시"] = EXEC_STATUS_LABEL.get(r["상태"], r["상태"])
@@ -724,6 +730,7 @@ def read_all() -> dict:
             "labor_kinds": LABOR_KINDS,
             "labor_status": LABOR_STATUS,
             "dep_types": DEP_TYPES,
+            "dep_status": DEP_STATUS,
             "budget_items": BUDGET_ITEMS,
             "fund_types": FUND_TYPES,
             "fund_type_pool": FUND_TYPE_POOL,
@@ -839,6 +846,43 @@ def exec_status(rec: dict) -> str:
     if rec.get("지급청구일"):
         return "보완" if str(rec.get("상태") or "") == "보완" else "청구"
     return "발생"
+
+
+def dep_status(rec: dict) -> str:
+    """적립금 사용 행: 대기(날짜 없음) → 발주(발주일) → 결제(결제일) → 수령(수령일). 뒤 날짜가 우선. 적립 행은 빈 값."""
+    if str(rec.get("구분") or "") != "사용":
+        return ""
+    if rec.get("수령일"):
+        return "수령"
+    if rec.get("결제일"):
+        return "결제"
+    if rec.get("발주일"):
+        return "발주"
+    return "대기"
+
+
+def _ensure_dep_stages(wb) -> bool:
+    """적립금 보정: 사용 행의 빈 발주일은 일자로 채우고(이전 장부는 모두 '발주' 단계에서 시작), 상태 열을 날짜대로 맞춘다. 변경 여부 반환."""
+    if SHEET_DEP not in wb.sheetnames:
+        return False
+    ws = wb[SHEET_DEP]
+    heads = _headers(ws)
+    if not all(c in heads for c in ("구분", "일자", "발주일", "상태")):
+        return False
+    changed = False
+    for r in _rows(ws, DEP_COLS):
+        if not r.get("일자"):
+            continue
+        upd = {}
+        if r.get("구분") == "사용" and not r.get("발주일"):
+            upd["발주일"] = r["일자"]
+        st = dep_status({**r, **upd})
+        if str(r.get("상태") or "") != st:
+            upd["상태"] = st
+        if upd:
+            _write_row(ws, DEP_COLS, r["_row"], upd)
+            changed = True
+    return changed
 
 
 def _ident(kind: str, rec: dict) -> dict:
@@ -1360,6 +1404,17 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
             raise ValueError("구분은 적립/사용 중 하나여야 합니다.")
         if _to_num(rec.get("금액")) <= 0:
             raise ValueError("금액은 0보다 커야 합니다.")
+        if rec.get("구분") == "사용":
+            # 뒤 단계 날짜가 있으면 앞 단계를 비울 수 없다 (집행 단계와 같은 규칙)
+            have = [c for c in DEP_STAGE_COLS if rec.get(c)]
+            if have and not rec.get("발주일"):
+                raise ValueError("결제·수령 날짜가 있으면 발주일을 비울 수 없습니다. 뒤 단계를 먼저 취소하세요.")
+            if rec.get("수령일") and not rec.get("결제일"):
+                raise ValueError("수령일이 있으면 결제일을 비울 수 없습니다. 수령을 먼저 취소하세요.")
+        else:
+            for c in DEP_STAGE_COLS:  # 적립 행은 단계 없음
+                rec[c] = ""
+        rec["상태"] = dep_status(rec)
     elif kind == "budget":
         if not str(rec.get("재원") or "").strip():
             raise ValueError("재원은 필수입니다.")
@@ -1637,6 +1692,9 @@ def create(kind: str, rec: dict) -> dict:
             _assign_request_number(wb, ws, rec)
         elif kind == "deposit":
             _assign_dep_number(wb, ws, rec)
+            if rec.get("구분") == "사용" and not rec.get("발주일"):  # 새 사용 건은 일자에 발주한 것으로 시작
+                rec["발주일"] = rec["일자"]
+                rec["상태"] = dep_status(rec)
         elif key and kind not in ("funds", "tags", "people", "payee"):
             _assign_number(wb, ws, cols, head_row, key, rec)
         if kind == "evidence":  # MCP·API 로 직접 추가해도 증빙번호 부여 (입력값은 무시)
@@ -2211,6 +2269,47 @@ def exec_action(row: int, action: str, expect: dict | None = None, extra: dict |
         return rec
 
 
+def deposit_action(row: int, action: str, expect: dict | None = None) -> dict:
+    """적립금 사용 행의 단계 처리. action: order(발주일=오늘) | pay(결제일=오늘, 발주일 비면 채움) | receive(수령일=오늘, 앞 단계 비면 채움)
+    | unorder | unpay | unreceive (뒤 단계가 있으면 거부). 적립 행은 단계가 없다."""
+    with _write_session() as wb:
+        ws = wb[SHEET_DEP]
+        rec = next((x for x in _rows(ws, DEP_COLS) if x["_row"] == row), None)
+        if rec is None:
+            raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
+        _check_expect("deposit", rec, expect)
+        if rec.get("구분") != "사용":
+            raise ValueError("적립 행에는 발주·결제·수령 단계가 없습니다.")
+        today = dt.date.today().isoformat()
+        if action == "order":
+            rec["발주일"] = today
+        elif action == "pay":
+            if rec.get("수령일"):
+                raise ValueError("이미 수령한 건입니다. 수령을 먼저 취소하세요.")
+            rec["결제일"] = today
+            rec["발주일"] = rec.get("발주일") or today
+        elif action == "receive":
+            rec["수령일"] = today
+            rec["결제일"] = rec.get("결제일") or today
+            rec["발주일"] = rec.get("발주일") or today
+        elif action == "unorder":
+            if rec.get("결제일") or rec.get("수령일"):
+                raise ValueError("결제·수령 날짜가 있어 발주를 취소할 수 없습니다. 뒤 단계를 먼저 취소하세요.")
+            rec["발주일"] = ""
+        elif action == "unpay":
+            if rec.get("수령일"):
+                raise ValueError("수령된 건은 먼저 수령을 취소하세요.")
+            rec["결제일"] = ""
+        elif action == "unreceive":
+            rec["수령일"] = ""
+        else:
+            raise ValueError("알 수 없는 동작입니다.")
+        rec["상태"] = dep_status(rec)
+        _write_row(ws, DEP_COLS, row, rec)
+        _save(wb)
+        return rec
+
+
 def _fixlog_add(wb, no: str, kind: str, reason: str):
     """보완이력 시트에 한 줄 추가 (시트가 없는 이전 장부는 _ensure_structure 가 만들어 둔다)."""
     ws = wb[SHEET_FIXLOG]
@@ -2703,6 +2802,8 @@ def order_create(rows: list, extra: dict | None = None, expects: list | None = N
             _validate_tag(dep, wb)
             ws_d = wb[SHEET_DEP]
             _assign_dep_number(wb, ws_d, dep)
+            dep["발주일"] = dep["발주일"] or d
+            dep["상태"] = dep_status(dep)
             dep["_row"] = _next_row(ws_d)
             _write_row(ws_d, DEP_COLS, dep["_row"], dep)
         r = _next_row(ws_o)

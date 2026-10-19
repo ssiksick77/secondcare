@@ -497,6 +497,12 @@ def exec_action(row: int, body: dict):
     return store.exec_action(row, body.get("action") or "", body.get("expect"), body.get("extra") if isinstance(body.get("extra"), dict) else None)
 
 
+@app.post("/api/deposit/{row}/action")
+def deposit_action(row: int, body: dict):
+    """body: {action: order|pay|receive|unorder|unpay|unreceive, expect: {...}} — 적립금 사용 행의 발주·결제·수령 단계"""
+    return store.deposit_action(row, body.get("action") or "", body.get("expect"))
+
+
 @app.get("/api/drive/status")
 def drive_status():
     return drive.status()
