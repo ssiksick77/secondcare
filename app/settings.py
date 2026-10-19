@@ -36,7 +36,7 @@ FIELDS = {
     "REQUEST_SHIP_TO": ("", False),                # 배송지
     "REQUEST_CONTACT": ("", False),                # 담당자 (이름·연락처)
     # 소모품 구매처 (store.SUPPLIERS_DEFAULT 와 같은 기본값)
-    "REQUEST_SUPPLIERS": ("알파몰,드림디포", False),  # 구매처 목록 (쉼표 구분)
+    "REQUEST_SUPPLIERS": ("알파,드림디포", False),  # 구매처 목록 (쉼표 구분)
     "REQUEST_SUPPLIERS_OFF": ("", False),          # 지금 신청할 수 없는 구매처 (쉼표 구분, 목록에 있는 이름만)
     "REQUEST_SUPPLIER_NOTE": ("", False),          # 연구원 화면 안내 (예: 드림디포는 10월 말까지 이용 불가)
 }

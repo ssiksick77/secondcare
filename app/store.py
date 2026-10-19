@@ -120,8 +120,8 @@ STALE_MSG = "{no} 는 그사이 다른 곳에서 결재 정보가 바뀌어 처�
 ORDER_VENDOR = "알파몰"  # (이전 기본값, 지금은 쓰지 않음: 주문 구매처 = 신청의 구매처)
 ORDER_PREFIX = "알파"
 # 소모품 구매처: 목록·이용 불가는 설정(.env)의 REQUEST_SUPPLIERS / REQUEST_SUPPLIERS_OFF (settings.FIELDS 기본값과 같게 유지)
-SUPPLIERS_DEFAULT = "알파몰,드림디포"
-ORDER_PREFIXES = {"알파몰": "알파", "드림디포": "드림"}  # 주문번호 앞자리. 그 밖의 구매처는 이름 앞 두 글자 (한글·영문·숫자)
+SUPPLIERS_DEFAULT = "알파,드림디포"  # 2026-10-19 사용자: 알파미금역점은 "알파"로 부른다
+ORDER_PREFIXES = {"알파": "알파", "알파몰": "알파", "드림디포": "드림"}  # 주문번호 앞자리. 그 밖의 구매처는 이름 앞 두 글자 (한글·영문·숫자)
 ORDER_DEP_NOTE = "소모품 주문 {no}"   # 주문이 남기는 적립금 '사용' 행의 적요
 DEP_ORDER_LOCKED = ["증빙번호", "금액", "거래처", "구분"]  # 주문에 연결된 적립금 행에서 잠그는 열
 DEP_ORDER_LOCK_MSG = "주문 {no}에 연결된 적립금 기록입니다. 주문 보기에서 주문을 취소하면 함께 삭제됩니다."

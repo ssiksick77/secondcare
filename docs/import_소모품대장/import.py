@@ -35,7 +35,7 @@ for _st in (sys.stdout, sys.stderr):  # cp949 콘솔에서 한글·기호가 깨
     except Exception:
         pass
 
-VENDOR, CODE = "알파몰", "알파"
+VENDOR, CODE = "알파", "알파"  # 사용자: 장부의 거래처 이름은 "알파"(알파미금역점)
 EXAMPLE_ITEMS = {"(알파몰의 품목 이름 복사)", "가나다"}
 
 
@@ -131,7 +131,14 @@ def show(p):
 def apply(p):
     import store
     print("장부:", store.XLSX_PATH)
-    if not any(v["거래처명"] == VENDOR for v in store.read_all()["vendor"]):
+    vendors = store.read_all()["vendor"]
+    same_code = next((v for v in vendors if str(v["코드"]).strip().casefold() == CODE.casefold()), None)
+    if same_code and same_code["거래처명"] != VENDOR:
+        # 같은 코드로 다른 이름(예: 알파미금역점)이 등록돼 있으면 이름을 VENDOR 로 맞춘다 (사용자 결정 2026-10-19: 거래처 이름은 '알파')
+        memo = " · ".join(x for x in [str(same_code.get("비고") or ""), f"이전 이름 {same_code['거래처명']}"] if x)
+        store.update("vendor", same_code["_row"], {"거래처명": VENDOR, "코드": CODE, "비고": memo})
+        print(f"  거래처 이름 수정: {same_code['거래처명']} → {VENDOR}")
+    elif not any(v["거래처명"] == VENDOR for v in vendors):
         store.create("vendor", {"거래처명": VENDOR, "코드": CODE, "비고": "소모품 대장 들여오기"})
     created = {}  # 주문번호 → [신청 행]
     for item in p["requests"]:
@@ -164,6 +171,21 @@ def apply(p):
             upd = {k: v for k, v in dep.items() if not k.startswith("_")}
             upd.update({"비고": o["비고"], "결제일": o["주문일"], "수령일": o["배송일"] or ""})
             store.update("deposit", dep["_row"], upd)
+    # 이전에 "알파몰"로 적힌 구매처·거래처는 "알파"로 (사용자 결정 2026-10-19). 번호·잠금과 무관한 이름 칸만 바꾼다
+    import openpyxl as _ox
+    wb = _ox.load_workbook(store.XLSX_PATH)
+    n_fix = 0
+    for sheet, col in ((store.SHEET_RQ, "구매처"), (store.SHEET_ORDER, "거래처"), (store.SHEET_DEP, "거래처")):
+        ws = wb[sheet]; heads = store._headers(ws)
+        if col not in heads:
+            continue
+        ci = heads.index(col) + 1
+        for r in range(2, ws.max_row + 1):
+            if str(ws.cell(r, ci).value or "").strip() == "알파몰":
+                ws.cell(r, ci).value = VENDOR; n_fix += 1
+    if n_fix:
+        wb.save(store.XLSX_PATH); print(f"  '알파몰' → '{VENDOR}' 이름 수정 {n_fix}칸")
+    wb.close()
     print("완료")
 
 
