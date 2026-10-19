@@ -113,7 +113,7 @@ def main() -> int:
             ck("기타: 저장 행 존재", False)
         # ---- 재원 종류 · 공금 (회계대장 화면) ----
         sv.call("POST", "/api/funds", {"재원코드": "GG01", "과제명": "센터 공금", "종류": "공금"})
-        sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "입금": 500000})
+        sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "신청일자": "2026-01-01", "입금": 500000})
         s, r = sv.call("POST", "/api/exec", {"재원": "GG01", "예산목": "연구활동비", "원인발생일": "2026-03-02", "거래처": "검사", "금액": 120000, "적요": "공금 지출", "지출완료일": "2026-03-02"})
         pool_row = r.get("_row")
         pg.goto(sv.base + "/"); pg.wait_for_timeout(1200)
@@ -154,6 +154,24 @@ def main() -> int:
         if src_row:
             pg.evaluate(f"openVoucher({src_row})"); pg.wait_for_timeout(1000)
             ck("결의서: 미관리 재원 안내 한 줄", "예산·잔액을 관리하지 않습니다" in pg.inner_text("#voucher-sheet"))
+        # ---- 예산목 잔액: 예산변동 신청일자를 집행과 날짜 순으로 섞어 누적 ----
+        sv.call("POST", "/api/funds", {"재원코드": "RB01", "과제명": "잔액 검사"})
+        sv.call("POST", "/api/budget", {"재원": "RB01", "변경회차": "당초", "신청일자": "2026-01-01", "연구활동비": 100000})
+        sv.call("POST", "/api/budget", {"재원": "RB01", "변경회차": "1", "신청일자": "2026-04-01", "연구활동비": 50000})
+        rb = []
+        for d, amt in (("2026-03-10", 30000), ("2026-04-01", 20000), ("2026-05-01", 10000)):
+            s, r = sv.call("POST", "/api/exec", {"재원": "RB01", "예산목": "연구활동비", "원인발생일": d, "거래처": "검사", "금액": amt, "적요": "잔액 검사 " + d, "지출완료일": d})
+            rb.append(r.get("_row"))
+        pg.reload(); pg.wait_for_timeout(1200)
+        bals = pg.evaluate(f"[{rb[0]}, {rb[1]}, {rb[2]}].map(n => runningBalance(DATA.exec.find(x => x._row === n)))")
+        ck("예산목 잔액: 변경 전 거래는 당초 기준, 변경일 거래부터 증액 반영", bals == [70000, 100000, 90000], bals)
+        pg.evaluate(f"openVoucher({rb[0]})"); pg.wait_for_timeout(1000)
+        tail = pg.inner_text("#voucher-sheet").split("재원 현황")[-1]
+        ck("결의서 재원 현황: 거래 시점의 예산만 반영", "70,000" in tail and "120,000" not in tail, tail[:300])
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+        pg.evaluate("openForm('budget')"); pg.wait_for_timeout(300)
+        ck("예산변동 폼: 신청일자 필수", pg.evaluate("document.getElementById('f-신청일자').required"))
+        pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
         # ---- 보완 표시 사유 입력·이력 ----
         s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구활동비", "원인발생일": "2026-03-06", "거래처": "검사", "금액": 5000, "적요": "보완 검사", "지급청구일": "2026-03-06"})
         fx_row = r.get("_row")

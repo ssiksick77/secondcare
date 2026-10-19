@@ -79,13 +79,19 @@ def main() -> int:
         ck("종류 없으면 국책", s == 200 and r.get("종류") == "국책", (s, r))
         s, r = sv.call("POST", "/api/funds", {"재원코드": "XX01", "과제명": "x", "종류": "엉뚱"})
         ck("목록 밖 종류 → 400", s == 400, (s, r))
-        s, r = sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "연구활동비": 100})
+        s, r = sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "신청일자": "2026-01-01", "연구활동비": 100})
         ck("공금에 예산목 예산 → 400", s == 400, (s, r))
-        s, r = sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초"})
+        s, r = sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "신청일자": "2026-01-01"})
         ck("공금 입금 없음 → 400", s == 400, (s, r))
         s, r = sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "입금": 500000})
+        ck("예산변동: 신청일자 없음 → 400", s == 400, (s, r))
+        s, r = sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "신청일자": "2026-01-01", "입금": 500000})
         ck("공금 입금 저장", s == 200 and r.get("입금") == 500000, (s, r))
-        s, r = sv.call("POST", "/api/budget", {"재원": "NN01", "변경회차": "당초", "입금": 1000})
+        bud_row = r.get("_row")
+        rec = sv.rec("budget", bud_row); rec["신청일자"] = ""
+        s, r = sv.call("PUT", f"/api/budget/{bud_row}", {"rec": rec})
+        ck("예산변동 수정: 신청일자 비우기 → 400", s == 400, (s, r))
+        s, r = sv.call("POST", "/api/budget", {"재원": "NN01", "변경회차": "당초", "신청일자": "2026-01-01", "입금": 1000})
         ck("국책에 입금 → 400", s == 400, (s, r))
         s, r = sv.call("POST", "/api/exec", {"재원": "GG01", "예산목": "연구활동비", "원인발생일": "2026-03-02", "거래처": "검사", "금액": 120000, "적요": "공금 지출", "지출완료일": "2026-03-02"})
         ck("공금 집행 (예산목 필수 그대로)", s == 200, (s, r))
@@ -98,8 +104,19 @@ def main() -> int:
         # ---- 잔액 미관리 재원 ----
         s, r = sv.call("POST", "/api/funds", {"재원코드": "SRC1", "과제명": "출처 전용", "잔액미관리": True})
         ck("잔액 미관리 재원 생성 (체크 true → Y)", s == 200 and r.get("잔액미관리") == "Y", (s, r))
-        s, r = sv.call("POST", "/api/budget", {"재원": "SRC1", "변경회차": "당초", "연구활동비": 1000})
+        s, r = sv.call("POST", "/api/budget", {"재원": "SRC1", "변경회차": "당초", "신청일자": "2026-01-01", "연구활동비": 1000})
         ck("미관리 재원 예산변동 → 400", s == 400, (s, r))
+        # ---- 빈 신청일자 보정: 구조 보정이 장부 연도의 1월 1일로 채운다 ----
+        fill = ("import openpyxl, store; wb = openpyxl.load_workbook(store.XLSX_PATH); ws = wb[store.SHEET_BUDGET]; "
+                "ci = store._headers(ws, store.BUDGET_HEAD_ROW).index('신청일자') + 1; ws.cell(store.BUDGET_HEAD_ROW + 1, ci).value = None; "
+                "wb.save(store.XLSX_PATH); wb.close(); store.init_file(); "
+                "rows = store.read_all()['budget']; print(rows[0]['신청일자']); assert rows[0]['신청일자'] == '2026-01-01', rows[0]")
+        fill_dir = os.path.join(sv.dir, "fill"); os.makedirs(fill_dir, exist_ok=True)
+        import shutil
+        shutil.copyfile(os.path.join(sv.dir, "ledger.xlsx"), os.path.join(fill_dir, "ledger.xlsx"))
+        pr = subprocess.run([sys.executable, "-c", fill], cwd=os.path.join(os.path.dirname(sv.dir), "..", "..", "app"),
+                            env=dict(os.environ, LEDGER_XLSX=os.path.join(fill_dir, "ledger.xlsx")), capture_output=True, text=True)
+        ck("빈 신청일자 → 장부 연도 1월 1일로 보정", pr.returncode == 0, pr.stderr[-300:])
         s, r = sv.call("POST", "/api/exec", {"재원": "SRC1", "예산목": "연구활동비", "원인발생일": "2026-03-05", "거래처": "검사", "금액": 7000, "적요": "출처 전용 집행"})
         ck("미관리 재원 집행은 저장됨", s == 200, (s, r))
         s, r = sv.call("GET", "/api/all")

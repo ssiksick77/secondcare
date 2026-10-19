@@ -416,6 +416,8 @@ def _ensure_structure(wb) -> bool:
         changed = True
     if _ensure_evid_numbers(wb, head_font):
         changed = True
+    if _ensure_budget_dates(wb):
+        changed = True
 
     for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30)),
                                (SHEET_SALARY, SALARY_COLS, (14, 10, 10, 14, 30)),
@@ -1107,6 +1109,38 @@ def _assign_evid_number(wb, ws, rec):
     _meta_set(wb, _evid_hw_key(number), mx + 1)
 
 
+def _ledger_year(wb) -> str:
+    """장부 연도: 집행내역 원인발생일·예산변동 신청일자 중 가장 이른 연도, 없으면 올해 (장부 파일 하나 = 한 해)."""
+    years = []
+    if SHEET_EXEC in wb.sheetnames:
+        years += [str(r["원인발생일"])[:4] for r in _rows(wb[SHEET_EXEC], EXEC_COLS) if r.get("원인발생일")]
+    if SHEET_BUDGET in wb.sheetnames:
+        years += [str(r["신청일자"])[:4] for r in _rows(wb[SHEET_BUDGET], BUDGET_COLS, BUDGET_HEAD_ROW) if r.get("신청일자")]
+    years = [y for y in years if y.isdigit()]
+    return min(years) if years else str(dt.date.today().year)
+
+
+def _ensure_budget_dates(wb) -> bool:
+    """예산변동 보정: 신청일자가 빈 행(이전 장부)은 장부 연도의 1월 1일로 채운다 (사용자 결정 2026-10-19). 변경 여부 반환."""
+    if SHEET_BUDGET not in wb.sheetnames:
+        return False
+    ws = wb[SHEET_BUDGET]
+    heads = _headers(ws, BUDGET_HEAD_ROW)
+    if "신청일자" not in heads or "재원" not in heads:
+        return False
+    ci, fi = heads.index("신청일자") + 1, heads.index("재원") + 1
+    blank = [r for r in range(BUDGET_HEAD_ROW + 1, ws.max_row + 1)
+             if ws.cell(r, fi).value not in (None, "") and ws.cell(r, ci).value in (None, "")]
+    if not blank:
+        return False
+    first = dt.date(int(_ledger_year(wb)), 1, 1)
+    for r in blank:
+        cell = ws.cell(r, ci)
+        cell.value = first
+        cell.number_format = "yyyy-mm-dd"
+    return True
+
+
 def _ensure_evid_numbers(wb, head_font) -> bool:
     """증빙 시트 보정: 증빙번호 열이 없으면(이전 장부) 맨 끝에 붙이고, 번호가 빈 행에 시트 순서대로 거래번호별 번호를 부여.
     다른 열·값은 건드리지 않는다. 변경 여부 반환."""
@@ -1280,6 +1314,8 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
         rnd = str(rec.get("변경회차") or "").strip()
         if not (rnd in BUDGET_ROUNDS or rnd.isdigit()):
             raise ValueError("변경회차는 '이월', '당초' 또는 숫자여야 합니다.")
+        if not rec.get("신청일자"):  # 집행 표 '예산목 잔액'이 이 날짜부터 변경액을 반영한다 (2026-10-19)
+            raise ValueError("신청일자는 필수입니다 (이 날짜부터 거래별 예산목 잔액에 반영됩니다).")
     elif kind == "people":
         if not str(rec.get("이름") or "").strip():
             raise ValueError("이름은 필수입니다.")

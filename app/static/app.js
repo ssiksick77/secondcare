@@ -29,7 +29,7 @@ const COLS = {
   exec: [
     { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "연결품의번호", hide: true }, { k: "원인발생일", t: "date", label: "발생일" }, { k: "지급청구일", t: "date", hide: true },
     { k: "지출완료일", t: "date", hide: true }, { k: "결의일", t: "date", hide: true }, { k: "재원" }, { k: "예산목" }, { k: "세목" }, { k: "세세목", minor: true },
-    { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (예산현액 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true, minor: true },
+    { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (원인발생일까지 신청된 예산변동 합 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true, minor: true },
   ],
   req: [
     { k: "품의번호" }, { k: "상태", t: "badge" }, { k: "원인발생일", t: "date" }, { k: "지출예정일", t: "date" }, { k: "재원" },
@@ -85,7 +85,7 @@ function formFields(kind) {
   if (kind === "budget") return [
     { k: "재원", type: "select", opts: funds.filter(f => !isUntrackedFund(f)), req: true, hint: "잔액 미관리 재원은 예산변동을 적지 않습니다" },
     { k: "변경회차", type: "text", req: true, hint: "이월 / 당초 / 1, 2, 3…" },
-    { k: "신청일자", type: "date" },
+    { k: "신청일자", type: "date", req: true, hint: "이 날짜부터 거래별 예산목 잔액에 반영" },
     { k: "변경사유", type: "text", cls: "wide" },
     ...items.map(i => ({ k: i, type: "num" })),
     { k: "입금", type: "num", hint: "공금 재원만: 입금액 (예산목 구분 없음, 환입은 음수)" },
@@ -822,18 +822,24 @@ $("#dlg-save-more").addEventListener("click", () => { $("#dlg").dataset.saveMore
 
 // 가용잔액 = 예산현액 − 집행(파일 전체) − 대기 품의(날짜 무관). 대시보드·집행내역 열·저장 경고가 모두 이 함수를 쓴다 (2026-10-13 결정).
 // excludeReq / excludeExec: 품의→집행 전환 중인 품의, 수정 중인 집행 행은 빼고 계산 (이중 차감 방지)
-// 거래별 누적 잔액: 같은 재원·예산목의 집행을 원인발생일(같으면 행 순)으로 쌓아 "이 거래까지 반영한 뒤" 남는 예산. 예산 미입력이면 null
+// 거래별 누적 잔액: 같은 재원·예산목의 예산변동(신청일자)과 집행(원인발생일)을 날짜 순으로 섞어 쌓아 "이 거래까지 반영한 뒤" 남는 예산.
+// 같은 날이면 예산변동 먼저(그날 거래부터 변경액 반영), 집행끼리는 행 순. 그 날짜까지 신청된 예산이 없으면 null (사용자 결정 2026-10-19)
 let RUN_BAL = null;
+// 재원·예산목의 예산변동 중 날짜 d 까지 신청된 금액 합 (공금은 입금). 신청일자가 빈 행은 서버가 1월 1일로 채우지만, 혹시 비어 있으면 처음부터 포함
+function budgetUpTo(fund, item, d) {
+  const col = isPoolFund(fund) ? "입금" : item;
+  return DATA.budget.filter(x => x["재원"] === fund && (x["신청일자"] || "") <= (d || "")).reduce((a, x) => a + (x[col] || 0), 0);
+}
 function runningBalance(r) {
   if (!RUN_BAL) {
     RUN_BAL = new Map();
     const groups = {};
-    DATA.exec.forEach(x => { const k = x["재원"] + "" + (isPoolFund(x["재원"]) ? "" : x["예산목"]); (groups[k] = groups[k] || []).push(x); });  // 공금은 재원 단위로 누적
+    DATA.exec.forEach(x => { const k = x["재원"] + "" + (isPoolFund(x["재원"]) ? "" : x["예산목"]); (groups[k] = groups[k] || []).push(x); });  // 공금은 재원 단위로 누적
     Object.values(groups).forEach(list => {
       const f = list[0]["재원"], i = list[0]["예산목"];
-      const b = isUntrackedFund(f) ? 0 : isPoolFund(f) ? poolDeposit(f) : DATA.budget.filter(x => x["재원"] === f).reduce((a, x) => a + (x[i] || 0), 0);
       list.sort((a, c) => (a["원인발생일"] || "").localeCompare(c["원인발생일"] || "") || a._row - c._row);
-      let acc = 0; list.forEach(x => { acc += x["금액"] || 0; RUN_BAL.set(x._row, b ? b - acc : null); });
+      let acc = 0;
+      list.forEach(x => { acc += x["금액"] || 0; const b = isUntrackedFund(f) ? 0 : budgetUpTo(f, i, x["원인발생일"]); RUN_BAL.set(x._row, b ? b - acc : null); });
     });
   }
   return RUN_BAL.get(r._row) ?? null;
@@ -1932,16 +1938,17 @@ function korWon(n) {
 const VOUCHER_SIGNERS = ["담당", "매니저", "선임연구원", "센터장"];  // 결재란 칸 (사용자 결정 2026-10-16). 이름은 미리 인쇄하지 않음
 const ymdKo = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || ""); return m ? `${m[1]}년 ${m[2]}월 ${m[3]}일` : ""; };
 const vcNum = n => n < 0 ? "−" + fmt(-n) : fmt(n);   // 음수는 U+2212
-// 재원 현황: 이 행 위치(원인발생일 순, 같은 날은 행 순 = 집행 표 '예산목 잔액'의 runningBalance 와 같은 순서)까지 누적한 예산목 묶음별 잔액
+// 재원 현황: 이 행 위치(원인발생일 순, 같은 날은 행 순 = 집행 표 '예산목 잔액'의 runningBalance 와 같은 순서)까지 누적한 예산목 묶음별 잔액.
+// 예산은 이 거래의 원인발생일까지 신청된 예산변동만 (runningBalance 와 같은 기준)
 function voucherFund(r) {
   const fund = r["재원"], upTo = x => ((x["원인발생일"] || "").localeCompare(r["원인발생일"] || "") || x._row - r._row) <= 0;
-  const budget = DATA.budget.filter(x => x["재원"] === fund), execs = DATA.exec.filter(x => x["재원"] === fund && upTo(x));
+  const execs = DATA.exec.filter(x => x["재원"] === fund && upTo(x));
   if (isUntrackedFund(fund)) return { rows: [], own: false, before: 0, cur: 0, after: 0, untracked: true };  // 잔액 미관리: 재원 현황 표 대신 안내 한 줄
-  if (isPoolFund(fund)) {  // 공금: 예산목 없이 재원 잔액 한 줄 (입금 합계 − 이 거래까지의 집행)
-    const cur = r["금액"] || 0, after = poolDeposit(fund) - execs.reduce((a, x) => a + (x["금액"] || 0), 0);
+  if (isPoolFund(fund)) {  // 공금: 예산목 없이 재원 잔액 한 줄 (이 날짜까지의 입금 − 이 거래까지의 집행)
+    const cur = r["금액"] || 0, after = budgetUpTo(fund, null, r["원인발생일"]) - execs.reduce((a, x) => a + (x["금액"] || 0), 0);
     return { rows: [{ label: "공금 잔액", own: true, cur, after, before: after + cur }], own: true, before: after + cur, cur, after, pool: true };
   }
-  const bal = i => budget.reduce((a, x) => a + (x[i] || 0), 0) - execs.filter(x => x["예산목"] === i).reduce((a, x) => a + (x["금액"] || 0), 0);
+  const bal = i => budgetUpTo(fund, i, r["원인발생일"]) - execs.filter(x => x["예산목"] === i).reduce((a, x) => a + (x["금액"] || 0), 0);
   const rows = VOUCHER_GROUPS.map(([label, items]) => {
     const own = items.includes(r["예산목"]), cur = own ? (r["금액"] || 0) : 0, after = items.reduce((a, i) => a + bal(i), 0);
     return { label, own, cur, after, before: after + cur };

@@ -198,8 +198,9 @@ def add_req(원인발생일: str, 재원: str, 예산목: str, 금액: float, �
 
 @write_tool()
 @_safe
-def add_budget(재원: str, 변경회차: str, 금액: dict[str, float], 신청일자: str = "", 변경사유: str = "") -> str:
-    """예산변동 행을 추가한다. 변경회차는 '이월', '당초' 또는 숫자. 금액은 {예산목: 금액} 사전 (음수 가능)."""
+def add_budget(재원: str, 변경회차: str, 금액: dict[str, float], 신청일자: str, 변경사유: str = "") -> str:
+    """예산변동 행을 추가한다. 변경회차는 '이월', '당초' 또는 숫자. 금액은 {예산목: 금액} 사전 (음수 가능).
+    신청일자(YYYY-MM-DD)는 필수: 집행 표의 거래별 예산목 잔액은 이 날짜부터 변경액을 반영한다."""
     rec = dict(재원=재원, 변경회차=변경회차, 신청일자=신청일자, 변경사유=변경사유)
     for k, v in 금액.items():
         if k not in store.BUDGET_ITEMS:
