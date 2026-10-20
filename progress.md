@@ -4,12 +4,13 @@ Updated: 2026-10-20
 
 ## Goal
 
-The AI helper sends the whole ledger on every call. It gets slow and costly as the ledger grows, the user cannot check where an answer comes from, and it cannot remember facts outside the ledger (fund or vendor notes, rules). Rebuild it as a tool-calling agent on a shared tool module, with a memo store, for the accountant role first.
+AI chat history lives only in the browser: a refresh loses it, several users cannot be told apart, and one conversation cannot be split by topic. Store chats on the server per login user, in several rooms, with a 7-day auto-delete unless the user keeps a room.
 
 ## Done
 
-- AI helper overhaul, first version (this branch, 2026-10-20): 9dd63f1 `app/tools.py` shared read tools (MCP wraps them, `tool_schema`, `call`); d8ba018 `budget_balance`, `search_ledger` (집행·신청·품의), `get_exec` with 증빙·연결품의·적립금연결, `fx_rate` (frankfurter.app, live check once); c245e15 memo store (sheet/table `메모`, validation, settings panel CRUD, `read_memo`); a20d1c9 chat as a tool-calling agent (`AGENT_SYSTEM`, `summary_context`, `agent_tools`, `run_tool`, 10 rounds, 40k char cap, `propose_memo` card, "조회" line); d5f0afe AI 추천·검증 keeps a filled 예산목. Test group `ai` (tests/test_ai.py, 122 checks, stubbed client, no API calls). Merged main (Second Care rename, Google login, first-login name) on 2026-10-20.
-- Finding: receipt extract and suggest never sent the whole ledger (the first survey said so); only chat and report did. Report and the OpenAI chat path still do (later).
+- 137e869 AI chat rooms, first version: `app/chat_store.py` (`app/chats.sqlite`, rooms per login email, 7-day purge unless kept, history limit 40), routes `/api/chats…` (old `/api/ai/chat` removed), `ai.chat_in_room` (stores question and answer with calls/proposals only on success), panel room bar (select, 새 대화, 이름, 보관, 삭제), past proposal cards status-only, notice text, persona 행정보조 김연구 / button 김연구 호출하기, `LEDGER_AI_FAKE=1` canned answer for UI tests. Checks: calc 32, API 110, db 55, ai 158, api-db 120, UI 84, ui-db 86.
+- 7475b7c chat answers rendered as markdown (shared `.md` styles).
+- AI helper overhaul first version (9dd63f1..d5f0afe, merged eb02756) and real-model check of 6 sample questions (all correct). Details in git log.
 
 ## Done before this task (main, merged 2026-10-20)
 
@@ -37,7 +38,7 @@ The AI helper sends the whole ledger on every call. It gets slow and costly as t
 
 ## In progress
 
-None. AI helper overhaul first version is complete and merged into main (eb02756). Real-model check on the QA copy (2026-10-20, claude-sonnet-5-5, 6 questions, 103k input tokens of which 92k cached, 1.7k output): all six answers matched the ledger (잔액 1,000,500원; 회의비 증빙 from a 일반 memo; 신청품목03 단가 10,000·30,000원; 신청품목05 2026-07-04 QA05 with 품의·집행 chain; USD rate with the ECB caveat; 2026-QA01-003 보완 stage). Each answer used exactly one tool call. First call took 24 s (cache creation), the rest 5-6 s. Output saved in tests/.tmp/live_check.txt (local).
+None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE on the QA copy (room bar, title from first question, table rendering, notice). Not yet tried with the real model in rooms (the room layer only changes storage and history; the model path is the one verified earlier).
 
 ## Open issues
 
@@ -46,6 +47,7 @@ None. AI helper overhaul first version is complete and merged into main (eb02756
 - Static files have no version query, so a code change can show stale CSS until a hard refresh (ideas.md [later][fix] 2026-10-20).
 - SQLite mode skips `_ensure_structure`, so a ledger imported from an older xlsx must be fixed up by the import (it loops the fix-up); the budget sheet summary rows 1-7 are not kept in SQLite (export must rebuild them).
 - `mcp_server.py` was not run against SQLite; it only uses store functions, so it should work, but check it in session 3.
+- Manual QA launcher for the browser pane (local, untracked `.claude/launch.json` → scratchpad run_manual.py): QA copy in tests/.tmp/manual, LEDGER_AI_FAKE=1, LEDGER_AUTH_BYPASS=qa@example.com, port 8795.
 - Rename note for the AI tools: the brainstorm named `search_exec`; the tool is `search_ledger` (it spans 집행·신청·품의). `.claude/launch.json` (browser-pane launcher `qa-manual`) is local and untracked.
 - The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run.
 - The `api` group fails about once in six full `check.sh` runs and passes on rerun. Captured on 2026-10-20: test '구분 변경 → 재결재' got HTTP 423 '장부 파일에 쓸 수 없습니다' (store.py PermissionError on os.replace of the xlsx copy): a Windows file-lock race (indexer/antivirus), not a code bug. If it repeats often, retry the save once in `store._save` or run the api group on SQLite only.
@@ -94,7 +96,9 @@ None. AI helper overhaul first version is complete and merged into main (eb02756
 
 - 2026-10-20 (user) AI helper overhaul: hybrid C = small summary in the system prompt + read tools (not full ledger, not summary only); one tool module for MCP and the in-app agent; memo store by target kind (재원·거래처·일반), user edits, AI proposes and the user approves; fx_rate tool in the first version; OpenAI tool calling, receipt OCR (OCI candidate), report, travel calculator, rule-document answers all later. Accountant-role version first; the researcher version is a separate agent with its own smaller tool set (restriction by tool availability, not by prompt). My calls: memo UI in the settings panel; frankfurter.app for rates; tool loop cap stays 6; chat shows one line per tool call under the answer.
 
+- 2026-10-20 (user) AI chat rooms: server storage (not browser), separate file `app/chats.sqlite` (not the ledger DB: no backup/undo/export mixing), rooms per login email, 7-day auto-delete unless kept, model gets the last 40 messages, past proposal cards act only within their turn, xlsx mode not considered (owner falls back to `local`), notice that misuse may be forwarded to the master account (notice only; detection later). My calls: purge on startup and on list, by last message; title = first question (30 chars), renamable; room list at the top of the panel; delete is permanent.
+
 ## Next action
 
-Pick the next AI step with the user: OpenAI path tool calling (session card proposed 2026-10-20), receipt OCR, report without the full ledger, researcher agent. Or another task from ideas.md.
+Merge claude/ai-assistant-overhaul-c6df4b into main (137e869). Then pick the next AI step: OpenAI path tool calling (session card), receipt OCR, report, researcher agent; or misuse detection + master forwarding (notice only so far).
 

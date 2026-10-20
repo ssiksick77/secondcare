@@ -28,12 +28,17 @@ import ai  # noqa: E402
 import auth  # noqa: E402
 import drive  # noqa: E402
 import store  # noqa: E402
+import chat_store  # noqa: E402
 
 HOST, PORT = "127.0.0.1", int(os.environ.get("LEDGER_PORT", "8791"))
 STATIC = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title=f"{settings.APP_NAME}: {settings.APP_FULL_NAME}")
 log = logging.getLogger(settings.APP_SLUG)
+try:
+    chat_store.purge()  # 시작 때 오래된 채팅방 정리 (보관 방 제외)
+except Exception as e:  # 채팅 저장소 문제로 앱이 안 뜨면 안 된다
+    log.warning("chat purge failed: %s", e)
 
 
 @app.exception_handler(store.LedgerLocked)
@@ -43,6 +48,11 @@ async def _locked(_: Request, e: store.LedgerLocked):
 
 @app.exception_handler(store.NotFound)
 async def _notfound(_: Request, e: store.NotFound):
+    return JSONResponse({"detail": str(e)}, status_code=404)
+
+
+@app.exception_handler(chat_store.ChatNotFound)
+async def _chat_notfound(_: Request, e: chat_store.ChatNotFound):
     return JSONResponse({"detail": str(e)}, status_code=404)
 
 
@@ -461,6 +471,53 @@ def ratt_delete(row: int, body: dict | None = None):
     return {"ok": True}
 
 
+# ---------- AI 채팅방 (사용자별, app/chats.sqlite) ----------
+def _chat_owner(request: Request) -> str:
+    return ((request.state.user or {}).get("email") or "local").lower()
+
+
+@app.get("/api/chats")
+def chats_list(request: Request):
+    """내 채팅방 목록 (최근 활동순). 보관하지 않은 방은 마지막 메시지 7일 뒤 자동 삭제."""
+    return chat_store.list_chats(_chat_owner(request))
+
+
+@app.post("/api/chats")
+def chats_create(request: Request, body: dict | None = None):
+    return chat_store.create_chat(_chat_owner(request), str((body or {}).get("title") or ""))
+
+
+@app.patch("/api/chats/{chat_id}")
+def chats_update(request: Request, chat_id: int, body: dict):
+    """body: {title?: str, kept?: bool}"""
+    return chat_store.update_chat(_chat_owner(request), chat_id, body.get("title") if "title" in body else None,
+                                  bool(body["kept"]) if "kept" in body else None)
+
+
+@app.delete("/api/chats/{chat_id}")
+def chats_delete(request: Request, chat_id: int):
+    chat_store.delete_chat(_chat_owner(request), chat_id)
+    return {"ok": True}
+
+
+@app.get("/api/chats/{chat_id}/messages")
+def chats_messages(request: Request, chat_id: int):
+    return chat_store.messages(_chat_owner(request), chat_id)
+
+
+@app.post("/api/chats/{chat_id}/messages")
+def chats_ask(request: Request, chat_id: int, body: dict):
+    """질문 → 모델 → 답 저장. 반환: {answer, proposals, calls, usage, message, chat}."""
+    return ai.chat_in_room(_chat_owner(request), chat_id, str(body.get("content") or ""))
+
+
+@app.post("/api/chats/{chat_id}/notes")
+def chats_note(request: Request, chat_id: int, body: dict):
+    """제안 처리 알림([알림] 제안 p1 저장됨 등)을 사용자 메시지로 남긴다 (모델 이력에 포함, 화면에는 작게)."""
+    return chat_store.add_message(_chat_owner(request), chat_id, "user", str(body.get("content") or ""), note=True)
+
+
+
 @app.post("/api/{kind}")
 def create(kind: str, rec: dict):
     _kind(kind)
@@ -597,11 +654,6 @@ def test_settings(body: dict | None = None):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-
-
-@app.post("/api/ai/chat")
-def ai_chat(body: dict):
-    return ai.chat(body.get("messages") or [], int(body.get("turn") or 0))
 
 
 @app.get("/readme")
