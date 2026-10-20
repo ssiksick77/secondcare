@@ -43,6 +43,7 @@ def tables() -> dict[str, tuple[str, list[str]]]:
         "order": (st.SHEET_ORDER, st.ORDER_COLS),
         "ratt": (st.SHEET_RATT, st.RATT_COLS),
         "fixlog": (st.SHEET_FIXLOG, st.FIXLOG_COLS),
+        "memo": (st.SHEET_MEMO, st.MEMO_COLS),
     }
 
 

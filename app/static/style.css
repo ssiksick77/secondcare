@@ -160,6 +160,13 @@ input[type="file"]::file-selector-button:hover { background: var(--bg-hover); }
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-ghost:hover { background: var(--bg-hover); border-color: transparent; }
 .btn-sm { padding: 0 9px; min-height: 26px; font-size: 12px; }
+/* 설정 패널 메모 목록 (AI 도우미 참고용) */
+.memo-list table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.memo-list th, .memo-list td { padding: 4px 6px; border-bottom: 1px solid var(--rule-2); text-align: left; vertical-align: top; }
+.memo-list th { background: var(--bg-head); color: var(--ink-2); font-weight: 500; }
+.memo-list td.wrap { white-space: pre-wrap; word-break: break-word; }
+.memo-list td.actions { white-space: nowrap; width: 1%; }
+.memo-list .empty { color: var(--ink-3); padding: 6px 0; }
 /* 삭제: 휴지 상태는 회색, hover/focus 에서만 붉게 */
 .btn-danger { color: var(--ink-2); border-color: var(--rule); }
 .btn-danger:not(:disabled):hover, .btn-danger:not(:disabled):focus-visible { color: var(--alert); border-color: var(--alert); background: var(--alert-bg); }
@@ -488,6 +495,7 @@ textarea.xd-edit { resize: vertical; margin: 2px 0; }
 .msg.error { background: var(--alert-bg); color: var(--alert-deep); }
 .msg.pending { color: var(--ink-2); font-style: italic; }
 .msg .retry { margin-left: 8px; font-size: 12px; }
+.ai-calls { font-size: 11px; color: var(--ink-3); align-self: flex-start; max-width: 95%; word-break: break-all; }
 .msg.proposal { border: 1px solid var(--margin); background: var(--bg); width: 95%; }
 .proposal-head { font-weight: 700; color: var(--margin); margin-bottom: 4px; }
 .proposal-body { font-size: 12px; white-space: pre-wrap; }

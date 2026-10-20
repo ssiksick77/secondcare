@@ -98,8 +98,8 @@ def main() -> int:
     ck("내보낸 xlsx 에 수식 셀 없음", direct["meta"]["formula_count"] == 0)
     import openpyxl
     wb = openpyxl.load_workbook(export)
-    ck("시트 이름 = 이전 장부 + 거래처·보완이력", wb.sheetnames == ["인원", "기준급여", "지급처", "인건비지급", "인건비조정", "재원", "집행내역", "품의내역", "예산변동",
-                                               "적립금", "거래처", "태그", "증빙", "보완이력", "신청", "주문", "신청첨부", "메타"], wb.sheetnames)
+    ck("시트 이름 = 이전 장부 + 거래처·보완이력·메모", wb.sheetnames == ["인원", "기준급여", "지급처", "인건비지급", "인건비조정", "재원", "집행내역", "품의내역", "예산변동",
+                                               "적립금", "거래처", "태그", "증빙", "보완이력", "메모", "신청", "주문", "신청첨부", "메타"], wb.sheetnames)
     ck("메타 시트 숨김, 예산변동 8행 머리글·7행 합계", wb["메타"].sheet_state == "hidden" and wb["예산변동"].cell(8, 1).value == "재원" and wb["예산변동"].cell(7, 5).value is not None)
     wb.close()
     return ck.done("db")
