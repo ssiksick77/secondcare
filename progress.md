@@ -8,6 +8,7 @@ Move the ledger store from the xlsx file to SQLite so several users can work on 
 
 ## Done
 
+- d202ab6 Session 3: `app/export_xlsx.py` writes a read-only xlsx copy (old sheet order, 예산변동 header row 8 with summary rows 1-7 via `_refresh_budget_summary`, hidden 메타 sheet, values through `_write_row`). `test_db` exports, re-imports and compares `read_all` from SQLite, the re-import and the xlsx (53 checks). README section "SQLite 저장소", CLAUDE.md commands, `*.sqlite*` gitignored.
 - 7ee9405 / f389f7f Session 2: every write path runs on SQLite when `LEDGER_DB` is set. `db.Workbook` / `db.Sheet` stand in for the openpyxl workbook; `_rows`, `_write_row`, `_next_row`, `_delete_row`, `_has_value`, `_meta_get/_meta_set`, `_rename_tag`, `_load` dispatch on the type; `_ensure_structure` and `_refresh_budget_summary` are skipped for SQLite. `_write_session` = one `BEGIN IMMEDIATE` transaction, `_save` backs up the committed state (`app/backup/*.sqlite`) and commits, `undo_last` restores from that backup, `meta.write_seq` replaces the file hash and feeds `/api/meta` (`store.data_stamp`). Each create/update/delete/replace writes one `changelog` row (author empty). `import_xlsx` repeats the structure fix-up until stable. Tests: `api-db` and `ui-db` run the API and UI tests on a SQLite copy (`LEDGER_TEST_MODE=db` in `tests/_env.py`), `test_db` checks backup, undo and changelog; `test_api` child output is read as UTF-8 (cp949 flake fixed).
 - ef7ffc0 Session 1: `app/db.py` (schema: one table per sheet, `id` + `author` columns, `meta`, `changelog`), `app/import_xlsx.py` (xlsx -> SQLite, fills author, refuses to overwrite without `--force`), `store.read_all` split into `_raw_xlsx` / `_raw_db` / `_derive` and reads SQLite when `LEDGER_DB` is set, `tests/test_db.py` (45 checks: counts, 금액 totals, every column equal between xlsx and SQLite on the QA ledger), `db` group in `tests/run.py`.
 
@@ -31,18 +32,18 @@ Move the ledger store from the xlsx file to SQLite so several users can work on 
 
 SQLite migration, first version (brainstormed 2026-10-20). Done conditions:
 - Store on SQLite: calc 32, API 95, UI 56 tests pass; screen and API behaviour unchanged. (done: api-db 95, ui-db 56 pass)
-- Every record has a stable id: API and frontend address records by id, not by row number. (SQLite read_all returns `_row` = id; frontend rename pending)
+- Every record has a stable id: API and frontend address records by id, not by row number. (done in substance: `_row` carries the SQLite id; the field name stays `_row`, see Decisions)
 - One-shot import script xlsx -> SQLite: on the QA ledger, every sheet's row count and amount totals equal the source. (done ef7ffc0)
-- Export SQLite -> xlsx: the exported file opens in Excel with the same sheets and columns as the current ledger.
+- Export SQLite -> xlsx: the exported file opens in Excel with the same sheets and columns as the current ledger. (done d202ab6; opened only by openpyxl, not by Excel)
 - Backup and undo on SQLite: a backup file exists before each write; undo works. (done f389f7f)
-- Runs on Linux: `python main.py` starts without the .bat files.
+- Runs on Linux: `python main.py` starts without the .bat files. (verified by code reading only: the .bat files are wrappers, the lock uses fcntl on posix; no Linux machine here)
 - Change log has an author column (email); the import fills existing rows with 안윤아 (snubh.ai.center.01@gmail.com). (done; writes log with an empty author until login)
 
-Session order: (1) schema + import + read_all — done, (2) write paths — done (the adapter covered numbering, evidence, requests and orders too), (3) export SQLite -> xlsx, Linux run, frontend `_row` -> `id` rename, docs (README/PRODUCT), MCP server check.
+Session order: (1) schema + import + read_all — done, (2) write paths — done, (3) export, docs — done. Left: MCP server check against SQLite, PRODUCT.md wording ("엑셀 파일이 원본"), switching the live ledger (user decision).
 
 ## Open issues
 
-- Migration state: with `LEDGER_DB` set the app reads and writes SQLite only; the xlsx is not updated (export pending). `_row` in the API is the SQLite id. The live ledger has not been imported; keep `app/.env` without `LEDGER_DB` until export exists.
+- Migration state: with `LEDGER_DB` set the app reads and writes SQLite only; the xlsx is not updated (use `export_xlsx.py` for a copy). `_row` in the API is the SQLite id. The live ledger has not been imported; switching `app/.env` to `LEDGER_DB` is the user's call (import once, then stop editing the xlsx by hand).
 - SQLite mode skips `_ensure_structure`, so a ledger imported from an older xlsx must be fixed up by the import (it loops the fix-up); the budget sheet summary rows 1-7 are not kept in SQLite (export must rebuild them).
 - `mcp_server.py` was not run against SQLite; it only uses store functions, so it should work, but check it in session 3.
 - The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run.
@@ -81,6 +82,7 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 - 2026-10-20 (user) 증빙 교체([교체] 버튼, replace=1, 옛 파일 휴지통) 9ff0690; 드라이브가 기준: 지운(휴지통) 파일의 증빙 행은 조회·[드라이브 동기화] 때 장부에서 삭제, 폴더 이름은 현재 번호로 수정(drive.fix_folder_name) b6d17cf; 증빙번호는 지운 번호 재사용(베타, 메타 최고값 폐기). 실제 장부에 동기화 1회 실행: AX 증빙 8건 삭제(사용자가 일부러 지움), 폴더 3개 이름 수정, 백업 manual_before_drivesync_*. drive.file 권한이라 직접 넣은 파일은 못 봄(README).
 - 2026-10-20 (user) 증빙 업로드 시 원본파일명 보존 안 함(열은 남기되 빈 값), 실제 장부의 기존 값 9건 비움(백업 manual_before_origname_*). 신청 첨부는 그대로.
 - 2026-10-20 (user) 거래처 이름 알파 → 알파미금역점, 코드는 알파 유지. My calls: 적립번호·주문번호·메타 키·적요·비고·품목명은 그대로, 거래처 탭 비고는 "이전 이름 알파 (코드 알파)".
+- 2026-10-20 Session 3 (my calls): keep the API field name `_row` (it already holds the SQLite id; renaming touches every JS file and MCP docstring for no behaviour change); the export rebuilds the budget summary and 메타 sheet instead of copying the old file; `export_xlsx.py` refuses to overwrite without `--force`.
 - 2026-10-20 Session 2 (my calls): keep the openpyxl-shaped write code and put a SQLite adapter under it instead of rewriting 60 functions; one transaction per write session; backup = SQLite backup API of the committed state taken inside `_save` before commit; undo = restore from that backup; change detection = `meta.write_seq` (WAL makes file mtime unreliable); changelog rows per row action, create-then-write logs once.
 - 2026-10-20 SQLite schema (my calls): one table per sheet with the Korean headers as column names; empty cells NULL, numeric columns REAL, other columns untyped so 변경회차 keeps int vs text; dates as 'YYYY-MM-DD' text; `_row` carries the SQLite id so screens work unchanged until the frontend is renamed; `author` stores the email only (name mapping comes with login).
 - 2026-10-20 (user) SQLite migration, multi-user. Target: 3 (several accountants + researchers filing requests), external access, centre Linux server later, tunnel from a centre PC first. Login = Google, allow-list of emails managed by the accountant, first accountant in app/.env. Roles, login, external access, deployment are all later; the migration only adds stable ids and an author column. Existing rows get author 안윤아 (snubh.ai.center.01@gmail.com). SQLite before PostgreSQL (2026-10-19 decision kept).
@@ -88,6 +90,6 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 
 ## Next action
 
-Session 3 on branch claude/sqlite-migration-difficulty-9c1e10: write `app/export_xlsx.py` (SQLite -> xlsx with the same sheets, columns, header row 8 and summary rows for 예산변동, hidden 메타 sheet) and a test that imports the export again and compares `read_all`. Then the Linux run check and the frontend `_row` -> `id` rename.
+Ask the user whether to switch the live ledger now: import `의료인공지능센터_지출장부_2026.xlsx` to SQLite (`import_xlsx.py`), set `LEDGER_DB` in `app/.env`, restart the app and MCP, and keep the xlsx as a read-only export. Before that, run `mcp_server.py` once against a SQLite QA copy. Then merge branch claude/sqlite-migration-difficulty-9c1e10 into main.
 
 Previous candidates: Candidates: one-shot rename of existing evidence files to the new rule (needs Drive connected), LEDGER_HOST + server role check, 학회·기타 review leftovers.
