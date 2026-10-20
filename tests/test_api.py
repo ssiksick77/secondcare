@@ -353,7 +353,7 @@ def main() -> int:
             s, loc = sv.get_raw("/", cookie=ck_)
             ck("xlsx: / 200", s == 200, (s, loc))
         # ---- 허용 계정 관리 (/api/users): 마스터(.env)만, SQLite users 표에 저장 ----
-        other = "other@example.com"
+        other = "guest@example.com"  # .env 마스터(TEST_EMAIL, OTHER_EMAIL)가 아닌 계정
         ck_o = sv.session_cookie(other)
         s, r = sv.call("GET", "/api/me", cookie=ck_o)
         ck("허용 전: 목록에 없는 계정 → 401", s == 401, (s, r))
@@ -373,7 +373,7 @@ def main() -> int:
         ck("추가: 이름 21자 400", s == 400 and "20자" in r.get("detail", ""), (s, r))
         ck("마스터: /api/me role=master", sv.call("GET", "/api/me", cookie=ck_)[1].get("role") == "master")
         if sv.mode == "db":
-            s, r = sv.call("POST", "/api/users", {"email": "  Other@Example.COM ", "role": "Researcher"}, cookie=ck_)
+            s, r = sv.call("POST", "/api/users", {"email": "  " + other.title() + " ", "role": "Researcher"}, cookie=ck_)
             ck("추가: 소문자 정규화, added", s == 200 and r.get("email") == other and r.get("added") is True, (s, r))
             s, r = sv.call("POST", "/api/users", {"email": other, "role": "staff"}, cookie=ck_)
             ck("추가: 중복은 200 + 안내", s == 200 and r.get("added") is False and r.get("message"), (s, r))
