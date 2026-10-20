@@ -213,7 +213,7 @@ function fillSelects() {
 
   const vendors = [...new Set(DATA.deposit.map(r => r["거래처"]).filter(Boolean))].sort();
   $$("select[data-filter='거래처']").forEach(sel => setOptions(sel, ["", ...vendors], ["전체", ...vendors]));
-  $$("select[data-filter='재원']").forEach(sel => setOptions(sel, ["", ...funds], ["전체", ...funds]));
+  $$("select[data-filter='재원']").forEach(sel => setOptions(sel, ["", ...funds], [sel.dataset.kind === "budget" ? "선택" : "전체", ...funds]));  // 예산 변경 내역은 재원을 골라야 보임
   $$("select[data-filter='year']").forEach(sel => setOptions(sel, ["", ...ys], ["전체", ...ys]));
   $$("select[data-filter='month'], #dash-month").forEach(sel => setOptions(sel, ["", ...Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))], ["전체", ...Array.from({ length: 12 }, (_, i) => (i + 1) + "월")]));
   $$("select[data-filter='예산목']").forEach(sel => setOptions(sel, ["", ...DATA.meta.budget_items], ["전체", ...DATA.meta.budget_items]));
@@ -275,6 +275,7 @@ function renderAll() {
 const SORT = {};  // kind -> {k, dir}
 // 목록별 선택 열·행 표시 훅 (신청 화면: request.js 가 채움). {head(), cell(r), rowCls(r), after()}
 const SEL_HOOK = {};
+SEL_HOOK.budget = { head: () => "", cell: () => "", rowCls: () => "", empty: () => FILTERS.budget["재원"] ? "이 재원의 예산 변경 내역이 없습니다." : "재원을 선택하면 변경 내역이 보입니다." };
 // 행이 많으면 처음 LIST_LIMIT 건만 그리고 '더 보기'로 나머지 (합계·CSV 는 항상 전체 기준). 필터가 바뀌면 다시 접힘
 const LIST_LIMIT = 400, LIST_MORE = {};
 const norm = s => String(s ?? "").toLowerCase().replace(/,/g, "");
@@ -283,6 +284,7 @@ function filtered(kind) {
   const f = FILTERS[kind] || {};
   const q = norm((f.q || "").trim());
   return DATA[kind].filter(r => {
+    if (kind === "budget" && !f["재원"]) return false;  // 예산 변경 내역은 재원을 골라야 보임
     if (f["재원"] && r["재원"] !== f["재원"]) return false;
     if (f["예산목"] && r["예산목"] !== f["예산목"]) return false;
     if (f["상태"] && r["상태"] !== f["상태"]) return false;
@@ -399,7 +401,8 @@ function renderList(kind) {
 
 function renderBudgetSummary() {
   const items = DATA.meta.budget_items;
-  const funds = fundOptions();
+  const hasBudget = new Set(DATA.budget.map(r => r["재원"]));
+  const funds = fundOptions().filter(f => hasBudget.has(f) && !isUntrackedFund(f));  // 잔액 미관리·예산 미입력 재원은 숨김
   const sum = {};
   funds.forEach(f => sum[f] = Object.fromEntries(items.map(i => [i, 0])));
   DATA.budget.forEach(r => { if (sum[r["재원"]]) items.forEach(i => sum[r["재원"]][i] += r[i] || 0); });
@@ -565,7 +568,7 @@ function renderDashboard() {
   });
   DASH_COLS = ["재원", "예산목", ...cols];
   $("#dash-table").closest(".table-wrap").classList.toggle("empty", !body);
-  $("#dash-table").innerHTML = th + `<tbody>${body || `<tr><td class="empty" colspan="${cols.length + 2}">${DATA.funds.length ? "예산 또는 집행 데이터가 없습니다." : "등록된 재원이 없습니다. [재원] 탭에서 과제를 먼저 등록하고 [예산변동]에 예산을 입력하세요."}</td></tr>`}</tbody>`;
+  $("#dash-table").innerHTML = th + `<tbody>${body || `<tr><td class="empty" colspan="${cols.length + 2}">${DATA.funds.length ? "예산 또는 집행 데이터가 없습니다." : "등록된 재원이 없습니다. [재원] 탭에서 과제를 먼저 등록하고 [예산]에 예산을 입력하세요."}</td></tr>`}</tbody>`;
 
   // 월별 차트 (누적선 + 예산현액 기준선)
   renderChart(execs, funds, year, tot.b);

@@ -33,7 +33,7 @@
     <li><button role="tab" id="tab-dash" aria-controls="panel-dash" aria-selected="true">대시보드</button></li>
     <li><button role="tab" id="tab-exec" aria-controls="panel-exec" aria-selected="false">집행내역</button></li>
     <li><button role="tab" id="tab-req" aria-controls="panel-req" aria-selected="false">품의내역</button></li>
-    <li><button role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false">예산변동</button></li>
+    <li><button role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false">예산</button></li>
     <li><button role="tab" id="tab-deposit" aria-controls="panel-deposit" aria-selected="false">적립금</button></li>
     <li><button role="tab" id="tab-tags" aria-controls="panel-tags" aria-selected="false">태그</button></li>
     <li><button role="tab" id="tab-vendor" aria-controls="panel-vendor" aria-selected="false">거래처</button></li>
@@ -261,16 +261,18 @@
     <div class="table-wrap"><table class="grid" id="req-table"></table></div>
   </section>
 
-  <!-- 예산변동 -->
+  <!-- 예산 -->
   <section id="panel-budget" role="tabpanel" aria-labelledby="tab-budget" hidden>
+    <h2 style="margin-top:0">재원별 예산현액 요약</h2>
+    <p class="toolbar-note">예산현액 = 이월 + 당초 + 변경 합계. 잔액 미관리 재원과 예산을 입력하지 않은 재원은 표시하지 않습니다.</p>
+    <div class="table-wrap"><table class="grid" id="budget-summary"></table></div>
+    <h2>변경 내역</h2>
     <div class="toolbar">
-      <label>재원 <select data-filter="재원" data-kind="budget"><option value="">전체</option></select></label>
-      <span class="toolbar-note">변경회차: <b>이월</b>(이월금) · <b>당초</b>(당초액) · 숫자(변경 회차). 예산현액 = 이월 + 당초 + 변경 합계</span>
+      <label>재원 <select data-filter="재원" data-kind="budget"><option value="">선택</option></select></label>
+      <span class="toolbar-note">변경회차: <b>이월</b>(이월금) · <b>당초</b>(당초액) · 숫자(변경 회차)</span>
       <button type="button" class="btn btn-primary" data-add="budget">예산 행 추가</button>
     </div>
     <div class="table-wrap"><table class="grid" id="budget-table"></table></div>
-    <h2>재원별 예산현액 요약</h2>
-    <div class="table-wrap"><table class="grid" id="budget-summary"></table></div>
   </section>
 
   <!-- 적립금 -->
