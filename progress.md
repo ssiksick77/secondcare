@@ -4,12 +4,12 @@ Updated: 2026-10-20
 
 ## Goal
 
-Staff tab (인건비 > 인원) update: label 구분 (not 인건비구분), new kind 기타, a hide function for people, name pickers in 가나다 order, a two-pane layout (name click filters 기준급여, empty by default), and the label 월지급액 (not 월액). Checked by `scripts/check.sh`.
+People tab (인건비 > 인원) UI fix: notes under the headings, the two columns aligned, no name column in the salary table, a clear selected row, a quiet hide button. Checked by `scripts/check.sh` and in the browser pane on the QA copy.
 
 ## Done
 
-- 6a2ba76 Staff tab. `PEOPLE_COLS` gains `숨김` (Y/blank, like 잔액미관리). `LABOR_KINDS` adds 기타; `LABOR_ITEM` maps 기타 → 외부인건비(공통). Screen labels 구분 and 월지급액; storage column names 인건비구분 and 월액 stay. Hidden people leave the people list and all name pickers (지급·기준급여·조정·일괄 생성, 지급 원장 이름 필터, 신청인 datalist); toolbar checkbox 숨긴 인원 보기 shows them with "(숨김)". Row button 숨기기/보이기 and a form checkbox. `peopleNames()` = visible names sorted with `localeCompare(…, "ko")`. Two panes (`.people-split`): left people, right 기준급여 of the selected name (`FILTERS.salary.이름`, toggle on second click, aria-pressed, row highlight); 기준급여 추가 prefills the name. `db.create_schema` now adds missing columns to existing tables (ALTER TABLE), so the live SQLite gets 숨김 at the next start. Tests: API +6, db +1, UI +10.
-- 440bfce merged main (budget tab cleanup, fund sort) into this branch; one conflict in `store._derive`, both sides kept.
+- 0dace3e People tab: notes move from the toolbars to a `.defs` line under each heading; `.people-col` is a four-row subgrid (heading, note, toolbar, table) so both tables start on one line; stacked below 1100px. Salary column 이름 has `hide: true` (CSV keeps it). Selected person row: full-row `--primary-bg`, 3px left bar, bold name. Hide button is `btn-ghost`. UI test reads salary rows by `data-row` and checks that 이름 is not a heading.
+- Before this task (same branch, merged to main earlier): 6a2ba76 staff tab split view, hide, 기타 kind; 994ed62 row click selects, static cache bust.
 
 ## Done before this task (kept for reference)
 
@@ -46,7 +46,7 @@ None.
 
 ## Next action
 
-Merge claude/friendly-greider-fb6c05 (xlsx mode removal, session local_7659ce74) into main if the user agrees. Then restart `appun.bat` once and check the 인원 tab on the live ledger.
+Fast-forward main to 0dace3e (done in this session if the merge below succeeded; see git log). Then restart the live app once and check the 인원 tab on the live ledger. Not chosen by the user this time: the 기준급여 column shows "-" when this month has no salary row; show the latest salary and its period instead.
 
 ## Earlier note
 
@@ -54,11 +54,11 @@ Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE o
 
 ## Open issues
 
-- checks: pass on the merged tree 440bfce (calc 32, API 126, db 56, ai 166, api-db 155, UI 97, ui-db 107; about 7 minutes). Run with a timeout above 420 s.
+- checks: pass on 0dace3e (calc 32, API 126, db 56, ai 166, api-db 155, UI 98, ui-db 108; about 7 minutes). Run with a timeout above 420 s.
 - Hidden people still appear in the 계획표 and 선급·미지급 tables when they have pay or accrual that year (my call: hiding must not drop money from totals).
 - Server role checks are not implemented: `role` is stored and shown only. Design doc §4 and §8 step 3 describe the checks. `extra.admin` from the request screen is still trusted.
 - No UI to change an account's role or name after adding; delete and add again. Masters are `.env` only.
-- krds-improve / impeccable were not run on the new fieldset; it follows the existing memo fieldset pattern (label, aria-live, button names).
+- krds-improve / impeccable were not run on the people tab fix (visual check in the browser pane only, 1440px and 1000px). Not run on the new fieldset either; it follows the existing memo fieldset pattern (label, aria-live, button names).
 - The design doc §5.3 (no-login local mode) and §6 (`users.json`) are superseded; the note at the top of the doc says so.
 - Live ledger is SQLite since 2026-10-20 14:58. `의료인공지능센터_지출장부_2026.xlsx` is frozen at that moment: do not edit it by hand, it is no longer read. For an Excel view run `python app/export_xlsx.py <sqlite> <copy.xlsx>`. Backups are `app/backup/*.sqlite`. `_row` in the API is the SQLite id.
 - Worktree branches claude/sqlite-migration-difficulty-9c1e10, claude/resolution-signature-names-196bd0 and claude/google-login-implementation-33c005 are merged and can be deleted.
