@@ -76,7 +76,7 @@ async def _unhandled(request: Request, e: Exception):
 
 # ---------- 로그인 (auth.py) ----------
 # 로그인 없이 열 수 있는 경로. 나머지 화면은 /login 으로, /api/* 는 401 (아래 미들웨어)
-PUBLIC_PREFIXES = ("/login", "/auth/", "/static/")
+PUBLIC_PREFIXES = ("/login", "/auth/", "/static/", "/favicon.ico")
 # 이름이 없는 계정도 열 수 있는 경로 (최초 로그인 이름 입력)
 NAME_FREE_PATHS = ("/welcome", "/api/me", "/api/me/name")
 
@@ -180,6 +180,12 @@ def _q(v: str) -> str:
 @app.get("/")
 def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """링크 태그를 읽지 않는 요청(북마크 등)도 같은 아이콘을 받는다."""
+    return FileResponse(STATIC / "favicon.svg", media_type="image/svg+xml")
 
 
 @app.get("/labor")
@@ -611,7 +617,7 @@ def readme():
     import html as _html
     md = (Path(__file__).resolve().parent / "README.md").read_text(encoding="utf-8")
     body = _html.escape(md)
-    return HTMLResponse(f"""<!doctype html><html lang=ko><head><meta charset=utf-8><title>사용 안내</title>
+    return HTMLResponse(f"""<!doctype html><html lang=ko><head><meta charset=utf-8><title>사용 안내</title><link rel=icon href=/static/favicon.svg type=image/svg+xml>
 <style>body{{font-family:Pretendard,'Malgun Gothic',sans-serif;max-width:900px;margin:30px auto;padding:0 20px;line-height:1.6}}pre{{white-space:pre-wrap;font:inherit}}</style></head>
 <body><p><a href="/">← 앱으로</a></p><pre id="md">{body}</pre>
 <script>const el=document.getElementById('md');const h=location.hash.slice(1);if(h){{const i=el.textContent.indexOf('드라이브 OAuth');}}</script></body></html>""")
