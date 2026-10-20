@@ -71,6 +71,18 @@ code { font: inherit; }
 .top-status { margin-left: auto; font-size: 12px; color: var(--ink-2); }
 .top-status.locked { color: var(--alert); font-weight: 600; }
 .top-sep { width: 1px; height: 22px; background: var(--rule); margin: 0 2px; }
+.top-user { font-size: 12px; color: var(--ink-2); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- 로그인 화면 (login.html) ---------- */
+.login-body { display: flex; flex-direction: column; min-height: 100vh; }
+.login-main { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: 72px 20px 40px; }
+.login-card { width: 100%; max-width: 380px; border-top: 2px solid var(--ink); padding-top: 16px; }
+.login-card h2 { margin: 0 0 8px; font-size: 15px; }
+.login-hint { margin: 0 0 16px; font-size: 13px; color: var(--ink-2); line-height: 1.45; }
+.login-alert { margin-bottom: 12px; line-height: 1.45; }
+.login-btn { width: 100%; justify-content: center; min-height: 36px; text-decoration: none; }
+.login-note { margin: 12px 0 0; font-size: 12px; color: var(--ink-3); }
+.login-foot { padding: 12px 20px; border-top: 1px solid var(--rule); }
 .tabs { background: var(--bg); border-bottom: 1px solid var(--rule); }
 .tabs ul { list-style: none; margin: 0; padding: 0 12px; display: flex; gap: 2px; }
 .tabs button { border: 0; background: none; font: inherit; font-weight: 600; padding: 0 14px; height: 40px; cursor: pointer; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }

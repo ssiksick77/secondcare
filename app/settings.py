@@ -39,6 +39,11 @@ FIELDS = {
     "REQUEST_SUPPLIERS": ("알파미금역점,드림디포", False),  # 구매처 목록 (쉼표 구분)
     "REQUEST_SUPPLIERS_OFF": ("", False),          # 지금 신청할 수 없는 구매처 (쉼표 구분, 목록에 있는 이름만)
     "REQUEST_SUPPLIER_NOTE": ("", False),          # 연구원 화면 안내 (예: 드림디포는 10월 말까지 이용 불가)
+    # 구글 로그인 (auth.py). 허용 목록 관리 UI 는 나중에; 지금은 이 파일을 직접 편집
+    "LEDGER_ALLOWED_EMAILS": ("", False),          # 로그인 허용 이메일 (쉼표 구분). 비우면 아무도 못 들어옴
+    "LEDGER_OAUTH_CLIENT": ("", False),            # OAuth 클라이언트 JSON 경로 (비우면 google_client_secret.json)
+    "LEDGER_OAUTH_REDIRECT": ("", False),          # 리다이렉트 URI (비우면 http://127.0.0.1:<포트>/auth/callback). 다른 PC 접속 때 바꿈
+    "LEDGER_SESSION_SECRET": ("", True),           # 세션 쿠키 서명 키. 없으면 첫 로그인 때 자동 생성
 }
 SUPPLIER_KEYS = ("REQUEST_SUPPLIERS", "REQUEST_SUPPLIERS_OFF")
 

@@ -4,14 +4,16 @@ Updated: 2026-10-20
 
 ## Goal
 
-Print the approver names on the 지출결의서 결재란 so the accountant does not write them by hand. Done when the voucher shows 매니저 오인선, 선임연구원 이진영, 센터장 류지원 (small 직무대행 above the name) in bold italic, the check passes, and the user confirms the screen.
+Add Google login so every write records who made it and the app is ready for access from other PCs later. One PC now: all screens and the API need a login; an allow-list of emails in `app/.env` decides who may log in; SQLite rows and the change log store the login email as author.
 
 ## Done
 
-- 8a738a4 feat: print signer names on voucher approval box. `VOUCHER_SIGNER_NAMES` in app.js, `.vc-sign-n` styles in style.css (11pt bold italic, tag 6.5pt with -0.2mm tracking so 직무대행 stays inside the name width). Merged into main. User confirmed the screen after a hard refresh (the first view showed cached CSS).
-- SQLite migration finished and switched on 2026-10-20 (a91649d, 75e4201); see `git log` and the Decisions below for details.
+- 950dca2 Google login first version: `app/auth.py` (signed cookie session 30 days, allow-list, OAuth flow with `google_auth_oauthlib.Flow`, ID token check), `main.py` middleware (pages -> `/login`, `/api/*` -> 401, author ContextVar per request), routes `/login`, `/auth/login`, `/auth/callback`, `/auth/logout`, `/api/me`; `store.set_author` / `current_author` (ContextVar replaces the global), MCP server writes author `mcp`; `login.html` + `.login-*` CSS; header shows email + 로그아웃; `app.js` sends the browser to `/login` on 401. Tests: `tests/_env.py` sets `LEDGER_AUTH_BYPASS=test@example.com` (`Server(..., auth_bypass=False)` for a locked server, `get_raw` follows no redirect); API +11/+12 checks, UI +8 checks. README 2-1, `.env.example`, `.gitignore` (`app/google_oauth_client.json`). checks: pass (calc 32, API 106, db 53, api-db 107, UI 64, ui-db 64).
 
-## Done before the migration (xlsx era, kept for reference)
+## Done before this task (kept for reference)
+
+- 8a738a4 feat: print signer names on voucher approval box (`VOUCHER_SIGNER_NAMES` in app.js, `.vc-sign-n` styles). 담당 cell stays empty until login gives an email-to-name map.
+- 2026-10-20 SQLite migration complete and live (a91649d merge, d202ab6 export, 7ee9405/f389f7f write paths, ef7ffc0 schema/import). Details in git log.
 
 - 5926413 fix: startup sheet check leaked a read_only workbook handle; every save since 10-18 13:32 failed at os.replace (backups piled up, ledger mtime frozen). Regression test in tests/test_api.py. User re-entered the lost entries.
 - 85f8c23 예산목 잔액 (집행 표·결의서 재원 현황) counts only budget rows with 신청일자 ≤ 원인발생일; 신청일자 required; blank → Jan 1 of ledger year on fix-up.
@@ -29,24 +31,17 @@ Print the approver names on the 지출결의서 결재란 so the accountant does
 
 ## In progress
 
-None.
+Google login first version is coded and checked (see Done). Not verified: a real Google login in the browser (needs the user's OAuth client and allow-list in `app/.env`; tests use the bypass). The done condition "KRDS score check passes" could not run: `scripts/check.sh` has no KRDS score step; the login page structure is checked by `tests/test_ui.py` instead (lang, landmarks, h1, skip link, alert role).
 
-## SQLite migration done conditions (closed 2026-10-20, kept for reference)
-Done conditions:
-- Store on SQLite: calc 32, API 95, UI 56 tests pass; screen and API behaviour unchanged. (done: api-db 95, ui-db 56 pass)
-- Every record has a stable id: API and frontend address records by id, not by row number. (done in substance: `_row` carries the SQLite id; the field name stays `_row`, see Decisions)
-- One-shot import script xlsx -> SQLite: on the QA ledger, every sheet's row count and amount totals equal the source. (done ef7ffc0)
-- Export SQLite -> xlsx: the exported file opens in Excel with the same sheets and columns as the current ledger. (done d202ab6; opened only by openpyxl, not by Excel)
-- Backup and undo on SQLite: a backup file exists before each write; undo works. (done f389f7f)
-- Runs on Linux: `python main.py` starts without the .bat files. (verified by code reading only: the .bat files are wrappers, the lock uses fcntl on posix; no Linux machine here)
-- Change log has an author column (email); the import fills existing rows with 안윤아 (snubh.ai.center.01@gmail.com). (done; writes log with an empty author until login)
-
-Session order: (1) schema + import + read_all — done, (2) write paths — done, (3) export, docs — done, (4) switch — done. Left: PRODUCT.md wording ("엑셀 파일이 원본"); re-register the MCP server in Claude Desktop if it does not pick up `LEDGER_DB` from app/.env.
+User steps before first use (README 2-1):
+1. Put the allowed emails in `app/.env`: `LEDGER_ALLOWED_EMAILS=...`.
+2. Keep `app/google_client_secret.json` (desktop client works for 127.0.0.1) or make a web-application client and set `LEDGER_OAUTH_CLIENT`.
+3. Restart the app and log in once. `LEDGER_SESSION_SECRET` is written to `.env` on the first login.
 
 ## Open issues
 
 - Live ledger is SQLite since 2026-10-20 14:58. `의료인공지능센터_지출장부_2026.xlsx` is frozen at that moment: do not edit it by hand, it is no longer read. For an Excel view run `python app/export_xlsx.py <sqlite> <copy.xlsx>`. Backups are `app/backup/*.sqlite`. `_row` in the API is the SQLite id.
-- Worktree branches claude/sqlite-migration-difficulty-9c1e10 and claude/resolution-signature-names-196bd0 are merged and can be deleted.
+- Worktree branches claude/sqlite-migration-difficulty-9c1e10, claude/resolution-signature-names-196bd0 and claude/google-login-implementation-33c005 are merged and can be deleted.
 - Static files have no version query, so a code change can show stale CSS until a hard refresh (ideas.md [later][fix] 2026-10-20).
 - SQLite mode skips `_ensure_structure`, so a ledger imported from an older xlsx must be fixed up by the import (it loops the fix-up); the budget sheet summary rows 1-7 are not kept in SQLite (export must rebuild them).
 - `mcp_server.py` was not run against SQLite; it only uses store functions, so it should work, but check it in session 3.
@@ -66,7 +61,6 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 ## Decisions
 
 - 2026-10-20 (user) 결의서 결재란 이름: 매니저 오인선, 선임연구원 이진영, 센터장 류지원 with small '직무대행' above the name, bold italic; 담당 cell stays empty until login gives an email-to-name map (per-transaction author, not a fixed setting). My calls: name 11pt, tag 6.5pt with -0.2mm tracking inside the name width.
-
 - 2026-10-16 (user) 여비 계산기: 기본 정보 외 필수 없음; 출장 기간과 학회 기간 별도 입력; 학회 전후 각 1일만 인정, 초과 출장일은 공제일수로 일비·식비에서 자동 제외(숙박은 그대로, my choice since the user named 일비/식비 only).
 - 2026-10-16 (user) 재원 종류: list 국책/원내/위탁/교육/공금/기타; 공금 deposits go through 예산변동 (no per-예산목 split), 예산목 stays required on 집행/품의/신청, existing funds default to 국책 and the user edits them later.
 - 2026-10-16 (user) 지출결의서 결재란: 담당 / 매니저 / 선임연구원 / 센터장 4칸, 위 직책·아래 서명. Row height 6.5mm and blank name cells were my choice (user did not answer).
@@ -93,9 +87,9 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 - 2026-10-20 SQLite schema (my calls): one table per sheet with the Korean headers as column names; empty cells NULL, numeric columns REAL, other columns untyped so 변경회차 keeps int vs text; dates as 'YYYY-MM-DD' text; `_row` carries the SQLite id so screens work unchanged until the frontend is renamed; `author` stores the email only (name mapping comes with login).
 - 2026-10-20 (user) SQLite migration, multi-user. Target: 3 (several accountants + researchers filing requests), external access, centre Linux server later, tunnel from a centre PC first. Login = Google, allow-list of emails managed by the accountant, first accountant in app/.env. Roles, login, external access, deployment are all later; the migration only adds stable ids and an author column. Existing rows get author 안윤아 (snubh.ai.center.01@gmail.com). SQLite before PostgreSQL (2026-10-19 decision kept).
 - 2026-10-20 (user) 한 문서(사전결재안 등)를 여러 거래의 증빙으로: 증빙 행 [복사] → 거래번호 여러 개 → 그 거래 폴더로 drive.copy(그 거래 기준 이름), 독립 증빙 항목(비고 '복사: 원본'). 연결(공유 파일)·드라이브 바로가기 방식은 사용자가 거절. POST /api/evidence/{번호}/copy.
+- 2026-10-20 (user) Google login: full lock (every screen and API), allow-list in `.env` only (management UI later), web-application OAuth client with `LEDGER_OAUTH_REDIRECT` as a setting so a later host name is a config change. My calls: xlsx mode locks the same but records no author; MCP server is unaffected (no HTTP) and uses author `mcp`; cookie 30 days; tests bypass auth with a fixed email and never call Google.
 
 ## Next action
 
-Pick the next task with the user. The 결재란 '담당' cell (per-transaction author name) waits for the login work (ideas.md 2026-10-20). Candidates from the brainstorm "later" list (ideas.md 2026-10-20): Google login with an allow-list, then roles, then server deployment. Small leftovers: PRODUCT.md wording, delete the merged worktree branch.
+Branch merged into main (2026-10-20) before a real login test. User step: set `LEDGER_ALLOWED_EMAILS` in `app/.env`, restart `appun.bat`, log in once and confirm the header shows the email. Then: 결재란 '담당' name from the login author (ideas.md), and pick from ideas.md: allow-list management UI, role check, multi-PC access (host name, HTTPS, Secure cookie).
 
-Previous candidates: Candidates: one-shot rename of existing evidence files to the new rule (needs Drive connected), LEDGER_HOST + server role check, 학회·기타 review leftovers.
