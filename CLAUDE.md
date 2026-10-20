@@ -1,6 +1,6 @@
-# CAIH_회계장부_2026 — Second Care (caih-rfm)
+# CAIH_회계장부_2026 — SECONDCare (caih-rfm)
 
-Program names: code name `caih-rfm` (MCP server name, log name), short name "Second Care" (header, tab title), full name "의료인공지능센터 연구비 관리 시스템" (print head, official documents). Constants: `app/settings.py` (APP_SLUG, APP_NAME, APP_FULL_NAME) and `app/static/app.js` (APP_NAME, APP_FULL). "회계대장" stays as the name of the ledger screen (vs 인건비, 신청). The folder name and `LEDGER_*` env vars stay.
+Program names: code name `caih-rfm` (MCP server name, log name), short name "SECONDCare" (header, tab title), full name "의료인공지능센터 연구비 관리 시스템" (print head, official documents). Constants: `app/settings.py` (APP_SLUG, APP_NAME, APP_FULL_NAME) and `app/static/app.js` (APP_NAME, APP_FULL). "회계대장" stays as the name of the ledger screen (vs 인건비, 신청). The folder name and `LEDGER_*` env vars stay.
 
 The shared rules in `../CLAUDE.md` apply here. This file holds the facts of this project only.
 

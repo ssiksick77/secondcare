@@ -1836,6 +1836,10 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
             raise ValueError("변경회차는 '이월', '당초' 또는 숫자여야 합니다.")
         if not rec.get("신청일자"):  # 집행 표 '예산목 잔액'이 이 날짜부터 변경액을 반영한다 (2026-10-19)
             raise ValueError("신청일자는 필수입니다 (이 날짜부터 거래별 예산목 잔액에 반영됩니다).")
+        if rnd.isdigit():  # 숫자 회차는 예산목 사이 이동만 허용: 발생이자(·입금)를 뺀 변경액 합이 0 (2026-10-20 사용자)
+            moved = sum(_to_num(rec.get(i)) for i in BUDGET_ITEMS if i != "발생이자")
+            if moved != 0:
+                raise ValueError(f"{rnd}회차 변경은 예산목 사이 이동만 가능합니다: 발생이자를 뺀 변경액 합이 0이어야 하는데 {moved:+,.0f}원입니다.")
     elif kind == "people":
         if not str(rec.get("이름") or "").strip():
             raise ValueError("이름은 필수입니다.")

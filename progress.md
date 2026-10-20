@@ -9,6 +9,7 @@ Post-login menu screen `/enter` with three square buttons (연구비 / 인건비
 ## Done
 
 - d83e60e Menu screen `app/static/enter.html` (SECONDCare wordmark, three square buttons with icons, name and logout in the header, footer "분당서울대학교병원 의료인공지능센터"). Routes: `/enter` (menu; redirects to the account's home unless `?menu=1`), `/fund` (회계대장), `/` (신청), `/request` → 301 `/`. Login callback, `/login` when logged in, and `/welcome` after the name go to `/enter`. `users.home` column (`db.set_user_home`, `store.HOME_PATHS`), `/api/me` returns `home` and `db`, `POST /api/me/home`. Settings fieldset "기본 화면" saves on change (SQLite per account, xlsx localStorage `ledger-home`). Header: 메뉴 button (`/enter?menu=1`); back buttons read 연구비. `labor.js` MODE_PATH updated. Menu 신청 button sets `request-admin` for non-researcher roles. Tests: API +12, UI +10. README and PRODUCT.md route text updated.
+- Merged main 5872ffd (two-column frame with side panel, dashboard report, SECONDCare rename) into this branch on 2026-10-20; conflicts in style.css (both kept: menu styles + sticky tabs) and progress.md (this file kept). `enter.html` title changed to SECONDCare.
 - Previous goal (people tab layout) ended at 0dace3e; merged to main earlier.
 
 ## In progress

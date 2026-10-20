@@ -47,3 +47,10 @@ Who reads what:
 - [later][idea] 2026-10-20: 별도 /users 페이지: 초대 메일, 비활성 사유, 마지막 로그인 시각 — 허용 이메일 관리 첫 버전은 설정 다이얼로그 안 fieldset
 - [later][idea] 2026-10-20: 허용 계정의 권한·이름 수정 UI (지금은 삭제 후 다시 추가) — 허용 계정 화면 랩업
 - [later][idea] 2026-10-20: 사용자 직책(title) 표시 필드 — 권한 설계 문서 6절, 표시용이라 미룸
+- [later][idea] 2026-10-20: side panel purpose (candidates: month-end to-do list of 미승인·품의대기, recent change log, fund summary); request-screen panel content for researchers — two-column frame brainstorming, first version shows a placeholder
+- [later][idea] 2026-10-20: variable panel width that absorbs spare width on large monitors (mock variant 3) — two-column frame brainstorming
+- [later][idea] 2026-10-20: dashboard critique P2-P5: aggregation-basis labels in summary line and headers, tag subtab toolbar (note, month, CSV of the active table), remove the table scroll box and fold item rows under fund subtotals, card denominator text and drilldown, chart as single ink bars + cumulative line + n/12 pace line — see app/.impeccable/critique/2026-10-20T10-29-26Z__app-static-index-html.md; revisit after the frame
+- [later][idea] 2026-10-20: user-draggable panel width — two-column frame brainstorming
+- [later][idea] 2026-10-20: MSRI dashboard card: definition pending (user: 추후 설명) — KPI card row keeps a placeholder
+- [later][idea] 2026-10-20: copy 원인발생일 into empty 지출예정일 for existing 품의 rows (one-shot) — the screen falls back to 원인발생일 for now
+- [later][idea] 2026-10-20: year select in the header should switch the referenced ledger (DB) per year, not only filter — user remark while moving the year select
