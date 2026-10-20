@@ -4,56 +4,42 @@ Updated: 2026-10-20
 
 ## Goal
 
-Staff tab (인건비 > 인원) update: label 구분 (not 인건비구분), new kind 기타, a hide function for people, name pickers in 가나다 order, a two-pane layout (name click filters 기준급여, empty by default), and the label 월지급액 (not 월액). Checked by `scripts/check.sh`.
+Two-column app frame and table polish (branch claude/dashboard-ui-improvement-4f9f95, 2026-10-20): every screen looked stretched at 1366-1920 px. The right side panel absorbs the width, and the list tables got fixed column widths. Checked by `scripts/check.sh` and the browser pane on the QA copy (port 8893, launcher `.claude/launch.json` name `qa`).
 
 ## Done
 
-- 6a2ba76 Staff tab. `PEOPLE_COLS` gains `숨김` (Y/blank, like 잔액미관리). `LABOR_KINDS` adds 기타; `LABOR_ITEM` maps 기타 → 외부인건비(공통). Screen labels 구분 and 월지급액; storage column names 인건비구분 and 월액 stay. Hidden people leave the people list and all name pickers (지급·기준급여·조정·일괄 생성, 지급 원장 이름 필터, 신청인 datalist); toolbar checkbox 숨긴 인원 보기 shows them with "(숨김)". Row button 숨기기/보이기 and a form checkbox. `peopleNames()` = visible names sorted with `localeCompare(…, "ko")`. Two panes (`.people-split`): left people, right 기준급여 of the selected name (`FILTERS.salary.이름`, toggle on second click, aria-pressed, row highlight); 기준급여 추가 prefills the name. `db.create_schema` now adds missing columns to existing tables (ALTER TABLE), so the live SQLite gets 숨김 at the next start. Tests: API +6, db +1, UI +10.
-- 440bfce merged main (budget tab cleanup, fund sort) into this branch; one conflict in `store._derive`, both sides kept.
-
-## Done before this task (kept for reference)
-
-- 1eacbbc Tab label 예산변동 → 예산 (index.html; dashboard hint and README wording; sheet name and ids unchanged). Panel order: 재원별 예산현액 요약, then 변경 내역 heading, fund filter (blank option 선택), 예산 행 추가, list. `filtered("budget")` returns no rows without a fund; `SEL_HOOK.budget.empty` shows "재원을 선택하면 변경 내역이 보입니다." `renderBudgetSummary` keeps only funds with budget rows and not 잔액미관리. Verified in the browser pane on the QA copy (QA10 hidden, list fills on QA01).
-- 8e43f4c merged main (favicon, no browser auto-open) into this branch.
-- 137e869 AI chat rooms, first version: `app/chat_store.py` (`app/chats.sqlite`, rooms per login email, 7-day purge unless kept, history limit 40), routes `/api/chats…` (old `/api/ai/chat` removed), `ai.chat_in_room` (stores question and answer with calls/proposals only on success), panel room bar (select, 새 대화, 이름, 보관, 삭제), past proposal cards status-only, notice text, persona 행정보조 김연구 / button 김연구 호출하기, `LEDGER_AI_FAKE=1` canned answer for UI tests. Checks: calc 32, API 110, db 55, ai 158, api-db 120, UI 84, ui-db 86.
-- Memo kind 비세목 (예산목·세목·세세목 target, active when the row matches any of the three; `tools.memos_for`; suggest prompt sends 관련메모). ai 166.
-- 7475b7c chat answers rendered as markdown (shared `.md` styles).
-- AI helper overhaul first version (9dd63f1..d5f0afe, merged eb02756) and real-model check of 6 sample questions (all correct). Details in git log.
-- AI helper overhaul, first version (this branch, 2026-10-20): 9dd63f1 `app/tools.py` shared read tools (MCP wraps them, `tool_schema`, `call`); d8ba018 `budget_balance`, `search_ledger` (집행·신청·품의), `get_exec` with 증빙·연결품의·적립금연결, `fx_rate` (frankfurter.app, live check once); c245e15 memo store (sheet/table `메모`, validation, settings panel CRUD, `read_memo`); a20d1c9 chat as a tool-calling agent (`AGENT_SYSTEM`, `summary_context`, `agent_tools`, `run_tool`, 10 rounds, 40k char cap, `propose_memo` card, "조회" line); d5f0afe AI 추천·검증 keeps a filled 예산목. Test group `ai` (tests/test_ai.py, 122 checks, stubbed client, no API calls). Merged main (Second Care rename, Google login, first-login name) on 2026-10-20.
-- Finding: receipt extract and suggest never sent the whole ledger (the first survey said so); only chat and report did. Report and the OpenAI chat path still do (later).
-- 9da4d04 First-login name: `users` table (`db.USERS_DDL`, `user_names`, `set_user_name`), `store.author_names` / `user_name` / `set_user_name` (1-20 chars), `meta.authors`; middleware sends a nameless account to `/welcome` (API 403) except `/api/me` and `POST /api/me/name`; `welcome.html` prefilled with the Google profile name; header shows the name; voucher 담당 cell = `authorSigner(r)` from `_author`. Bypass accounts have no profile name and are never sent to `/welcome`. Tests: fixed `LEDGER_SESSION_SECRET` and `LEDGER_ALLOWED_EMAILS` in `tests/_env.py` (`session_cookie()` forges a login cookie; `call`/`get_raw` take a cookie), API +4/+14, UI +3 (ui-db). checks: pass (calc 32, API 110, db 53, api-db 120, UI 64, ui-db 66).
-- 950dca2 / 41642cb Google login first version with allow-list and PKCE fix (verified by the user 2026-10-20).
-- 8a738a4 feat: print signer names on voucher approval box (`VOUCHER_SIGNER_NAMES` in app.js, `.vc-sign-n` styles). 담당 cell stays empty until login gives an email-to-name map.
-- 2026-10-20 SQLite migration complete and live (a91649d merge, d202ab6 export, 7ee9405/f389f7f write paths, ef7ffc0 schema/import). Details in git log.
-
-- 5926413 fix: startup sheet check leaked a read_only workbook handle; every save since 10-18 13:32 failed at os.replace (backups piled up, ledger mtime frozen). Regression test in tests/test_api.py. User re-entered the lost entries.
-- 85f8c23 예산목 잔액 (집행 표·결의서 재원 현황) counts only budget rows with 신청일자 ≤ 원인발생일; 신청일자 required; blank → Jan 1 of ledger year on fix-up.
-- 0cfa798 evidence on deposit rows (적립번호 key, same evidence API, drawer shared with exec via XD.kind, Drive 증빙관리/YYYY/적립금/거래처/번호).
-- 99026bd deposit stages 발주일/결제일/수령일 → 상태 (사용 rows only), action endpoint, timeline in drawer, badge column, status filter.
-- edaf8b4 vendor codes: `거래처` sheet/tab, 적립번호 = 코드-적립|사용-YYYY-NNN, auto-register unknown vendors with a unique name prefix, old numbers renumbered on fix-up.
-- 4e6df73 / 462ec27 import script docs/import_소모품대장/import.py; applied to the live ledger (68 requests, 3 orders, 6 deposit rows, 알파 balance 20,400 = source). Supplier 알파몰 → 알파 (code, settings default, UI text, app/.env by user instruction).
-- 2bc34c7 request numbers E/S/C/Z-YYYY-NNN (R- renumbered on fix-up with reference updates); 사유 as its own column. Live-ledger one-offs: requester names unified (19), '구 신청번호' notes removed (68).
-- 2651274 order list column 구매내역 = first item + "외 n건".
-- Live ledger: 거래번호 renumbered by 원인발생일 for 융합인재 (58), SDM (12), AX (6) with reference updates; scratch script renumber_fund.py (not in repo). Backups app/backup/manual_before_*.
-- 741c0c8 exec 취소 status: cancel/uncancel actions with optional reason (logged in 보완이력), excluded from every total (server active_exec, client activeExec), voucher/stage actions blocked, linked execs cannot be cancelled.
-- b2f86a0 evidence list syncs names from Drive (file_meta → store.evidence_sync), missing/trashed files flagged.
-- cdda72f vendor name 알파 → 알파미금역점 (code 알파 stays): defaults (store.SUPPLIERS_DEFAULT, settings), ORDER_PREFIXES entry, request UI text, settings placeholder, README, import script VENDOR, app/.env REQUEST_SUPPLIERS. Live ledger renamed by a scratch script (79 cells: 집행내역·적립금·주문 거래처, 신청 구매처, 거래처 tab name; numbers, 적요, 비고, 품목 untouched). Backup app/backup/manual_before_vendorrename_20261020_134506.xlsx. No 알파 deposit evidence existed on Drive, so no Drive renames.
-- e44e9ee evidence file names drop 적요 (`재원_증빙종류_금액_YYMMDD`, deposits `거래처_…`); editing 재원/금액 (deposit 거래처/금액) renames Drive files + ledger names (main.sync_evidence_names).
+- e8a8282 Two-column frame: `.shell` > `.col` + `aside#side`; drawers (집행·적립금 상세, 신청 상세, AI) render inside the panel; side controller at the end of app.js (`setSide`, `syncSide`, rail, localStorage `ledger-side`).
+- 5ca28ff Feedback round (about 30 items), all verified in the browser pane at 1366, 1536, 1600 and 1920:
+  - Panel: header and tab rows full width and sticky; panel fixed below them (`--top-h` 92 px), rail on the right, body 480 px; always open from 1500 px (collapse button hidden); below that the saved state, default collapsed; `.col` margin reserves the width.
+  - Dashboard: 종류 (1st) and 재원 (2nd) filters, 연도 moved to the header (`.top-year`, hidden in labor and request modes), no month filter; 12 fixed KPI cards (10 items without 연구개발부담비, 공금 잔액, MSRI placeholder) in 6 columns; fund x item table with 4 lines per fund (예산현액 / (집행액) / (예정액) / 가용잔액 double rule), 내부인건비·연구개발부담비 hidden, fixed 108 px columns; chart y-axis top = 예산현액 (0-100 %); deposit table stretched to the chart height with blank ruled rows and the total pinned at the bottom; print = A4 portrait report (`#print-report`, `reportHtml`, `@page report`): title, meta table, KPI table, 집행 현황 (thousands when more than 6 item columns), 태그 × 월 (thousands), footnote, page numbers.
+  - Lists: `table-layout: fixed` with per-column widths for 집행·품의·적립·예산 tables, light vertical rules, no navy margin line, cells clip with ellipsis, folding by main width (`@container main`, tiers 1500/1300/1100/900/760), empty-row colspan fitted to visible headers (`fixEmptySpan`), scroll boxes sized from their real position (`fitWraps`), total row sticky at the box bottom, action column border instead of shadow, scroll-hint gradient removed, main bottom padding 20 px, footer removed, headers centered, 작성자 column (`authorName`), tab restore moved after the `XD` declaration (it silently failed before).
+  - Menus: 집행 / 품의 / 적립; 거래처 tab merged into 적립 as a left pane next to 적립금 잔액 (no total row there); 집행전환 button → 집행.
+  - 품의: 지출예정일 is the only date in the table and form; the form writes 원인발생일 = 지출예정일; old rows fall back to 원인발생일 on screen.
+  - 예산: both tables uniform 104 px item columns, bold 예산현액 합계, 재원 column dropped from 변경 내역, 내부인건비·연구개발부담비 hidden, numbered rounds must net to zero except 발생이자 (server `_validate` + form pre-check + API tests).
 
 ## In progress
 
-None.
+None. The merge into main is the next step (see Next action).
+
+## Decisions (this task)
+
+- Layout variant 2 (full-height right column) + collapse rail, chosen by the user from five mocks (scratchpad mock/layout.html). Then changed on feedback: panel below the header and tabs, rail on the right, 480 px, no collapse from 1500 px.
+- Column folding keys on the main width (container query), not on the panel state: the panel is permanent on wide screens.
+- Hidden items on screen (연구개발부담비, 내부인건비 in 예산; both in the dashboard table) stay in CSV and in totals.
+- 품의 keeps the 원인발생일 field in the ledger (numbering, balance by date) but the UI shows only 지출예정일.
+- Numbered budget rounds are reallocations: 발생이자 and 입금 free, everything else must sum to 0. Existing rows are not re-validated.
+- The dashboard critique (app/.impeccable/critique/2026-10-20T10-29-26Z__app-static-index-html.md, 26/40) P2-P5 stay in ideas.md.
 
 ## Next action
 
-Merge claude/friendly-greider-fb6c05 (xlsx mode removal, session local_7659ce74) into main if the user agrees. Then restart `appun.bat` once and check the 인원 tab on the live ledger.
-
-## Earlier note
-
-Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE on the QA copy (room bar, title from first question, table rendering, notice). Not yet tried with the real model in rooms (the room layer only changes storage and history; the model path is the one verified earlier).
+Merge main (3e5d95a, people tab fixes) into this branch, resolve conflicts (app.js 집행전환 line, style.css near the table rules, progress.md), run `scripts/check.sh` on the merged tree, then fast-forward main and restart run.bat.
 
 ## Open issues
 
+- checks on 5ca28ff: full `scripts/check.sh` passed calc, api 157, db, ai, api-db; ui and ui-db failed once on a leftover `tests/.tmp/ui` folder from an aborted run (an orphan test server held `server.log`), then passed 97/97 and 107/107 after the last app.js fix. A full run on the merged tree is still due. Before a rerun, make sure no orphan `python main.py` from an aborted run is alive (ports 8791 = live app, 8893 = QA pane must stay).
+- MSRI card and the side panel 기본 tab are placeholders; the user will define them later (ideas.md).
+- Printing the dashboard report was checked by rendering `#print-report` on screen, not through a real print dialog.
+- The QA server on port 8893 must be restarted after `app/store.py` changes (done once for the budget rule).
 - checks: pass on the merged tree 440bfce (calc 32, API 126, db 56, ai 166, api-db 155, UI 97, ui-db 107; about 7 minutes). Run with a timeout above 420 s.
 - Hidden people still appear in the 계획표 and 선급·미지급 tables when they have pay or accrual that year (my call: hiding must not drop money from totals).
 - Server role checks are not implemented: `role` is stored and shown only. Design doc §4 and §8 step 3 describe the checks. `extra.admin` from the request screen is still trusted.
