@@ -165,7 +165,7 @@ input[type="file"]::file-selector-button:hover { background: var(--bg-hover); }
 .memo-list th, .memo-list td { padding: 4px 6px; border-bottom: 1px solid var(--rule-2); text-align: left; vertical-align: top; }
 .memo-list th { background: var(--bg-head); color: var(--ink-2); font-weight: 500; }
 .memo-list td.wrap { white-space: pre-wrap; word-break: break-word; }
-.memo-list td.actions { white-space: nowrap; width: 1%; }
+.memo-list th.actions, .memo-list td.actions { white-space: nowrap; width: 1%; }
 .memo-list .empty { color: var(--ink-3); padding: 6px 0; }
 .memo-list .muted { color: var(--ink-3); }
 /* 삭제: 휴지 상태는 회색, hover/focus 에서만 붉게 */
