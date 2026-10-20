@@ -14,9 +14,9 @@
 
 ## 2. 실행과 종료
 
-- `app\run.bat` 더블클릭 → 콘솔 창이 뜨고 브라우저가 `http://127.0.0.1:8791` 로 열립니다.
+- `app\run.bat` 더블클릭 → 콘솔 창이 뜹니다. 브라우저는 자동으로 열리지 않으니 `http://127.0.0.1:8791` 을 직접 엽니다(즐겨찾기 권장).
 - **콘솔 창을 닫으면 앱이 종료됩니다.** 쓰는 동안 최소화해 두세요.
-- 이미 실행 중인데 다시 누르면 "이미 실행 중입니다" 안내와 함께 기존 창을 엽니다.
+- 이미 실행 중인데 다시 누르면 "이미 실행 중입니다" 안내와 주소만 보여 줍니다.
 - 포트를 바꾸려면 `.env`에 `LEDGER_PORT=번호`.
 - 설정 파일은 기본 `app\.env`이고, 환경변수 `LEDGER_ENV`로 다른 파일을 지정할 수 있습니다(상대 경로는 `app` 폴더 기준). 설정 화면의 저장도 그 파일에 씁니다.
 
@@ -386,4 +386,4 @@ claude mcp add caih-rfm -s user -- python "C:/Users/parkj/Desktop/Project/dev/CA
 - `tests/test_api.py` — 신청 API 규칙(학회 금액 강제·날짜·재결재·0원 승인 차단, 기타·장비 정규화·정수·시스템 열 보호). `python -I tests/test_api.py`
 - `tests/test_ui.py` — Playwright(chromium 헤드리스)로 신청 폼·여비 계산기·기타 문구·탭 전환·드로어·품의 전환을 검사. `python -I tests/test_ui.py` (playwright 와 chromium 설치 필요: `python -m pip install playwright && python -m playwright install chromium`)
 
-서버가 필요한 검사는 `tests/_env.py` 의 `Server` 가 QA 장부(`docs/qa_data_2026_01_09/qa_ledger.xlsx`)를 `tests/.tmp/<이름>/` 에 복사해 빈 포트로 띄우고(`LEDGER_DRIVE_MOCK=1`, `LEDGER_NO_BROWSER=1`), 끝나면 내립니다. 실제 장부는 건드리지 않습니다. `LEDGER_NO_BROWSER=1` 이면 `main.py` 가 브라우저를 열지 않습니다(2026-10-16 추가).
+서버가 필요한 검사는 `tests/_env.py` 의 `Server` 가 QA 장부(`docs/qa_data_2026_01_09/qa_ledger.xlsx`)를 `tests/.tmp/<이름>/` 에 복사해 빈 포트로 띄우고(`LEDGER_DRIVE_MOCK=1`, `LEDGER_NO_BROWSER=1`), 끝나면 내립니다. 실제 장부는 건드리지 않습니다. `main.py` 는 브라우저를 자동으로 열지 않습니다(2026-10-20부터).
