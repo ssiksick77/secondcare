@@ -31,7 +31,7 @@ Add Google login so every write records who made it and the app is ready for acc
 
 ## In progress
 
-Google login first version is coded and checked (see Done). Not verified: a real Google login in the browser (needs the user's OAuth client and allow-list in `app/.env`; tests use the bypass). The done condition "KRDS score check passes" could not run: `scripts/check.sh` has no KRDS score step; the login page structure is checked by `tests/test_ui.py` instead (lang, landmarks, h1, skip link, alert role).
+Google login first version is done. User logged in with a real Google account on 2026-10-20 after the PKCE fix (41642cb): the verifier now travels in the signed state cookie. None in progress. The done condition "KRDS score check passes" could not run: `scripts/check.sh` has no KRDS score step; the login page structure is checked by `tests/test_ui.py` instead (lang, landmarks, h1, skip link, alert role).
 
 User steps before first use (README 2-1):
 1. Put the allowed emails in `app/.env`: `LEDGER_ALLOWED_EMAILS=...`.
@@ -91,5 +91,6 @@ User steps before first use (README 2-1):
 
 ## Next action
 
-Branch merged into main (2026-10-20) before a real login test. User step: set `LEDGER_ALLOWED_EMAILS` in `app/.env`, restart `appun.bat`, log in once and confirm the header shows the email. Then: 결재란 '담당' name from the login author (ideas.md), and pick from ideas.md: allow-list management UI, role check, multi-PC access (host name, HTTPS, Secure cookie).
+Branch merged into main (2026-10-20) before a real login test. User step: set `LEDGER_ALLOWED_EMAILS` in `app/.env`, restart `app
+un.bat`, log in once and confirm the header shows the email. Then: 결재란 '담당' name from the login author (ideas.md), and pick from ideas.md: allow-list management UI, role check, multi-PC access (host name, HTTPS, Secure cookie).
 
