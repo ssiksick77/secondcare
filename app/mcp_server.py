@@ -1,8 +1,8 @@
-"""센터 회계대장 MCP 서버 (stdio).
+"""Second Care (caih-rfm) MCP 서버 (stdio).
 
 Claude Desktop / Claude Code 에서 장부를 도구로 조회·입력할 수 있게 노출한다.
 등록 예 (Claude Code):
-  claude mcp add ledger -- python "<이 폴더 절대경로>/mcp_server.py"
+  claude mcp add caih-rfm -- python "<이 폴더 절대경로>/mcp_server.py"
 Claude Desktop 은 claude_desktop_config.json 의 mcpServers 에 같은 command/args 를 추가.
 """
 from __future__ import annotations
@@ -25,10 +25,12 @@ from mcp.types import ToolAnnotations
 import store
 import tools
 
+store.set_author("mcp")  # MCP 를 거친 쓰기의 author (로그인 없음)
+
 mcp = MCPServer(
-    "ledger",
+    settings.APP_SLUG,
     instructions=(
-        "의료인공지능센터 연구비 회계대장. 재원(과제)별 예산·집행·품의·적립금을 조회하고 입력한다. "
+        "Second Care: 의료인공지능센터 연구비 관리 시스템. 재원(과제)별 예산·집행·품의·적립금을 조회하고 입력한다. "
         f"예산목은 {store.BUDGET_ITEMS} 중 하나. 번호(거래번호/품의번호)는 자동 부여되며 YYYY-재원코드-NNN 형식. "
         "쓰기 도구는 엑셀 파일을 직접 수정하므로 사용자 확인 후 호출할 것. 삭제 후에는 다른 행의 _row 가 바뀌므로 반드시 다시 조회할 것. "
         "오늘 날짜는 서버가 알려주지 않으므로 상대 날짜('어제')는 사용자에게 확인."

@@ -1,4 +1,6 @@
-# 센터 회계대장 관리도구 — 사용 안내
+# Second Care: 의료인공지능센터 연구비 관리 시스템 — 사용 안내
+
+코드명 `caih-rfm`. 짧은 이름 "Second Care"는 병원 ERP BESTCare 옆에서 연구비 집행을 보조하는 센터 자체 도구라는 뜻입니다. 공문·보고서에는 정식 명칭 "의료인공지능센터 연구비 관리 시스템"을 씁니다. 집행·품의·예산·적립금을 다루는 본 화면은 "회계대장" 화면이라고 부릅니다(인건비·신청 화면과 구분).
 
 `의료인공지능센터_지출장부_2026.xlsx`를 원본으로 쓰는 로컬 웹앱입니다. 엑셀 파일이 곧 데이터베이스이고, 앱은 그 파일을 읽고 씁니다. 엑셀에서도 언제든 열어 볼 수 있습니다.
 
@@ -29,6 +31,28 @@
 - MCP 는 QA 장부를 쓰지 않습니다(MCP 는 `app\.env`의 `LEDGER_XLSX`). MCP 로 QA 장부를 보려면 MCP 실행 환경에 `LEDGER_XLSX`·`LEDGER_ENV`를 같은 값으로 지정합니다.
 
 **첫 실행 때 장부 구조가 자동으로 보정됩니다.** 재원·적립금·태그·증빙 시트가 추가되고 집행내역에 상태·증빙폴더·증빙목록·연결품의번호 열(연결품의번호는 비고의 `품의 X`에서 자동 이관), 품의내역에 상태 열, 예산변동에 국제공동연구개발비·연구개발부담비 열(맨 끝)이 생깁니다. 보정 전 파일은 `app\backup`에 백업되고 콘솔에 내용이 표시됩니다. 처음 실행하기 전에 장부 사본을 따로 보관해 두세요. 장부 파일에 차트·이미지·피벗이 있으면 저장 과정(openpyxl)에서 사라질 수 있으니 장부에는 넣지 마세요.
+
+## 2-1. 구글 로그인 설정 (최초 1회) <a id="login"></a>
+
+모든 화면과 API 는 로그인 뒤에만 열립니다. 로그인은 구글 계정으로 하고, 허용된 이메일만 들어올 수 있습니다. 로그인 상태는 브라우저에 30일 유지됩니다. 설정은 `app\.env` 에 직접 적습니다 (허용 목록 관리 화면은 나중에).
+
+1. OAuth 클라이언트 JSON. 드라이브용으로 받은 `app\google_client_secret.json` (데스크톱 앱 유형) 이 있으면 그대로 씁니다. 다른 PC 에서 접속할 계획이면 **Google 인증 플랫폼 → 클라이언트 → 클라이언트 만들기 → 웹 애플리케이션** 으로 하나 더 만들고, "승인된 리디렉션 URI" 에 `http://127.0.0.1:8791/auth/callback` (포트는 `LEDGER_PORT`) 을 넣은 뒤 JSON 을 `app\google_oauth_client.json` 으로 저장하고 `.env` 에 `LEDGER_OAUTH_CLIENT=google_oauth_client.json` 을 적습니다. 테스트 사용자 등록은 드라이브 절차([5. 증빙 관리](#drive)) 와 같습니다.
+2. `.env` 에 허용 이메일을 적습니다: `LEDGER_ALLOWED_EMAILS=담당자@gmail.com,연구원@gmail.com` (쉼표 구분). 비어 있으면 아무도 로그인할 수 없습니다.
+3. 앱을 다시 시작하고 `http://127.0.0.1:8791` 을 열면 로그인 화면이 뜹니다. "Google 계정으로 로그인" → 구글 계정 선택 → 메인 화면. 허용 목록에 없는 계정은 "허용되지 않은 계정입니다" 안내가 뜹니다.
+4. 처음 로그인하면 이름 입력 화면이 한 번 뜹니다 (구글 프로필 이름이 미리 채워짐, 1~20자). 이 이름이 상단과 지출결의서 결재란의 **담당** 칸에 들어갑니다 (그 집행을 만든 계정의 이름). 이름은 SQLite 의 `users` 표에 저장되고, 바꾸는 화면은 아직 없습니다 (SQLite 로 직접 수정). xlsx 저장소는 이름을 묻지 않습니다.
+5. 로그아웃은 상단 오른쪽 **로그아웃** 버튼.
+
+`.env` 키:
+
+| 키 | 뜻 | 기본값 |
+|---|---|---|
+| `LEDGER_ALLOWED_EMAILS` | 로그인 허용 이메일 (쉼표 구분) | (없음 → 로그인 불가) |
+| `LEDGER_OAUTH_CLIENT` | OAuth 클라이언트 JSON 경로 (상대 경로는 `app` 기준) | `google_client_secret.json` |
+| `LEDGER_OAUTH_REDIRECT` | 리다이렉트 URI. 다른 PC 접속(호스트명·HTTPS) 때 이 값과 콘솔 등록만 바꿈 | `http://127.0.0.1:<포트>/auth/callback` |
+| `LEDGER_SESSION_SECRET` | 세션 쿠키 서명 키. 첫 로그인 때 자동 생성·저장. 바꾸면 모두 다시 로그인 | (자동) |
+| `LEDGER_AUTH_BYPASS` | 검사용. 이 이메일로 로그인한 것으로 봄 (tests/ 가 설정). 실제 운영에서는 쓰지 말 것 | (없음) |
+
+SQLite 저장소에서는 생성·수정·삭제한 행의 `author` 와 변경 로그에 로그인 이메일이 기록됩니다. MCP 서버를 거친 쓰기는 `mcp` 로 기록됩니다. xlsx 저장소는 로그인은 같지만 작성자를 기록하지 않습니다.
 
 ## 3. 처음 시작하기 (순서대로)
 
@@ -251,13 +275,14 @@ Google Cloud 콘솔 화면은 2025년부터 "Google 인증 플랫폼(Google Auth
 
 ## 7. AI 도우미 (선택 · 유료)
 
-상단 우측 설정 → AI 도우미에서 제공자(Anthropic 또는 OpenAI 호환)·모델·API 키를 넣고 "연결 확인 후 저장"을 누릅니다. 키가 없으면 AI 버튼이 비활성으로 보입니다. **질문마다 장부 전체(거래처·사용자 이름 포함)가 선택한 AI 서버로 전송되며 사용량에 따라 과금됩니다.**
+상단 우측 설정 → AI 도우미에서 제공자(Anthropic 또는 OpenAI 호환)·모델·API 키를 넣고 "연결 확인 후 저장"을 누릅니다. 키가 없으면 AI 버튼이 비활성으로 보입니다. **AI 서버로 보내는 내용(거래처·사용자 이름 포함)은 사용량에 따라 과금됩니다.** Anthropic 경로의 채팅은 재원 목록 요약만 보내고 나머지는 필요한 범위를 도구로 조회합니다(2026-10-20 개편). 보고서 초안과 OpenAI 호환 경로의 채팅은 아직 질문마다 장부 전체를 보냅니다.
 
 | 기능 | 위치 | 동작 |
 |---|---|---|
-| 장부 Q&A · 입력 제안 | 상단 "AI 도우미" → 우측 패널 | 장부를 근거로 답합니다. "5/20 ABC식당 회의비 85,000원 집행 기록해줘"처럼 말하면 **제안 카드**가 뜨고, "검토 후 저장"을 누르면 입력 폼이 채워진 채 열립니다. 저장은 사용자가 직접 하며 AI는 장부를 바꾸지 못합니다. 기존 행 수정·품의→집행 전환도 같은 방식입니다. |
+| 장부 Q&A · 입력 제안 | 상단 "AI 도우미" → 우측 패널 | 질문에 필요한 범위를 도구로 조회해 답합니다: 재원·예산목 잔액(`budget_balance`), 품목·장비·거래처 검색(`search_ledger`: 집행·신청·품의), 거래 한 건의 진행 상태·증빙(`get_exec`), 환율(`fx_rate`, 유럽중앙은행 기준), 메모(`read_memo`). 답변 아래 "조회:" 줄에 무엇을 봤는지 표시됩니다. "5/20 ABC식당 회의비 85,000원 집행 기록해줘"처럼 말하면 **제안 카드**가 뜨고, "검토 후 저장"을 누르면 입력 폼이 채워진 채 열립니다. 저장은 사용자가 직접 하며 AI는 장부를 바꾸지 못합니다. 기존 행 수정·품의→집행 전환·메모 저장도 같은 방식입니다. |
+| 메모 | 설정 → 메모 | 재원·거래처별 특이사항과 일반 규정(예: 회의비는 참석자 명단 첨부)을 적어 두면 AI 가 규정·증빙 질문에 참고합니다. 장부의 `메모` 시트에 저장되며, 대화 중 AI 가 제안한 메모도 승인해야 저장됩니다. |
 | 영수증 추출 | 집행/품의 입력 폼 "영수증에서 채우기" | 이미지·PDF에서 일자·거래처·금액·적요·세목·예산목을 읽어 **빈 칸만** 채우고 노란색으로 표시합니다. 재원·태그·사용자는 직접 고르고, 금액은 부가세 포함 합계입니다. |
-| 추천·검증 | 집행/품의 입력 폼 "AI 추천·검증" | 거래처 이력과 예산 현황으로 예산목·세목·태그를 추천하고 중복·잔액 초과를 경고합니다. |
+| 추천·검증 | 집행/품의 입력 폼 "AI 추천·검증" | 같은 거래처 이력과 해당 재원 예산 현황으로 예산목·세목·태그를 추천하고 중복·잔액 초과를 경고합니다. 빈 칸만 채우고, 이미 입력한 예산목은 그대로 둡니다. |
 | 보고서 초안 | AI 도우미 패널 상단 "보고서 초안 생성" (재원·연도·월·종류 선택) | 서버가 집계한 수치를 모델에 넘겨 서술만 맡깁니다. 그래도 수치는 대시보드 표와 대조하세요. |
 
 - Anthropic 기본 모델은 `claude-sonnet-5-5`, 응답 품질은 "보통(medium)"입니다. 서버 측 폴백(거부 시 재시도)과 1시간 프롬프트 캐시는 Anthropic 경로에만 적용됩니다.
@@ -265,7 +290,7 @@ Google Cloud 콘솔 화면은 2025년부터 "Google 인증 플랫폼(Google Auth
 
 ## 8. MCP 서버 (Claude Desktop / Claude Code 연동)
 
-`mcp_server.py`가 장부를 MCP 도구로 노출합니다. 조회: `list_funds`, `list_tags`, `get_dashboard`, `list_exec`, `get_exec`, `list_req`, `list_budget`, `list_deposit`. 입력: `add_exec`, `add_req`, `add_budget`, `add_deposit`, `update_row`, `delete_row`, `req_to_exec`.
+`mcp_server.py`가 장부를 MCP 도구로 노출합니다. 조회 도구는 앱 내 AI 도우미와 같은 `app/tools.py` 함수입니다: `list_funds`, `list_vendors`, `list_tags`, `get_dashboard`, `list_exec`, `get_exec`, `list_req`, `list_budget`, `list_deposit`, `budget_balance`, `search_ledger`, `fx_rate`, `read_memo`. 입력: `add_exec`, `add_req`, `add_budget`, `add_deposit`, `update_row`, `delete_row`, `req_to_exec`.
 
 **주의: MCP에는 웹의 제안 카드 같은 확인 단계가 없습니다.** 쓰기 도구는 장부를 바로 바꿉니다. 클라이언트에서 쓰기 도구를 "항상 허용"하지 마세요. 읽기 전용으로만 쓰려면 `.env`에 `LEDGER_MCP_READONLY=1`을 넣으면 쓰기 도구가 등록되지 않습니다. 삭제 후에는 다른 행의 `_row`가 바뀌므로 도구 설명대로 다시 조회해야 하며, `expect_id`(거래번호 등)를 함께 주면 엉뚱한 행을 고치지 않습니다.
 
@@ -274,15 +299,15 @@ Python 실행 파일 경로를 먼저 확인합니다(명령 프롬프트에서 
 **Claude Code** (모든 폴더에서 쓰려면 `-s user`):
 
 ```text
-claude mcp add ledger -s user -- python "C:/Users/parkj/Desktop/Project/dev/CAIH_회계장부_2026/app/mcp_server.py"
+claude mcp add caih-rfm -s user -- python "C:/Users/parkj/Desktop/Project/dev/CAIH_회계장부_2026/app/mcp_server.py"
 ```
 
-**Claude Desktop**: 설정 → 개발자 → "구성 편집"으로 `%APPDATA%\Claude\claude_desktop_config.json`을 열고 `mcpServers` 안에 아래 항목을 추가합니다(이미 다른 서버가 있으면 쉼표로 이어 붙임). 저장 후 Claude Desktop을 완전히 종료했다가 다시 실행합니다. 같은 내용의 예시 파일이 `app\claude_desktop_config.ledger.json`에 있습니다.
+**Claude Desktop**: 설정 → 개발자 → "구성 편집"으로 `%APPDATA%\Claude\claude_desktop_config.json`을 열고 `mcpServers` 안에 아래 항목을 추가합니다(이미 다른 서버가 있으면 쉼표로 이어 붙임). 저장 후 Claude Desktop을 완전히 종료했다가 다시 실행합니다. 같은 내용의 예시 파일이 `app\claude_desktop_config.ledger.json`에 있습니다. 예전 이름 `ledger`로 등록했다면 그 항목을 지우고 다시 등록합니다.
 
 ```json
 {
   "mcpServers": {
-    "ledger": {
+    "caih-rfm": {
       "command": "python",
       "args": ["C:/Users/parkj/Desktop/Project/dev/CAIH_회계장부_2026/app/mcp_server.py"]
     }
@@ -290,7 +315,7 @@ claude mcp add ledger -s user -- python "C:/Users/parkj/Desktop/Project/dev/CAIH
 }
 ```
 
-등록 확인: Claude에게 "ledger 의 list_funds 를 실행해 줘"라고 말해 재원 목록이 나오면 됩니다. `run_mcp.bat`은 직접 실행하는 파일이 아닙니다.
+등록 확인: Claude에게 "caih-rfm 의 list_funds 를 실행해 줘"라고 말해 재원 목록이 나오면 됩니다. `run_mcp.bat`은 직접 실행하는 파일이 아닙니다.
 
 ## 9. 시트 구조 요약
 

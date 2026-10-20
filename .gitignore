@@ -8,6 +8,7 @@
 # 비밀·토큰·로컬 상태
 app/.env
 app/google_client_secret.json
+app/google_oauth_client.json
 app/google_token.json
 app/google_token.expired
 app/drive_folders.json

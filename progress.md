@@ -8,28 +8,48 @@ The AI helper sends the whole ledger on every call. It gets slow and costly as t
 
 ## Done
 
-- Before this task: SQLite migration merged in a91649d (see `git log` and the Decisions below).
+- AI helper overhaul, first version (this branch, 2026-10-20): 9dd63f1 `app/tools.py` shared read tools (MCP wraps them, `tool_schema`, `call`); d8ba018 `budget_balance`, `search_ledger` (집행·신청·품의), `get_exec` with 증빙·연결품의·적립금연결, `fx_rate` (frankfurter.app, live check once); c245e15 memo store (sheet/table `메모`, validation, settings panel CRUD, `read_memo`); a20d1c9 chat as a tool-calling agent (`AGENT_SYSTEM`, `summary_context`, `agent_tools`, `run_tool`, 10 rounds, 40k char cap, `propose_memo` card, "조회" line); d5f0afe AI 추천·검증 keeps a filled 예산목. Test group `ai` (tests/test_ai.py, 122 checks, stubbed client, no API calls). Merged main (Second Care rename, Google login, first-login name) on 2026-10-20.
+- Finding: receipt extract and suggest never sent the whole ledger (the first survey said so); only chat and report did. Report and the OpenAI chat path still do (later).
+
+## Done before this task (main, merged 2026-10-20)
+
+- 9da4d04 First-login name: `users` table (`db.USERS_DDL`, `user_names`, `set_user_name`), `store.author_names` / `user_name` / `set_user_name` (1-20 chars), `meta.authors`; middleware sends a nameless account to `/welcome` (API 403) except `/api/me` and `POST /api/me/name`; `welcome.html` prefilled with the Google profile name; header shows the name; voucher 담당 cell = `authorSigner(r)` from `_author`. Bypass accounts have no profile name and are never sent to `/welcome`. Tests: fixed `LEDGER_SESSION_SECRET` and `LEDGER_ALLOWED_EMAILS` in `tests/_env.py` (`session_cookie()` forges a login cookie; `call`/`get_raw` take a cookie), API +4/+14, UI +3 (ui-db). checks: pass (calc 32, API 110, db 53, api-db 120, UI 64, ui-db 66).
+- 950dca2 / 41642cb Google login first version with allow-list and PKCE fix (verified by the user 2026-10-20).
+
+## Done before this task (kept for reference)
+
+- 8a738a4 feat: print signer names on voucher approval box (`VOUCHER_SIGNER_NAMES` in app.js, `.vc-sign-n` styles). 담당 cell stays empty until login gives an email-to-name map.
+- 2026-10-20 SQLite migration complete and live (a91649d merge, d202ab6 export, 7ee9405/f389f7f write paths, ef7ffc0 schema/import). Details in git log.
+
+- 5926413 fix: startup sheet check leaked a read_only workbook handle; every save since 10-18 13:32 failed at os.replace (backups piled up, ledger mtime frozen). Regression test in tests/test_api.py. User re-entered the lost entries.
+- 85f8c23 예산목 잔액 (집행 표·결의서 재원 현황) counts only budget rows with 신청일자 ≤ 원인발생일; 신청일자 required; blank → Jan 1 of ledger year on fix-up.
+- 0cfa798 evidence on deposit rows (적립번호 key, same evidence API, drawer shared with exec via XD.kind, Drive 증빙관리/YYYY/적립금/거래처/번호).
+- 99026bd deposit stages 발주일/결제일/수령일 → 상태 (사용 rows only), action endpoint, timeline in drawer, badge column, status filter.
+- edaf8b4 vendor codes: `거래처` sheet/tab, 적립번호 = 코드-적립|사용-YYYY-NNN, auto-register unknown vendors with a unique name prefix, old numbers renumbered on fix-up.
+- 4e6df73 / 462ec27 import script docs/import_소모품대장/import.py; applied to the live ledger (68 requests, 3 orders, 6 deposit rows, 알파 balance 20,400 = source). Supplier 알파몰 → 알파 (code, settings default, UI text, app/.env by user instruction).
+- 2bc34c7 request numbers E/S/C/Z-YYYY-NNN (R- renumbered on fix-up with reference updates); 사유 as its own column. Live-ledger one-offs: requester names unified (19), '구 신청번호' notes removed (68).
+- 2651274 order list column 구매내역 = first item + "외 n건".
+- Live ledger: 거래번호 renumbered by 원인발생일 for 융합인재 (58), SDM (12), AX (6) with reference updates; scratch script renumber_fund.py (not in repo). Backups app/backup/manual_before_*.
+- 741c0c8 exec 취소 status: cancel/uncancel actions with optional reason (logged in 보완이력), excluded from every total (server active_exec, client activeExec), voucher/stage actions blocked, linked execs cannot be cancelled.
+- b2f86a0 evidence list syncs names from Drive (file_meta → store.evidence_sync), missing/trashed files flagged.
+- cdda72f vendor name 알파 → 알파미금역점 (code 알파 stays): defaults (store.SUPPLIERS_DEFAULT, settings), ORDER_PREFIXES entry, request UI text, settings placeholder, README, import script VENDOR, app/.env REQUEST_SUPPLIERS. Live ledger renamed by a scratch script (79 cells: 집행내역·적립금·주문 거래처, 신청 구매처, 거래처 tab name; numbers, 적요, 비고, 품목 untouched). Backup app/backup/manual_before_vendorrename_20261020_134506.xlsx. No 알파 deposit evidence existed on Drive, so no Drive renames.
+- e44e9ee evidence file names drop 적요 (`재원_증빙종류_금액_YYMMDD`, deposits `거래처_…`); editing 재원/금액 (deposit 거래처/금액) renames Drive files + ledger names (main.sync_evidence_names).
 
 ## In progress
 
-AI helper overhaul, first version (brainstormed 2026-10-20). Order: 1, 2, 4, 3, 5, 6. Done conditions:
-1. Shared tool module `app/tools.py`: the 9 read tools of `mcp_server.py` wrap `tools.py` functions; MCP behaviour on the QA ledger is unchanged (test).
-2. New read tools `budget_balance(재원, 예산목)`, `search_exec(keyword/vendor/period)`, `get_exec` (stages, evidence, linked 품의), `fx_rate(currency)` (frankfurter.app, no key), `read_memo(target)`: each has a unit test on the QA ledger without a model call; `budget_balance` equals the exec screen balance.
-3. Chat as a tool-calling agent: the system prompt holds only a small summary (today, funds with balances, open counts); the rest comes from tools; `propose_*` cards stay. `/api/ai/chat` sends no ledger JSON (test); sample questions 1, 3, 4, 6 answer correctly on the QA ledger (manual, once each).
-4. Memo store: sheet/table `메모` (kind 재원·거래처·일반, target, text, date). CRUD in the settings panel; the AI reads with `read_memo` and proposes with `propose_memo`; the card saves on approval. CRUD API test; nothing is stored before approval (test); one rule memo answers sample question 2 (manual).
-5. `/api/ai/suggest` sends only same-vendor history and the fund budget state; the 예산목 overwrite in app.js (AI 추천·검증) is fixed. Payload has no full ledger (test); a filled 예산목 is kept.
-6. Test group `ai` in `tests/run.py`, no model calls.
-
-Sample questions (tool design targets): (1) 재원·예산목 잔액, (2) 어떤 증빙이 필요한가 (memo), (3) 품목 이전 가격, (4) 장비 구매 시점·재원, (5) 환율, (6) 거래 진행 상태.
-
+AI helper overhaul, first version: code done. Left: (a) manual check with the real model on the QA ledger copy (sample questions 1 재원·예산목 잔액, 3 품목 이전 가격, 4 장비 구매 시점·재원, 6 거래 진행 상태, and 2 어떤 증빙 via a memo) — needs user approval (API cost); (b) merge this branch into main.
+Later steps (ideas.md): OpenAI path tool calling (session card proposed), receipt OCR, report, travel calculator, rule documents, approval writes, researcher agent.
 ## Open issues
 
-- Migration state: with `LEDGER_DB` set the app reads and writes SQLite only; the xlsx is not updated (use `export_xlsx.py` for a copy). `_row` in the API is the SQLite id. The live ledger has not been imported; switching `app/.env` to `LEDGER_DB` is the user's call (import once, then stop editing the xlsx by hand).
+- Live ledger is SQLite since 2026-10-20 14:58. `의료인공지능센터_지출장부_2026.xlsx` is frozen at that moment: do not edit it by hand, it is no longer read. For an Excel view run `python app/export_xlsx.py <sqlite> <copy.xlsx>`. Backups are `app/backup/*.sqlite`. `_row` in the API is the SQLite id.
+- Worktree branches claude/sqlite-migration-difficulty-9c1e10, claude/resolution-signature-names-196bd0 and claude/google-login-implementation-33c005 are merged and can be deleted.
+- Static files have no version query, so a code change can show stale CSS until a hard refresh (ideas.md [later][fix] 2026-10-20).
 - SQLite mode skips `_ensure_structure`, so a ledger imported from an older xlsx must be fixed up by the import (it loops the fix-up); the budget sheet summary rows 1-7 are not kept in SQLite (export must rebuild them).
 - `mcp_server.py` was not run against SQLite; it only uses store functions, so it should work, but check it in session 3.
+- Rename note for the AI tools: the brainstorm named `search_exec`; the tool is `search_ledger` (it spans 집행·신청·품의). `.claude/launch.json` (browser-pane launcher `qa-manual`) is local and untracked.
 - The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run.
-- The `api` group failed once inside a full `check.sh` run (detail lost) and passed on every rerun and on the next two full runs; cause unknown, possibly a port or lock timing issue. If it repeats, save the output (`bash scripts/check.sh > tests/.tmp/check_out.txt 2>&1`) and read the FAIL line.
-- checks: pass (smoke; test: calc 32, API 95, db 46, api-db 95, UI 56, ui-db 56, about 5 minutes — run with a timeout above 300 s). No lint or typecheck. Two sessions running check.sh at the same time collide on tests/.tmp/ (one run fails); run checks from one session at a time.
+- The `api` group fails about once in six full `check.sh` runs and passes on rerun. Captured on 2026-10-20: test '구분 변경 → 재결재' got HTTP 423 '장부 파일에 쓸 수 없습니다' (store.py PermissionError on os.replace of the xlsx copy): a Windows file-lock race (indexer/antivirus), not a code bug. If it repeats often, retry the save once in `store._save` or run the api group on SQLite only.
+- checks: pass on the merged tree 2026-10-20 (smoke; test: calc 32, API 110, db 55, ai 122, api-db 120, UI 74, ui-db 76, about 7 minutes — run with a timeout above 420 s). No lint or typecheck. Two sessions running check.sh at the same time collide on tests/.tmp/ (one run fails); run checks from one session at a time.
 - The app running on port 8791 must be restarted to read the new REQUEST_SUPPLIERS in app/.env.
 - Live ledger follow-ups for the user: enter 배송일 for order 알파-20260703-01 (11 requests then become 완료); review auto-registered vendor codes in the 거래처 tab (codes are immutable once used in a number).
 - Existing evidence files keep old-rule names (with 적요) until their exec's 재원/금액 is edited; a one-shot rename script could be offered. Folder names were fixed by [드라이브 동기화] on 2026-10-20.
@@ -42,6 +62,8 @@ Sample questions (tool design targets): (1) 재원·예산목 잔액, (2) 어떤
 
 ## Decisions
 
+- 2026-10-20 (user) First-login name entry instead of an email-to-name map in .env: ask once, no change UI yet; the imported author (snubh.ai.center.01@gmail.com) is asked like everyone else. My calls: `users` table in SQLite, prefill from the Google profile, xlsx mode skips the prompt, voucher 담당 cell reads the row author.
+- 2026-10-20 (user) 결의서 결재란 이름: 매니저 오인선, 선임연구원 이진영, 센터장 류지원 with small '직무대행' above the name, bold italic; 담당 cell stays empty until login gives an email-to-name map (per-transaction author, not a fixed setting). My calls: name 11pt, tag 6.5pt with -0.2mm tracking inside the name width.
 - 2026-10-16 (user) 여비 계산기: 기본 정보 외 필수 없음; 출장 기간과 학회 기간 별도 입력; 학회 전후 각 1일만 인정, 초과 출장일은 공제일수로 일비·식비에서 자동 제외(숙박은 그대로, my choice since the user named 일비/식비 only).
 - 2026-10-16 (user) 재원 종류: list 국책/원내/위탁/교육/공금/기타; 공금 deposits go through 예산변동 (no per-예산목 split), 예산목 stays required on 집행/품의/신청, existing funds default to 국책 and the user edits them later.
 - 2026-10-16 (user) 지출결의서 결재란: 담당 / 매니저 / 선임연구원 / 센터장 4칸, 위 직책·아래 서명. Row height 6.5mm and blank name cells were my choice (user did not answer).
@@ -68,11 +90,11 @@ Sample questions (tool design targets): (1) 재원·예산목 잔액, (2) 어떤
 - 2026-10-20 SQLite schema (my calls): one table per sheet with the Korean headers as column names; empty cells NULL, numeric columns REAL, other columns untyped so 변경회차 keeps int vs text; dates as 'YYYY-MM-DD' text; `_row` carries the SQLite id so screens work unchanged until the frontend is renamed; `author` stores the email only (name mapping comes with login).
 - 2026-10-20 (user) SQLite migration, multi-user. Target: 3 (several accountants + researchers filing requests), external access, centre Linux server later, tunnel from a centre PC first. Login = Google, allow-list of emails managed by the accountant, first accountant in app/.env. Roles, login, external access, deployment are all later; the migration only adds stable ids and an author column. Existing rows get author 안윤아 (snubh.ai.center.01@gmail.com). SQLite before PostgreSQL (2026-10-19 decision kept).
 - 2026-10-20 (user) 한 문서(사전결재안 등)를 여러 거래의 증빙으로: 증빙 행 [복사] → 거래번호 여러 개 → 그 거래 폴더로 drive.copy(그 거래 기준 이름), 독립 증빙 항목(비고 '복사: 원본'). 연결(공유 파일)·드라이브 바로가기 방식은 사용자가 거절. POST /api/evidence/{번호}/copy.
+- 2026-10-20 (user) Google login: full lock (every screen and API), allow-list in `.env` only (management UI later), web-application OAuth client with `LEDGER_OAUTH_REDIRECT` as a setting so a later host name is a config change. My calls: xlsx mode locks the same but records no author; MCP server is unaffected (no HTTP) and uses author `mcp`; cookie 30 days; tests bypass auth with a fixed email and never call Google.
 
 - 2026-10-20 (user) AI helper overhaul: hybrid C = small summary in the system prompt + read tools (not full ledger, not summary only); one tool module for MCP and the in-app agent; memo store by target kind (재원·거래처·일반), user edits, AI proposes and the user approves; fx_rate tool in the first version; OpenAI tool calling, receipt OCR (OCI candidate), report, travel calculator, rule-document answers all later. Accountant-role version first; the researcher version is a separate agent with its own smaller tool set (restriction by tool availability, not by prompt). My calls: memo UI in the settings panel; frankfurter.app for rates; tool loop cap stays 6; chat shows one line per tool call under the answer.
 
 ## Next action
 
-Step 1: create app/tools.py from the read functions in mcp_server.py and make the MCP server wrap it; add a tools test on the QA ledger.
+Ask the user to approve the real-model check (app/.env key, QA copy server `tests/.tmp/manual`, see .claude/launch.json qa-manual); then merge claude/ai-assistant-overhaul-c6df4b into main. Next task: OpenAI path tool calling (ideas.md).
 
-Previous candidates: Candidates: one-shot rename of existing evidence files to the new rule (needs Drive connected), LEDGER_HOST + server role check, 학회·기타 review leftovers.

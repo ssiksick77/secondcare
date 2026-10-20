@@ -74,7 +74,23 @@ def create_schema(con: sqlite3.Connection):
     con.execute("CREATE TABLE IF NOT EXISTS changelog (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, "
                 f"{AUTHOR_COL} TEXT, kind TEXT NOT NULL, row_id INTEGER, action TEXT NOT NULL, detail TEXT)")
     con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)", (SCHEMA_VERSION,))
+    con.execute(USERS_DDL)
     con.commit()
+
+
+# 사용자 이름 (최초 로그인 때 입력, 2026-10-20). author 열의 이메일 → 표시 이름
+USERS_DDL = "CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL)"
+
+
+def user_names(con: sqlite3.Connection) -> dict[str, str]:
+    con.execute(USERS_DDL)
+    return {r["email"]: r["name"] for r in con.execute("SELECT email, name FROM users")}
+
+
+def set_user_name(con: sqlite3.Connection, email: str, name: str):
+    con.execute(USERS_DDL)
+    con.execute("INSERT INTO users (email, name, created_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET name = excluded.name",
+                (email.lower(), name, dt.datetime.now().isoformat(timespec="seconds")))
 
 
 @contextlib.contextmanager

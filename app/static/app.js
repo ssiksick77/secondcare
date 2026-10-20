@@ -1,5 +1,9 @@
-/* 센터 회계대장 관리도구 - 프론트엔드 */
+/* Second Care (caih-rfm): 의료인공지능센터 연구비 관리 시스템 - 프론트엔드 */
 "use strict";
+
+// 프로그램 이름 (settings.py 의 APP_NAME / APP_FULL_NAME 과 같은 값). 화면은 짧은 이름, 인쇄물은 정식 명칭.
+const APP_NAME = "Second Care";
+const APP_FULL = "의료인공지능센터 연구비 관리 시스템";
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -164,6 +168,7 @@ async function api(method, url, body) {
   catch { throw new Error("서버에 연결할 수 없습니다. run.bat 이 실행 중인지 확인하세요."); }
   const wid = res.headers.get("X-Write-Id");
   if (wid && wid !== LAST_WRITE_ID) { LAST_WRITE_ID = wid; $$(".toast-undo").forEach(b => { if (b.dataset.wid !== wid) b.remove(); }); }  // 새 쓰기 뒤에는 이전 되돌리기 버튼 제거
+  if (res.status === 401) { location.href = "/login"; throw new Error("로그인이 필요합니다."); }  // 세션 만료·로그아웃 → 로그인 화면
   if (!res.ok) {
     let msg = { 404: "찾을 수 없습니다", 405: "지원하지 않는 요청입니다", 409: "충돌", 413: "파일이 너무 큽니다 (25MB 이하)", 422: "입력 형식 오류", 423: "장부 파일이 잠겨 있습니다", 500: "서버 오류" }[res.status] || res.statusText;
     try { const d = (await res.json()).detail; if (Array.isArray(d)) msg = d.map(x => x.msg || JSON.stringify(x)).join(" / "); else if (d) msg = typeof d === "string" ? d : JSON.stringify(d); } catch { }
@@ -593,8 +598,8 @@ window.addEventListener("beforeprint", () => {
   if (dash) name += ` (${$("#panel-dash .subtabs [aria-selected=true]")?.textContent.trim() || ""})`;
   const note = dash ? $("#dash-note").textContent.trim() : "";
   // 신청 화면: 숨은 회계대장 탭의 재원·예산 값 대신 연도·구매처·상태 (request.js reqPrintHead)
-  if (document.body.classList.contains("request-mode") && typeof reqPrintHead === "function") $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(reqPrintHead())} · 출력일 ${today()}`;
-  else $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
+  if (document.body.classList.contains("request-mode") && typeof reqPrintHead === "function") $("#print-head").innerHTML = `<b>${APP_FULL}</b> · ${esc(reqPrintHead())} · 출력일 ${today()}`;
+  else $("#print-head").innerHTML = `<b>${APP_FULL}</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
   $$("details.defs-box").forEach(d => { if (!d.open) { d.open = true; d.dataset.printOpened = "1"; } });
 });
 window.addEventListener("afterprint", () => {
@@ -1197,6 +1202,9 @@ document.addEventListener("click", e => {
 $("#dash-fund").addEventListener("change", renderDashboard);
 $("#dash-year").addEventListener("change", renderDashboard);
 $("#btn-reload").addEventListener("click", load);
+// 로그인 사용자 표시 · 로그아웃 (auth.py)
+api("GET", "/api/me").then(u => { if (u && u.email) { $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
+$("#btn-logout").addEventListener("click", async () => { try { await api("POST", "/auth/logout"); } catch { } location.href = "/login"; });
 document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
 });
@@ -2178,6 +2186,8 @@ function voucherModel(r, evid, cfg) {
     req: req ? [req["품의번호"], req["품의자"]].filter(Boolean).join(" · ") : no || "-",
   };
 }
+// 결재란 담당 칸: 그 집행 행의 작성자(author 이메일) → users 표의 이름. 이름이 없으면 빈 칸 (2026-10-20)
+function authorSigner(r) { const name = (DATA.meta.authors || {})[String(r._author || "").toLowerCase()]; return name ? { name } : null; }
 function voucherHtml(v, withIds) {
   const r = v.r, t = x => esc(x == null ? "" : x), f = v.fund;
   const cur = x => !x.own ? "-" : x.cur > 0 ? "−" + fmt(x.cur) : x.cur < 0 ? "+" + fmt(-x.cur) : "0";
@@ -2187,7 +2197,7 @@ function voucherHtml(v, withIds) {
   <header class="vc-head">
     <p class="vc-inst">${t(v.org)}</p>
     <table class="vc-sign" aria-label="결재란"><tbody><tr><th scope="row" rowspan="2" class="vc-sign-k">결재</th>${VOUCHER_SIGNERS.map(x => `<th scope="col" class="vc-sign-t">${x}</th>`).join("")}</tr>
-      <tr>${VOUCHER_SIGNERS.map(x => { const n = VOUCHER_SIGNER_NAMES[x]; return n ? `<td class="vc-sign-n">${n.tag ? `<small>${n.tag}</small>` : ""}${n.name}</td>` : "<td></td>"; }).join("")}</tr></tbody></table>
+      <tr>${VOUCHER_SIGNERS.map(x => { const n = x === "담당" ? authorSigner(r) : VOUCHER_SIGNER_NAMES[x]; return n ? `<td class="vc-sign-n">${n.tag ? `<small>${n.tag}</small>` : ""}${t(n.name)}</td>` : "<td></td>"; }).join("")}</tr></tbody></table>
     <div class="vc-band"><h2 class="vc-title"${withIds ? ' id="voucher-title"' : ""}>지출결의서</h2></div>
   </header>
   <h3>결의 내역</h3>

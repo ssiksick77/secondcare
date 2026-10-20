@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import hashlib
 import json
 import math
@@ -373,7 +374,7 @@ def _write_session():
             con = db.connect()
             con.execute("BEGIN IMMEDIATE")
             try:
-                yield db.Workbook(con, CURRENT_AUTHOR)
+                yield db.Workbook(con, current_author())
             finally:
                 if con.in_transaction:
                     con.rollback()
@@ -388,7 +389,7 @@ def _write_session():
 def _load():
     """읽기용 워크북. SQLite 면 어댑터 (자동 커밋 연결, 트랜잭션 없음: 읽기 경로 전용. 쓰기는 _write_session)."""
     if USE_DB:
-        return db.Workbook(db.connect(), CURRENT_AUTHOR)
+        return db.Workbook(db.connect(), current_author())
     if not XLSX_PATH.exists():
         raise FileNotFoundError(f"장부 파일 없음: {XLSX_PATH}")
     try:
@@ -625,8 +626,43 @@ def data_stamp() -> str:
 
 # 직전 쓰기 기록: 되돌리기는 "그 이후 아무도 장부를 바꾸지 않았을 때"만 허용 (해시 비교)
 LAST_WRITE: dict | None = None
-# 쓰기 작성자 (SQLite author 열). 로그인이 붙기 전까지는 빈 값 → 가져온 행의 author 는 유지된다 (COALESCE)
-CURRENT_AUTHOR: str | None = None
+# 쓰기 작성자 (SQLite author 열): 요청별 ContextVar. main.py 미들웨어가 로그인 이메일을, mcp_server 가 "mcp" 를 넣는다.
+# 비어 있으면 가져온 행의 author 는 유지된다 (COALESCE)
+_AUTHOR: contextvars.ContextVar[str | None] = contextvars.ContextVar("ledger_author", default=None)
+
+
+def set_author(email: str | None):
+    _AUTHOR.set(email or None)
+
+
+def current_author() -> str | None:
+    return _AUTHOR.get()
+
+
+def author_names() -> dict[str, str]:
+    """이메일 → 이름 (users 표). xlsx 모드는 빈 표."""
+    if not USE_DB:
+        return {}
+    with db.session() as con:
+        return db.user_names(con)
+
+
+def user_name(email: str) -> str | None:
+    return author_names().get((email or "").lower()) if USE_DB else None
+
+
+def set_user_name(email: str, name: str) -> str:
+    """최초 로그인 이름 저장. 1~20자, 앞뒤 공백 제거."""
+    name = re.sub(r"\s+", " ", str(name or "")).strip()
+    if not name:
+        raise ValueError("이름을 입력하세요.")
+    if len(name) > 20:
+        raise ValueError("이름은 20자 이하로 입력하세요.")
+    if not USE_DB:
+        raise ValueError("xlsx 저장소에서는 이름을 저장하지 않습니다.")
+    with _lock, db.session() as con:
+        db.set_user_name(con, email, name)
+    return name
 
 
 def last_write_id() -> str | None:
@@ -865,6 +901,7 @@ def _derive(data: dict, meta: dict) -> dict:
         r["상태"] = exec_status(r)
         r["상태표시"] = EXEC_STATUS_LABEL.get(r["상태"], r["상태"])
     data["meta"] = {
+        "authors": author_names(),  # 이메일 → 이름 (결의서 담당 칸 등)
         "labor_kinds": LABOR_KINDS,
         "labor_status": LABOR_STATUS,
         "dep_types": DEP_TYPES,

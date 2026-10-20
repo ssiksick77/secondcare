@@ -294,6 +294,66 @@ def main() -> int:
         log = [x for x in r.get("fixlog", []) if x["거래번호"] == fx_no]
         ck("보완이력: 표시·해제 2줄, 사유 보존", len(log) == 2 and log[0]["구분"] == "표시" and log[0]["사유"] == "영수증 원본 누락" and log[1]["구분"] == "해제" and log[1]["사유"] == "원본 수령", log)
         ck("보완이력: 일시 형식", all(len(str(x["일시"])) >= 16 for x in log), [x["일시"] for x in log])
+
+        # ---- 로그인 (auth.py): 우회 서버에서는 /api/me 가 검사 이메일, 행 author 는 SQLite 모드에서만 ----
+        s, r = sv.call("GET", "/api/me")
+        ck("로그인: /api/me = 우회 이메일", s == 200 and r.get("email") == sv.TEST_EMAIL, (s, r))
+        s, r = sv.call("POST", "/api/request", {**base, "상세": {}, "금액": 11})
+        if sv.mode == "db":
+            ck("로그인: 새 행 author = 로그인 이메일 (SQLite)", s == 200 and sv.row("request", r["_row"]).get("_author") == sv.TEST_EMAIL, (s, r))
+        s, loc = sv.get_raw("/login")
+        ck("로그인: 로그인 상태에서 /login → / 로 이동", s == 302 and loc == "/", (s, loc))
+
+    # ---- 로그인 우회가 없는 서버: 화면은 /login 으로, API 는 401, 로그인 화면·정적 파일은 열림 ----
+    with Server("api-noauth", auth_bypass=False) as sv:
+        for path in ("/", "/labor", "/request"):
+            s, loc = sv.get_raw(path)
+            ck(f"미로그인: {path} → 302 /login", s == 302 and loc == "/login", (s, loc))
+        s, r = sv.call("GET", "/api/all")
+        ck("미로그인: /api/all → 401", s == 401, (s, r))
+        s, r = sv.call("POST", "/api/request", {"구분": "기타", "신청인": "x", "품목": "x", "금액": 1})
+        ck("미로그인: 쓰기 API → 401", s == 401, (s, r))
+        s, _ = sv.get_raw("/login")
+        ck("미로그인: /login 200", s == 200, s)
+        s, _ = sv.get_raw("/static/style.css")
+        ck("미로그인: 정적 파일 200", s == 200, s)
+        s, loc = sv.get_raw("/auth/login")
+        ck("미로그인: OAuth 클라이언트 없음 → /login?err=config", s == 302 and (loc or "").startswith("/login?err=config"), (s, loc))
+        s, loc = sv.get_raw("/auth/callback?code=x&state=y")
+        ck("미로그인: 잘못된 콜백 → /login 으로", s == 302 and (loc or "").startswith("/login?err="), (s, loc))
+
+        # ---- 서명 쿠키로 로그인한 계정: 최초 로그인 이름 입력 (SQLite 만 묻는다) ----
+        ck_ = sv.session_cookie()
+        s, r = sv.call("GET", "/api/me", cookie=ck_)
+        ck("쿠키 로그인: /api/me 이메일", s == 200 and r.get("email") == sv.TEST_EMAIL, (s, r))
+        if sv.mode == "db":
+            ck("이름 없음: needs_name, 구글 이름 미리 채움", r.get("needs_name") is True and r.get("name") == "Google Name", r)
+            s, loc = sv.get_raw("/", cookie=ck_)
+            ck("이름 없음: / → /welcome", s == 302 and loc == "/welcome", (s, loc))
+            s, r = sv.call("GET", "/api/all", cookie=ck_)
+            ck("이름 없음: API → 403", s == 403, s)
+            s, _ = sv.get_raw("/welcome", cookie=ck_)
+            ck("이름 없음: /welcome 200", s == 200, s)
+            s, r = sv.call("POST", "/api/me/name", {"name": "   "}, cookie=ck_)
+            ck("이름 저장: 빈 값 400", s == 400, (s, r))
+            s, r = sv.call("POST", "/api/me/name", {"name": "가" * 21}, cookie=ck_)
+            ck("이름 저장: 21자 400", s == 400, (s, r))
+            s, r = sv.call("POST", "/api/me/name", {"name": "  검사  담당 "}, cookie=ck_)
+            ck("이름 저장: 공백 정리", s == 200 and r.get("name") == "검사 담당", (s, r))
+            s, r = sv.call("GET", "/api/me", cookie=ck_)
+            ck("이름 저장 뒤: needs_name false, 이름", r.get("needs_name") is False and r.get("name") == "검사 담당", r)
+            s, loc = sv.get_raw("/", cookie=ck_)
+            ck("이름 저장 뒤: / 200", s == 200, (s, loc))
+            s, loc = sv.get_raw("/welcome", cookie=ck_)
+            ck("이름 저장 뒤: /welcome → /", s == 302 and loc == "/", (s, loc))
+            s, r = sv.call("GET", "/api/all", cookie=ck_)
+            ck("meta.authors 에 이름", s == 200 and r["meta"].get("authors", {}).get(sv.TEST_EMAIL) == "검사 담당", r.get("meta", {}).get("authors"))
+        else:
+            ck("xlsx: 이름을 묻지 않음", r.get("needs_name") is False, r)
+            s, loc = sv.get_raw("/", cookie=ck_)
+            ck("xlsx: / 200", s == 200, (s, loc))
+        s, r = sv.call("GET", "/api/me", cookie="ledger_session=abc.def")
+        ck("위조 쿠키 → 401", s == 401, (s, r))
     return ck.done("API")
 
 

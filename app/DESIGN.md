@@ -1,5 +1,5 @@
 ---
-name: 의료인공지능센터 회계대장
+name: Second Care (의료인공지능센터 연구비 관리 시스템)
 description: 컬럼너 패드(회계 괘선지)의 규율을 화면에 옮긴 단일 서체·단일 색조의 장부 UI
 colors:
   ink: "#1E2124"
@@ -171,7 +171,7 @@ components:
     width: "min(460px, 100vw)"
 ---
 
-# Design System: 의료인공지능센터 회계대장
+# Design System: Second Care (의료인공지능센터 연구비 관리 시스템)
 
 ## Overview
 
