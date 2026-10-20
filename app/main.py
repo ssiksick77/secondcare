@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import webbrowser
 from collections import defaultdict
@@ -375,7 +376,53 @@ def update(kind: str, row: int, body: dict):
         rec, expect, extra = body.get("rec"), body.get("expect"), body.get("extra")
     else:
         rec, expect, extra = body, None, None
-    return store.update(kind, row, rec, expect, extra if isinstance(extra, dict) else None)
+    before = None
+    if kind in ("exec", "deposit"):  # 파일명에 들어가는 열이 바뀌면 그 건의 증빙 파일 이름을 따라 바꾼다
+        before = next((r for r in store.read_all()[kind] if r["_row"] == row), None)
+    out = store.update(kind, row, rec, expect, extra if isinstance(extra, dict) else None)
+    if before is not None:
+        cols = ("거래처", "금액") if kind == "deposit" else ("재원", "금액")
+        number = out.get(store.DEP_NO if kind == "deposit" else "거래번호") or before.get(store.DEP_NO if kind == "deposit" else "거래번호")
+        if number and any(store._norm_cmp(c, out.get(c)) != store._norm_cmp(c, before.get(c)) for c in cols):
+            try:
+                out["_renamed"] = sync_evidence_names(number)
+            except Exception as e:  # 장부는 이미 저장됨. 이름 변경 실패는 알림만
+                out["_rename_error"] = str(e)
+    return out
+
+
+_YYMMDD_RE = re.compile(r"_(\d{6})(?:_\d+)?(?:\.[^.]*)?$")
+
+
+def sync_evidence_names(number: str) -> int:
+    """한 건(거래번호·적립번호)의 증빙 파일 이름을 현재 규칙({재원|거래처}_증빙종류_금액_YYMMDD)으로 다시 만든다.
+    날짜 부분은 기존 이름의 YYMMDD 를 유지(없으면 원인발생일·일자), 확장자도 유지. 바뀐 파일 수 반환."""
+    subj = store.evidence_subject(number)
+    if subj is None:
+        return 0
+    rec, is_dep = subj["rec"], subj["kind"] == "deposit"
+    head = rec["거래처"] if is_dep else rec["재원"]
+    base_date = (rec["일자"] if is_dep else rec["원인발생일"]) or dt.date.today().isoformat()
+    items = [e for e in store.evidence_for(number) if e.get("드라이브파일ID")]
+    st = drive.status()
+    if not items or not (st.get("connected") or st.get("mock")):
+        return 0
+    n = 0
+    names = [e["파일명"] for e in items]
+    for e in items:
+        cur = str(e.get("파일명") or "")
+        m = _YYMMDD_RE.search(cur)
+        yymmdd = m[1] if m else base_date[2:4] + base_date[5:7] + base_date[8:10]
+        ext = cur.rsplit(".", 1)[-1] if "." in cur else ""
+        others = [x for x in names if x != cur]
+        new = drive.build_filename(head, e["증빙종류"] or "", rec["금액"], yymmdd, ext, others)
+        if new == cur:
+            continue
+        got = drive.rename(e["드라이브파일ID"], new)
+        store.evidence_set_file(e["_row"], new, got["id"] if got["id"] != e["드라이브파일ID"] else None)
+        names[names.index(cur)] = new
+        n += 1
+    return n
 
 
 @app.delete("/api/{kind}/{row}")
@@ -567,10 +614,9 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
     if subj is None:
         raise HTTPException(404, "집행 또는 적립금 행을 찾을 수 없습니다.")
     rec, is_dep = subj["rec"], subj["kind"] == "deposit"
-    # 폴더·파일명 재료: 집행은 재원·적요·원인발생일, 적립금은 거래처·적요(없으면 구분)·일자
+    # 폴더·파일명 재료: 집행은 재원·원인발생일, 적립금은 거래처·일자 (적요는 파일명에 넣지 않음)
     base_date = rec["일자"] if is_dep else rec["원인발생일"]
     name_head = rec["거래처"] if is_dep else rec["재원"]
-    summary = (rec["적요"] or rec["구분"]) if is_dep else (rec["적요"] or rec["거래처"] or "")
     target = None
     if row.strip() or evno.strip():
         if row.strip() and not row.strip().isdigit():
@@ -605,7 +651,7 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
     try:
         for f, data in blobs:
             ext = (f.filename or "").rsplit(".", 1)[-1] if "." in (f.filename or "") else ""
-            name = drive.build_filename(name_head, summary, kind, rec["금액"], yymmdd, ext, existing)
+            name = drive.build_filename(name_head, kind, rec["금액"], yymmdd, ext, existing)
             existing.append(name)
             up = drive.upload(folder, name, data, f.content_type or "")
             uploaded.append(up["id"])

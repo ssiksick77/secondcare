@@ -2628,6 +2628,17 @@ def evidence_sync(number: str, lookup) -> list[dict]:
     return items
 
 
+def evidence_set_file(row: int, name: str, file_id: str | None = None):
+    """증빙 행의 파일명(과 모의 모드에서 바뀌는 드라이브파일ID)만 고친다 — 원거래 수정에 따른 자동 이름 변경용."""
+    with _write_session() as wb:
+        ws = wb[SHEET_EVID]
+        upd = {"파일명": name}
+        if file_id:
+            upd["드라이브파일ID"] = file_id
+        _write_row(ws, EVID_COLS, row, upd)
+        _save(wb)
+
+
 def evidence_delete(row: int, expect: dict | None = None) -> dict:
     """증빙 행 삭제 후 집행내역 요약 갱신. 삭제된 행(드라이브파일ID 포함) 반환."""
     with _write_session() as wb:

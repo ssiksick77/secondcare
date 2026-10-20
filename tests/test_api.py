@@ -172,7 +172,7 @@ def main() -> int:
         up = requests.post(f"{sv.base}/api/evidence/{quote(dep_no)}", data={"kind": "카드전표"}, files={"files": ("r.png", b"\x89PNG fake", "image/png")})
         upj = up.json()
         ck("적립 증빙 업로드: 증빙관리/연도/적립금/거래처/적립번호", up.status_code == 200 and upj["folder"]["id"] == f"증빙관리/2026/적립금/검사 상사/{dep_no}", (up.status_code, upj))
-        ck("적립 증빙 파일명: 거래처_적요_종류_금액_YYMMDD", up.status_code == 200 and upj["items"][0]["파일명"] == "검사 상사_증빙 검사_카드전표_12000_260307.png", upj.get("items"))
+        ck("적립 증빙 파일명: 거래처_종류_금액_YYMMDD (적요 없음)", up.status_code == 200 and upj["items"][0]["파일명"] == "검사 상사_카드전표_12000_260307.png", upj.get("items"))
         s, r = sv.call("GET", f"/api/evidence/{quote(dep_no)}")
         ck("적립 증빙 목록 2건", s == 200 and len(r["items"]) == 2, (s, r))
         # ---- 드라이브 이름 변경·삭제 반영: 목록 조회 때 파일명을 맞추고 없는 파일은 missing ----
@@ -222,6 +222,19 @@ def main() -> int:
         ck("적립 행 단계 처리 → 400", s == 400, (s, r))
         s, r = sv.call("GET", "/api/all")
         ck("기존 사용 행 보정: 발주일 = 일자", all(x.get("발주일") and x.get("상태") for x in r["deposit"] if x["구분"] == "사용"), [(x["일자"], x.get("발주일"), x.get("상태")) for x in r["deposit"] if x["구분"] == "사용"][:4])
+        # ---- 원거래 수정 → 증빙 파일 이름 자동 변경 ----
+        s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구활동비", "원인발생일": "2026-03-08", "거래처": "검사", "금액": 4000, "적요": "이름 검사"})
+        rn_row, rn_no = r.get("_row"), r.get("거래번호")
+        up2 = requests.post(f"{sv.base}/api/evidence/{quote(rn_no)}", data={"kind": "영수증"}, files={"files": ("a.png", b"\x89PNG x", "image/png")}).json()
+        ck("집행 증빙 파일명: 재원_종류_금액_YYMMDD", up2["items"][0]["파일명"] == "QA01_영수증_4000_260308.png", up2.get("items"))
+        rec = sv.rec("exec", rn_row); rec["금액"] = 4500; rec["적요"] = "이름 검사 (적요 변경)"
+        s, r = sv.call("PUT", f"/api/exec/{rn_row}", {"rec": rec})
+        s2, ev = sv.call("GET", f"/api/evidence/{quote(rn_no)}")
+        ck("금액 수정 → 파일명 변경 + 드라이브(모의) 파일도 이동", s == 200 and r.get("_renamed") == 1 and ev["items"][0]["파일명"] == "QA01_영수증_4500_260308.png"
+           and os.path.exists(os.path.join(sv.dir, "mock", "증빙관리", "2026", "QA01", rn_no, "QA01_영수증_4500_260308.png")), (s, r.get("_renamed"), ev.get("items")))
+        rec = sv.rec("exec", rn_row); rec["비고"] = "메모만"
+        s, r = sv.call("PUT", f"/api/exec/{rn_row}", {"rec": rec})
+        ck("이름과 무관한 수정은 파일명 그대로", s == 200 and not r.get("_renamed"), (s, r.get("_renamed")))
         # ---- 집행 취소: 집계에서 완전히 제외, 해제 가능, 연결 행은 불가 ----
         s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구활동비", "원인발생일": "2026-03-07", "거래처": "검사", "금액": 7777, "적요": "취소 검사", "지출완료일": "2026-03-07"})
         cx_row, cx_no = r.get("_row"), r.get("거래번호")

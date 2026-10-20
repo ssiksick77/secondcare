@@ -827,7 +827,7 @@ $("#dlg-form").addEventListener("submit", async e => {
     if (doneMsg) showAlert(doneMsg, "ok", { undo: true });
     else if (kind === "request" && typeof requestSavedMsg === "function") requestSavedMsg(saved, !row);
     else if (saved["_vendor_registered"]) showAlert(`${no} 저장했습니다. 거래처 '${saved["거래처"]}' 를 코드 '${saved["_vendor_registered"]}' 로 자동 등록했습니다 — 거래처 탭에서 코드를 확인하세요.`, "warn", { action: { label: "거래처 탭", run: () => switchTab("vendor") } });
-    else showAlert(`${no ? no + " " : ""}저장했습니다.` + (convertRow != null ? " (품의 → 집행 전환 완료)" : ""), "ok");
+    else showAlert(`${no ? no + " " : ""}저장했습니다.` + (convertRow != null ? " (품의 → 집행 전환 완료)" : "") + (saved["_renamed"] ? ` 증빙 파일 ${saved["_renamed"]}개 이름을 바꿨습니다.` : "") + (saved["_rename_error"] ? ` (증빙 파일 이름 변경 실패: ${saved["_rename_error"]})` : ""), saved["_rename_error"] ? "warn" : "ok");
     await load();
     if (kind === "request" && typeof requestAfterSave === "function") requestAfterSave(saved);
     if (cb) cb(saved);
@@ -1914,7 +1914,7 @@ function evidSectionsHtml(c) {
         <label>파일명 날짜 <input type="date" name="date" value="${esc(c.dateDefault || today())}"></label>
         <label>비고 <input type="text" name="note" placeholder="선택"></label>
         <label class="file-pick">파일 <span class="file-pick-row"><input type="file" name="files" multiple ${drive.connected ? "" : "disabled"}><span class="btn btn-sm file-btn" aria-hidden="true">파일 선택</span><span class="file-names">선택된 파일 없음</span></span></label>
-        <div class="wide evid-drop-row"><div class="drop" id="evid-drop" title="이름은 ${c.number.startsWith("적립-") ? "거래처_적요_증빙종류_금액_YYMMDD" : "재원_적요_증빙종류_금액_YYMMDD"} 로 자동 변환됩니다"><b>파일을 여기로 끌어다 놓기</b> · ${c.folderHint}</div><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
+        <div class="wide evid-drop-row"><div class="drop" id="evid-drop" title="이름은 ${/-(적립|사용)-\d{4}-/.test(c.number) ? "거래처_증빙종류_금액_YYMMDD" : "재원_증빙종류_금액_YYMMDD"} 로 자동 변환됩니다 (재원·거래처·금액을 고치면 따라 바뀜)"><b>파일을 여기로 끌어다 놓기</b> · ${c.folderHint}</div><button type="submit" class="btn btn-primary btn-sm" ${drive.connected ? "" : "disabled"}>업로드</button></div>
       </form>
     </section>`;
 }

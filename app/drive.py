@@ -245,6 +245,18 @@ def trash(file_id: str):
     _guard(lambda: _svc().files().update(fileId=file_id, body={"trashed": True}).execute())
 
 
+def rename(file_id: str, name: str) -> dict:
+    """드라이브 파일 이름 변경 → {id, url}. 모의 모드는 파일을 옮기므로 id 가 바뀐다."""
+    if file_id.startswith("mock:"):
+        p = MOCK_DIR / file_id[5:]
+        q = p.with_name(name)
+        if p.exists() and p != q:
+            p.rename(q)
+        return {"id": f"mock:{q.relative_to(MOCK_DIR).as_posix()}", "url": q.resolve().as_uri()}
+    _guard(lambda: _svc().files().update(fileId=file_id, body={"name": name}, fields="id").execute())
+    return {"id": file_id, "url": file_url(file_id)}
+
+
 def file_meta(file_id: str) -> dict | None:
     """드라이브의 현재 파일 정보 {name, trashed}. 없으면(삭제·권한 없음) None. 모의 모드는 파일 존재 여부로 판단."""
     if not file_id:
@@ -349,10 +361,10 @@ def build_request_filename(number: str, item: str, original: str, existing: list
     return name
 
 
-def build_filename(fund: str, summary: str, kind: str, amount, yymmdd: str, ext: str, existing: list[str]) -> str:
-    """재원_적요_증빙종류_금액_YYMMDD(_n).ext — 같은 이름이 있으면 _2, _3"""
+def build_filename(head: str, kind: str, amount, yymmdd: str, ext: str, existing: list[str]) -> str:
+    """{재원|거래처}_증빙종류_금액_YYMMDD(_n).ext — 같은 이름이 있으면 _2, _3. 적요는 넣지 않는다 (2026-10-20 사용자 결정: 짧게, 내부 메모 노출 방지)"""
     amt = str(int(float(amount))) if str(amount).strip() not in ("", "None") else "0"
-    base = "_".join([safe_part(fund, 20), safe_part(summary), safe_part(kind, 20), amt, yymmdd])
+    base = "_".join([safe_part(head, 20), safe_part(kind, 20), amt, yymmdd])
     ext = safe_ext(ext)
     name, n = base + ext, 2
     taken = set(existing)
