@@ -9,7 +9,9 @@ MCP 서버(mcp_server.py)와 앱 내 AI 에이전트(ai.py)가 같은 함수를 
 from __future__ import annotations
 
 import inspect
+import json
 import typing
+import urllib.request
 from typing import Any
 
 import store
@@ -119,15 +121,116 @@ def list_deposit(vendor: str = "") -> dict:
 
 
 def get_exec(number: str) -> dict:
-    """거래번호로 집행 1건을 조회한다 (_row 포함)."""
-    r = next((x for x in store.read_all()["exec"] if x["거래번호"] == number), None)
+    """거래번호로 집행 1건을 상세 조회한다 (_row 포함). 진행 상태는 상태표시(발생→청구→보완→승인→완료, 취소)와 날짜 열(지급청구일·지출완료일·결의일)로 본다.
+    함께 반환: 증빙(등록된 증빙 목록: 증빙번호·증빙종류·파일명·업로드일·has_file), 연결품의(품의→집행 전환 원 품의, 없으면 null), 적립금연결(이 거래로 선결제한 적립금 행)."""
+    data = store.read_all()
+    r = next((x for x in data["exec"] if x["거래번호"] == number), None)
     if r is None:
         raise store.NotFound(f"거래번호 {number} 를 찾을 수 없습니다.")
-    return r
+    out = dict(r)
+    out["증빙"] = [{**_pick(e, "증빙번호", "증빙종류", "파일명", "업로드일", "비고"), "has_file": store.evid_has_file(e)}
+                 for e in data.get("evidence", []) if e.get("거래번호") == number]
+    link = str(r.get("연결품의번호") or "").strip()
+    req = next((x for x in data["req"] if x.get("품의번호") == link), None) if link else None
+    out["연결품의"] = _pick(req, *_REQ_BRIEF) if req else None
+    out["적립금연결"] = [_pick(d, "적립번호", "일자", "거래처", "구분", "금액", "상태") for d in data["deposit"] if d.get("연결거래번호") == number]
+    return out
+
+
+def _pick(r: dict, *cols) -> dict:
+    return {c: r.get(c) for c in cols}
+
+
+_EXEC_BRIEF = ("거래번호", "원인발생일", "재원", "예산목", "세목", "거래처", "적요", "금액", "상태표시", "지출완료일", "_row")
+_REQ_BRIEF = ("품의번호", "원인발생일", "재원", "예산목", "거래처", "적요", "금액", "상태", "_row")
+_RQ_BRIEF = ("신청번호", "구분", "상태", "신청인", "신청일", "관련과제", "품목", "규격", "단가", "수량", "금액", "구매처", "주문번호", "연결품의번호", "_row")
+# 검색 대상 종류: (read_all 키, 검색 열, 날짜 열, 재원 열, 거래처 열, 요약 열)
+_SEARCH = {
+    "exec": ("exec", ("거래번호", "적요", "거래처", "세목", "세세목", "사용자", "비고", "관리번호"), "원인발생일", "재원", "거래처", _EXEC_BRIEF),
+    "request": ("request", ("신청번호", "품목", "규격", "사유", "신청인", "구매처", "비고", "상세"), "신청일", "관련과제", "구매처", _RQ_BRIEF),
+    "req": ("req", ("품의번호", "적요", "거래처", "세목", "세세목", "품의자", "비고"), "원인발생일", "재원", "거래처", _REQ_BRIEF),
+}
+
+
+def search_ledger(q: str, fund: str = "", vendor: str = "", date_from: str = "", date_to: str = "",
+                  kinds: str = "exec,request,req", limit: int = 30) -> dict:
+    """장부 텍스트 검색: 품목·장비·거래처 이름으로 "전에 얼마에 샀나", "언제 어느 재원으로 샀나"를 찾을 때 쓴다.
+    q 는 공백으로 나눈 낱말을 모두 포함하는 행(AND, 대소문자 무시). kinds 는 쉼표 목록: exec 집행내역(적요·거래처·세목·사용자·비고),
+    request 신청(품목·규격·단가·수량·사유·신청인·구매처), req 품의(적요·거래처·비고). fund 는 재원코드(신청은 관련과제), vendor 는 거래처 부분일치,
+    date_from/date_to 는 YYYY-MM-DD(집행·품의는 원인발생일, 신청은 신청일). 반환 {종류: {total, rows}}, 최신순, 요약 열만. 상세는 get_exec."""
+    words = [w.lower() for w in str(q or "").split() if w.strip()]
+    data = store.read_all()
+    out = {}
+    for kind in [k.strip() for k in str(kinds or "").split(",") if k.strip() in _SEARCH]:
+        key, cols, dcol, fcol, vcol, brief = _SEARCH[kind]
+        rows = []
+        for r in data.get(key, []):
+            d = str(r.get(dcol) or "")
+            if fund and r.get(fcol) != fund: continue
+            if vendor and vendor not in str(r.get(vcol) or ""): continue
+            if date_from and d < date_from: continue
+            if date_to and d > date_to: continue
+            text = " ".join(str(r.get(c) or "") for c in cols).lower()
+            if all(w in text for w in words):
+                rows.append(r)
+        rows.sort(key=lambda r: (str(r.get(dcol) or ""), r["_row"]), reverse=True)
+        out[kind] = {"total": len(rows), "rows": [_pick(r, *brief) for r in rows[:max(1, min(limit, 200))]]}
+    return out
+
+
+def budget_balance(fund: str, item: str = "") -> dict:
+    """"<재원>의 <예산목> 지금 얼마 쓸 수 있어?"에 답하는 도구. 대시보드·집행 화면과 같은 계산:
+    가용잔액 = 예산현액(예산변동 이월+당초+변경 합계) − 집행액(취소 제외, 전체 기간) − 품의대기(상태 '대기' 품의). 잔액 = 예산현액 − 집행액.
+    item 을 비우면 그 재원의 예산목 전부. 공금 재원은 예산목 없이 '(공금 잔액)' 한 줄(입금 합계 − 집행 − 대기). 잔액미관리 재원은 예산을 관리하지 않으므로 행이 없다.
+    예산현액이 0이면 예산 미입력(화면은 '-' 표시)."""
+    data = store.read_all()
+    f = next((x for x in data["funds"] if x.get("재원코드") == fund), None)
+    if f is None:
+        raise store.NotFound(f"재원 {fund} 이(가) 재원 목록에 없습니다. list_funds 로 재원코드를 확인하세요.")
+    out = {"재원": fund, "과제명": f.get("과제명"), "종류": f.get("종류") or store.FUND_TYPE_DEFAULT, "기간": f"{f.get('시작일') or ''}~{f.get('종료일') or ''}"}
+    if (f.get("잔액미관리") or "").upper() == "Y":
+        out.update(잔액미관리=True, 행=[], 설명="재원 출처로만 쓰고 예산·잔액을 관리하지 않는 재원입니다.")
+        return out
+    table = [t for t in _dashboard(data)["table"] if t["재원"] == fund and (not item or t["예산목"] == item)]
+    if item and not table:
+        if item not in store.BUDGET_ITEMS and out["종류"] != store.FUND_TYPE_POOL:
+            raise ValueError(f"예산목 '{item}' 은(는) 목록에 없습니다. 예산목: {store.BUDGET_ITEMS}")
+        table = [{"재원": fund, "예산목": item, "예산현액": 0, "집행액": 0, "잔액": 0, "집행률": None, "품의대기": 0, "가용잔액": 0, "설명": "예산 미입력"}]
+    for t in table:
+        if not t.get("예산현액") and "설명" not in t:
+            t["설명"] = "예산 미입력 (집행·대기만 있음)"
+    out["행"] = table
+    return out
+
+
+FX_URL = "https://api.frankfurter.app/{date}?from={cur}&to=KRW"
+
+
+def _http_get_json(url: str, timeout: float = 6.0) -> dict:
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "ledger-ai/1"}), timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def fx_rate(currency: str = "USD", date: str = "") -> dict:
+    """환율: 외화 1단위당 원화 (학회 여비 계산 등). 출처는 유럽중앙은행 기준 환율(frankfurter.app, 영업일 기준, 키 없음)이며 은행 고시 환율과 다를 수 있다고 사용자에게 알릴 것.
+    currency 는 USD/EUR/JPY/GBP/CNY 같은 ISO 코드. date 를 비우면 최신, YYYY-MM-DD 를 주면 그 날짜(휴일이면 직전 영업일). 반환 {통화, 날짜, 원화환율, 출처} 또는 {error}."""
+    cur = str(currency or "USD").strip().upper()
+    if cur == "KRW" or len(cur) != 3:
+        return {"error": f"통화 코드 '{cur}' 은(는) 조회할 수 없습니다. USD, EUR, JPY 같은 ISO 코드를 쓰세요."}
+    url = FX_URL.format(date=(date or "latest").strip(), cur=cur)
+    try:
+        j = _http_get_json(url)
+    except Exception as e:
+        return {"error": f"환율 조회 실패 ({type(e).__name__}: {str(e)[:120]}). 인터넷 연결 또는 통화 코드를 확인하세요."}
+    rate = (j.get("rates") or {}).get("KRW")
+    if rate is None:
+        return {"error": f"'{cur}' 환율을 받지 못했습니다: {str(j)[:120]}"}
+    return {"통화": cur, "날짜": j.get("date"), "원화환율": rate, "출처": "유럽중앙은행 기준 환율 (frankfurter.app)"}
 
 
 # ---------- 도구 세트 ----------
-READ_TOOLS = ["list_funds", "list_vendors", "list_tags", "get_dashboard", "list_exec", "list_req", "list_budget", "list_deposit", "get_exec"]
+READ_TOOLS = ["list_funds", "list_vendors", "list_tags", "get_dashboard", "list_exec", "list_req", "list_budget", "list_deposit", "get_exec",
+              "budget_balance", "search_ledger", "fx_rate"]
 
 _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean"}
 

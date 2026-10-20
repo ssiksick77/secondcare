@@ -57,6 +57,69 @@ try:
 except store.NotFound:
     ck("get_exec: 없으면 NotFound", True)
 
+# --- 새 도구: budget_balance · search_ledger · get_exec 상세 · fx_rate ---
+bb = tools.budget_balance(f0)
+ck("budget_balance: 재원 전체 = 대시보드 표", bb["행"] == [t for t in d["table"] if t["재원"] == f0] and bb["과제명"])
+item = bb["행"][0]["예산목"]
+b1 = tools.budget_balance(f0, item)
+ck("budget_balance: 예산목 한 줄 = 대시보드 표 행", b1["행"] == [t for t in d["table"] if t["재원"] == f0 and t["예산목"] == item])
+ck("budget_balance: 가용잔액 = 예산현액 − 집행액 − 품의대기", all(abs(t["가용잔액"] - (t["예산현액"] - t["집행액"] - t["품의대기"])) < 1 for t in bb["행"]))
+have = {(t["재원"], t["예산목"]) for t in d["table"]}
+tracked = [f["재원코드"] for f in funds if (f.get("잔액미관리") or "").upper() != "Y" and (f.get("종류") or "국책") != "공금"]
+fo, other = next(((f, i) for f in tracked for i in store.BUDGET_ITEMS if (f, i) not in have), (None, None))
+if other:
+    b2 = tools.budget_balance(fo, other)
+    ck("budget_balance: 예산 없는 예산목은 '예산 미입력' 한 줄", len(b2["행"]) == 1 and b2["행"][0]["설명"].startswith("예산 미입력") and b2["행"][0]["가용잔액"] == 0, b2)
+try:
+    tools.budget_balance(f0, "없는예산목"); ck("budget_balance: 목록 밖 예산목은 ValueError", False)
+except ValueError as e:
+    ck("budget_balance: 목록 밖 예산목은 ValueError", "예산목" in str(e))
+try:
+    tools.budget_balance("ZZ99"); ck("budget_balance: 없는 재원은 NotFound", False)
+except store.NotFound:
+    ck("budget_balance: 없는 재원은 NotFound", True)
+unt = next((f["재원코드"] for f in funds if (f.get("잔액미관리") or "").upper() == "Y"), None)
+if unt:
+    ck("budget_balance: 잔액미관리 재원은 행 없음", tools.budget_balance(unt)["잔액미관리"] is True and tools.budget_balance(unt)["행"] == [])
+
+rqs = store.read_all()["request"]
+word = next((str(r["품목"]).split()[0] for r in rqs if r.get("품목")), "")
+sr = tools.search_ledger(word)
+ck("search_ledger: 세 종류 모두 반환", set(sr) == {"exec", "request", "req"}, list(sr))
+ck("search_ledger: 신청 품목 검색", word and sr["request"]["total"] >= 1 and all(word.lower() in " ".join(str(v) for v in r.values()).lower() for r in sr["request"]["rows"]), word)
+ck("search_ledger: 요약 열만", word and set(sr["request"]["rows"][0]) == set(tools._RQ_BRIEF))
+w2 = vend.split()[0]
+se = tools.search_ledger(w2, kinds="exec", limit=3)
+ck("search_ledger: kinds·limit", list(se) == ["exec"] and len(se["exec"]["rows"]) <= 3 and se["exec"]["total"] >= 1)
+ck("search_ledger: AND 검색은 결과가 줄거나 같다", tools.search_ledger(w2 + " 없는낱말xyz", kinds="exec")["exec"]["total"] == 0)
+dr = sorted(dates)
+mid = dr[len(dr) // 2]
+sd = tools.search_ledger("", kinds="exec", date_from=mid, limit=200)["exec"]
+ck("search_ledger: 날짜 범위", sd["total"] == sum(1 for x in dates if x >= mid) and all(r["원인발생일"] >= mid for r in sd["rows"]))
+ck("search_ledger: fund 필터", all(r["재원"] == f0 for r in tools.search_ledger("", fund=f0, kinds="exec")["exec"]["rows"]))
+
+gx = tools.get_exec(no)
+ck("get_exec: 증빙·연결품의·적립금연결 키", all(k in gx for k in ("증빙", "연결품의", "적립금연결", "상태표시")))
+linked = next((r for r in ex["rows"] if r.get("연결품의번호")), None)
+if linked:
+    g2 = tools.get_exec(linked["거래번호"])
+    ck("get_exec: 연결품의 행", g2["연결품의"] and g2["연결품의"]["품의번호"] == linked["연결품의번호"])
+evn = next((e["거래번호"] for e in store.read_all().get("evidence", []) if e.get("거래번호")), None)
+if evn:
+    ck("get_exec: 증빙 목록", len(tools.get_exec(evn)["증빙"]) >= 1 and "has_file" in tools.get_exec(evn)["증빙"][0])
+
+calls = []
+tools._http_get_json = lambda url, timeout=6.0: (calls.append(url), {"amount": 1.0, "base": "USD", "date": "2026-10-17", "rates": {"KRW": 1385.2}})[1]
+fx = tools.fx_rate("usd")
+ck("fx_rate: 원화환율·날짜·출처", fx == {"통화": "USD", "날짜": "2026-10-17", "원화환율": 1385.2, "출처": fx["출처"]} and "frankfurter" in fx["출처"])
+ck("fx_rate: latest URL", calls[-1] == "https://api.frankfurter.app/latest?from=USD&to=KRW", calls[-1])
+tools.fx_rate("EUR", "2026-10-01")
+ck("fx_rate: 날짜 URL", calls[-1] == "https://api.frankfurter.app/2026-10-01?from=EUR&to=KRW", calls[-1])
+ck("fx_rate: KRW 는 error", "error" in tools.fx_rate("KRW"))
+def boom(url, timeout=6.0): raise OSError("no network")
+tools._http_get_json = boom
+ck("fx_rate: 실패는 error 로 (예외 없음)", "error" in tools.fx_rate("USD") and "no network" in tools.fx_rate("USD")["error"])
+
 # --- 도구 정의·호출 ---
 for n in tools.READ_TOOLS:
     s = tools.tool_schema(n)

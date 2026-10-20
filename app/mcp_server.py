@@ -88,6 +88,9 @@ list_req = _read_tool(tools.list_req)
 list_budget = _read_tool(tools.list_budget)
 list_deposit = _read_tool(tools.list_deposit)
 get_exec = _read_tool(tools.get_exec)
+budget_balance = _read_tool(tools.budget_balance)
+search_ledger = _read_tool(tools.search_ledger)
+fx_rate = _read_tool(tools.fx_rate)
 
 
 # ---------- 입력 ----------
