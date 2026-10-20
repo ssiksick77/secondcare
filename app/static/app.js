@@ -1280,7 +1280,7 @@ $("#ai-form").addEventListener("submit", async e => {
   CHAT_TURN++;
   try {
     const r = await api("POST", "/api/ai/chat", { messages: CHAT.slice(-24), turn: CHAT_TURN });
-    pending.textContent = r.answer || "(제안만 생성)"; pending.classList.remove("pending");
+    pending.innerHTML = mdToHtml(r.answer || "(제안만 생성)"); pending.classList.remove("pending"); pending.classList.add("md");  // 답변의 표·굵게·목록을 렌더링 (mdToHtml 은 먼저 이스케이프)
     CHAT.push({ role: "assistant", content: r.answer || "(제안 생성)" });
     if (r.calls?.length) {  // 근거 확인용: 이번 답변에 실행된 조회 도구 한 줄
       const c = document.createElement("div"); c.className = "ai-calls";

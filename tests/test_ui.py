@@ -271,8 +271,9 @@ def main() -> int:
         ck("메모: 삭제 후 빈 목록", "메모가 없습니다" in pg.inner_text("#memo-list"))
         pg.click("#s-cancel"); pg.wait_for_timeout(200)
         # ---- 폼 'AI 추천·검증': 입력된 예산목은 덮어쓰지 않고 빈 칸만 채운다 (가짜 /api/ai/suggest) ----
-        pg.evaluate("""() => { AI = { enabled: true, provider: 'test', model: 't' }; const _api = api;
-          api = async (m, p, b) => p === '/api/ai/suggest' ? { '예산목': DATA.meta.budget_items[1], '세목': '검사세목', '태그': '', '근거': '검사', '경고': [] } : _api(m, p, b); }""")
+        pg.evaluate(r"""() => { AI = { enabled: true, provider: 'test', model: 't' }; const _api = api;
+          api = async (m, p, b) => p === '/api/ai/suggest' ? { '예산목': DATA.meta.budget_items[1], '세목': '검사세목', '태그': '', '근거': '검사', '경고': [] }
+            : p === '/api/ai/chat' ? { answer: ['**굵게** 표:', '', '| 재원코드 | 과제명 |', '|---|---|', '| QA01 | 가상 A |', '| QA02 | 가상 B |'].join(String.fromCharCode(10)), proposals: [], calls: [{ tool: 'list_funds', input: {}, error: false }], usage: { input: 10, cached: 0, output: 5 } } : _api(m, p, b); }""")
         pg.evaluate("openForm('exec')"); pg.wait_for_timeout(400)
         pg.evaluate("document.querySelector('#f-예산목').value = DATA.meta.budget_items[0]")
         ck("추천: AI 바 표시", pg.evaluate("!document.querySelector('#dlg-ai').hidden"))
@@ -282,6 +283,14 @@ def main() -> int:
         pg.evaluate("document.querySelector('#f-예산목').value = ''"); pg.click("#dlg-suggest"); pg.wait_for_timeout(600)
         ck("추천: 빈 예산목은 채움", pg.evaluate("document.querySelector('#f-예산목').value === DATA.meta.budget_items[1]"))
         pg.evaluate("$('#dlg').dataset.initial = ''; $('#dlg').close()")
+        # ---- 채팅 답변의 마크다운(표·굵게) 렌더링 + '조회' 줄 (가짜 /api/ai/chat) ----
+        pg.evaluate("toggleDrawer(true)"); pg.fill("#ai-input", "재원 목록 표로"); pg.press("#ai-input", "Enter")
+        for _ in range(20):
+            if pg.evaluate("!!document.querySelector('#ai-log .msg.assistant.md table')"):
+                break
+            pg.wait_for_timeout(200)
+        ck("채팅: 마크다운 표·굵게 렌더링", pg.evaluate("(() => { const m = document.querySelector('#ai-log .msg.assistant.md'); return !!m && m.querySelectorAll('table tbody tr').length === 2 && !!m.querySelector('b') && !m.textContent.includes('|'); })()"))
+        ck("채팅: 조회 줄", "조회: list_funds()" in pg.inner_text("#ai-log"))
         ck("페이지 오류 없음", not errs, errs)
 
         # ---- 로그인: 상단 계정 표시, 로그인 화면 구조 ----
