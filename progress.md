@@ -4,11 +4,12 @@ Updated: 2026-10-20
 
 ## Goal
 
-Add Google login so every write records who made it and the app is ready for access from other PCs later. One PC now: all screens and the API need a login; an allow-list of emails in `app/.env` decides who may log in; SQLite rows and the change log store the login email as author.
+Ask each person for their name at the first login and use that name (not the email) in the header, in the voucher 담당 cell and wherever a row's author is shown. One name entry per account; changing it is later.
 
 ## Done
 
-- 950dca2 Google login first version: `app/auth.py` (signed cookie session 30 days, allow-list, OAuth flow with `google_auth_oauthlib.Flow`, ID token check), `main.py` middleware (pages -> `/login`, `/api/*` -> 401, author ContextVar per request), routes `/login`, `/auth/login`, `/auth/callback`, `/auth/logout`, `/api/me`; `store.set_author` / `current_author` (ContextVar replaces the global), MCP server writes author `mcp`; `login.html` + `.login-*` CSS; header shows email + 로그아웃; `app.js` sends the browser to `/login` on 401. Tests: `tests/_env.py` sets `LEDGER_AUTH_BYPASS=test@example.com` (`Server(..., auth_bypass=False)` for a locked server, `get_raw` follows no redirect); API +11/+12 checks, UI +8 checks. README 2-1, `.env.example`, `.gitignore` (`app/google_oauth_client.json`). checks: pass (calc 32, API 106, db 53, api-db 107, UI 64, ui-db 64).
+- 9da4d04 First-login name: `users` table (`db.USERS_DDL`, `user_names`, `set_user_name`), `store.author_names` / `user_name` / `set_user_name` (1-20 chars), `meta.authors`; middleware sends a nameless account to `/welcome` (API 403) except `/api/me` and `POST /api/me/name`; `welcome.html` prefilled with the Google profile name; header shows the name; voucher 담당 cell = `authorSigner(r)` from `_author`. Bypass accounts have no profile name and are never sent to `/welcome`. Tests: fixed `LEDGER_SESSION_SECRET` and `LEDGER_ALLOWED_EMAILS` in `tests/_env.py` (`session_cookie()` forges a login cookie; `call`/`get_raw` take a cookie), API +4/+14, UI +3 (ui-db). checks: pass (calc 32, API 110, db 53, api-db 120, UI 64, ui-db 66).
+- 950dca2 / 41642cb Google login first version with allow-list and PKCE fix (verified by the user 2026-10-20).
 
 ## Done before this task (kept for reference)
 
@@ -31,12 +32,7 @@ Add Google login so every write records who made it and the app is ready for acc
 
 ## In progress
 
-Google login first version is done. User logged in with a real Google account on 2026-10-20 after the PKCE fix (41642cb): the verifier now travels in the signed state cookie. None in progress. The done condition "KRDS score check passes" could not run: `scripts/check.sh` has no KRDS score step; the login page structure is checked by `tests/test_ui.py` instead (lang, landmarks, h1, skip link, alert role).
-
-User steps before first use (README 2-1):
-1. Put the allowed emails in `app/.env`: `LEDGER_ALLOWED_EMAILS=...`.
-2. Keep `app/google_client_secret.json` (desktop client works for 127.0.0.1) or make a web-application client and set `LEDGER_OAUTH_CLIENT`.
-3. Restart the app and log in once. `LEDGER_SESSION_SECRET` is written to `.env` on the first login.
+None. The first-login name is coded and checked; not yet tried with a real account (the user's account has no name yet, so the next login shows `/welcome` once).
 
 ## Open issues
 
@@ -60,6 +56,7 @@ User steps before first use (README 2-1):
 
 ## Decisions
 
+- 2026-10-20 (user) First-login name entry instead of an email-to-name map in .env: ask once, no change UI yet; the imported author (snubh.ai.center.01@gmail.com) is asked like everyone else. My calls: `users` table in SQLite, prefill from the Google profile, xlsx mode skips the prompt, voucher 담당 cell reads the row author.
 - 2026-10-20 (user) 결의서 결재란 이름: 매니저 오인선, 선임연구원 이진영, 센터장 류지원 with small '직무대행' above the name, bold italic; 담당 cell stays empty until login gives an email-to-name map (per-transaction author, not a fixed setting). My calls: name 11pt, tag 6.5pt with -0.2mm tracking inside the name width.
 - 2026-10-16 (user) 여비 계산기: 기본 정보 외 필수 없음; 출장 기간과 학회 기간 별도 입력; 학회 전후 각 1일만 인정, 초과 출장일은 공제일수로 일비·식비에서 자동 제외(숙박은 그대로, my choice since the user named 일비/식비 only).
 - 2026-10-16 (user) 재원 종류: list 국책/원내/위탁/교육/공금/기타; 공금 deposits go through 예산변동 (no per-예산목 split), 예산목 stays required on 집행/품의/신청, existing funds default to 국책 and the user edits them later.
@@ -91,6 +88,5 @@ User steps before first use (README 2-1):
 
 ## Next action
 
-Branch merged into main (2026-10-20) before a real login test. User step: set `LEDGER_ALLOWED_EMAILS` in `app/.env`, restart `app
-un.bat`, log in once and confirm the header shows the email. Then: 결재란 '담당' name from the login author (ideas.md), and pick from ideas.md: allow-list management UI, role check, multi-PC access (host name, HTTPS, Secure cookie).
+User: log in once more; `/welcome` asks for the name; check the header and a voucher 담당 cell. Then pick from ideas.md: name change UI, allow-list management UI, roles, multi-PC access.
 
