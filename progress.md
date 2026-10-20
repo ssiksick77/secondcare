@@ -4,14 +4,16 @@ Updated: 2026-10-20
 
 ## Goal
 
-Ask each person for their name at the first login and use that name (not the email) in the header, in the voucher 담당 cell and wherever a row's author is shown. One name entry per account; changing it is later.
+Let the master accountant add and remove login-allowed emails in the settings dialog, without editing `app/.env` or restarting. Checked by: a new email added in the dialog can log in; a removed one gets 403 on the next request; non-master accounts cannot see or call the management API.
 
 ## Done
 
-- 9da4d04 First-login name: `users` table (`db.USERS_DDL`, `user_names`, `set_user_name`), `store.author_names` / `user_name` / `set_user_name` (1-20 chars), `meta.authors`; middleware sends a nameless account to `/welcome` (API 403) except `/api/me` and `POST /api/me/name`; `welcome.html` prefilled with the Google profile name; header shows the name; voucher 담당 cell = `authorSigner(r)` from `_author`. Bypass accounts have no profile name and are never sent to `/welcome`. Tests: fixed `LEDGER_SESSION_SECRET` and `LEDGER_ALLOWED_EMAILS` in `tests/_env.py` (`session_cookie()` forges a login cookie; `call`/`get_raw` take a cookie), API +4/+14, UI +3 (ui-db). checks: pass (calc 32, API 110, db 53, api-db 120, UI 64, ui-db 66).
-- 950dca2 / 41642cb Google login first version with allow-list and PKCE fix (verified by the user 2026-10-20).
+- (this task: none yet)
 
 ## Done before this task (kept for reference)
+
+- 9da4d04 First-login name: `users` table (`db.USERS_DDL`, `user_names`, `set_user_name`), `store.author_names` / `user_name` / `set_user_name` (1-20 chars), `meta.authors`; middleware sends a nameless account to `/welcome` (API 403) except `/api/me` and `POST /api/me/name`; `welcome.html` prefilled with the Google profile name; header shows the name; voucher 담당 cell = `authorSigner(r)` from `_author`. Bypass accounts have no profile name and are never sent to `/welcome`. Tests: fixed `LEDGER_SESSION_SECRET` and `LEDGER_ALLOWED_EMAILS` in `tests/_env.py` (`session_cookie()` forges a login cookie; `call`/`get_raw` take a cookie), API +4/+14, UI +3 (ui-db). checks: pass (calc 32, API 110, db 53, api-db 120, UI 64, ui-db 66).
+- 950dca2 / 41642cb Google login first version with allow-list and PKCE fix (verified by the user 2026-10-20).
 
 - 8a738a4 feat: print signer names on voucher approval box (`VOUCHER_SIGNER_NAMES` in app.js, `.vc-sign-n` styles). 담당 cell stays empty until login gives an email-to-name map.
 - 2026-10-20 SQLite migration complete and live (a91649d merge, d202ab6 export, 7ee9405/f389f7f write paths, ef7ffc0 schema/import). Details in git log.
@@ -32,7 +34,11 @@ Ask each person for their name at the first login and use that name (not the ema
 
 ## In progress
 
-None. The first-login name is done; the user tried it with a real account on 2026-10-20 (name screen, header, voucher 담당 cell).
+Allowed-email management (brainstormed 2026-10-20). First version:
+1. Allow-list = SQLite `users` table: add `allowed`, `added_at`, `added_by`; login check = `.env` emails OR allowed users rows. Done when: an email not in `.env` but allowed in the table can log in, and after allowed is cleared the next request gets 403 / login page (API test).
+2. Settings dialog group "로그인 허용 계정": table email · name ("—" if never logged in) · added date · [삭제]; input + [추가]; `.env` accounts marked 마스터 with no delete button. Done when: add shows the row at once, delete removes it, both survive a reload (UI test).
+3. Master only: group hidden for non-master; `GET/POST/DELETE /api/users` return 403 for non-master cookies (API test).
+4. Input checks: lowercase, email format, duplicate add is a notice only, deleting self or a master email is refused. Done when: each case returns 400 with a Korean message (API test).
 
 ## Open issues
 
@@ -56,6 +62,7 @@ None. The first-login name is done; the user tried it with a real account on 202
 
 ## Decisions
 
+- 2026-10-20 (user) Allowed-email management: store the allow-list in the SQLite `users` table (approach 2 of 3; `.env` emails stay as bootstrap masters that cannot be removed), and only master accounts (now: the `.env` emails) may manage it. Rejected: `.env`-only text field (no names, no room for roles); a separate `/users` page (too big now). My calls: removing keeps the users row and name (author names on ledger rows stay readable) and only clears allowed; the middleware checks the allow-list on every request so removal needs no restart; master is derived from `.env` only, no role column yet; xlsx mode uses the `.env` list only.
 - 2026-10-20 (user) First-login name entry instead of an email-to-name map in .env: ask once, no change UI yet; the imported author (snubh.ai.center.01@gmail.com) is asked like everyone else. My calls: `users` table in SQLite, prefill from the Google profile, xlsx mode skips the prompt, voucher 담당 cell reads the row author.
 - 2026-10-20 (user) 결의서 결재란 이름: 매니저 오인선, 선임연구원 이진영, 센터장 류지원 with small '직무대행' above the name, bold italic; 담당 cell stays empty until login gives an email-to-name map (per-transaction author, not a fixed setting). My calls: name 11pt, tag 6.5pt with -0.2mm tracking inside the name width.
 - 2026-10-16 (user) 여비 계산기: 기본 정보 외 필수 없음; 출장 기간과 학회 기간 별도 입력; 학회 전후 각 1일만 인정, 초과 출장일은 공제일수로 일비·식비에서 자동 제외(숙박은 그대로, my choice since the user named 일비/식비 only).
@@ -88,5 +95,4 @@ None. The first-login name is done; the user tried it with a real account on 202
 
 ## Next action
 
-Pick the next task with the user from ideas.md: name change UI, allow-list management UI, roles, multi-PC access.
-
+Start the work loop on feature 1 (users table `allowed` column and login check).
