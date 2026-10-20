@@ -34,11 +34,11 @@ None. The merge into main is the next step (see Next action).
 
 ## Next action
 
-Merge main (3e5d95a, people tab fixes) into this branch, resolve conflicts (app.js 집행전환 line, style.css near the table rules, progress.md), run `scripts/check.sh` on the merged tree, then fast-forward main and restart run.bat.
+main is at 3cbf693 (fast-forwarded 2026-10-20). Restart `appun.bat` and look at the frame on the laptop and the external monitor. Then decide the side panel purpose and the MSRI card (ideas.md), and revisit the dashboard critique P2-P5.
 
 ## Open issues
 
-- checks on 5ca28ff: full `scripts/check.sh` passed calc, api 157, db, ai, api-db; ui and ui-db failed once on a leftover `tests/.tmp/ui` folder from an aborted run (an orphan test server held `server.log`), then passed 97/97 and 107/107 after the last app.js fix. A full run on the merged tree is still due. Before a rerun, make sure no orphan `python main.py` from an aborted run is alive (ports 8791 = live app, 8893 = QA pane must stay).
+- checks: pass on the merged tree 3cbf693 (calc 32, api 128, db 56, ai 166, api-db 157, ui 98, ui-db 108; about 7 minutes, run with a timeout above 420 s). Note: a leftover `tests/.tmp/ui` folder from an aborted run (an orphan test server holding `server.log`) makes ui/ui-db fail at setup; remove the folder and the orphan first. Before a rerun, make sure no orphan `python main.py` from an aborted run is alive (ports 8791 = live app, 8893 = QA pane must stay).
 - MSRI card and the side panel 기본 tab are placeholders; the user will define them later (ideas.md).
 - Printing the dashboard report was checked by rendering `#print-report` on screen, not through a real print dialog.
 - The QA server on port 8893 must be restarted after `app/store.py` changes (done once for the budget rule).
