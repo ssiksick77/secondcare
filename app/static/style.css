@@ -347,13 +347,22 @@ table.grid td.actions .btn + .btn { margin-left: 4px; }
 table.grid .empty { text-align: center; color: var(--ink-2); padding: 26px; height: auto; white-space: normal; line-height: 1.6; }
 table.grid tr.more-row td { text-align: center; background: var(--bg-table); }
 table.grid.compact { font-size: 12px; }
-/* 인건비 > 인원: 왼쪽 인원 목록, 오른쪽 고른 사람의 기준급여 (좁은 화면은 한 줄로) */
-.people-split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 24px; align-items: start; }
-@media (max-width: 1100px) { .people-split { grid-template-columns: minmax(0, 1fr); } }
+/* 인건비 > 인원: 왼쪽 인원 목록, 오른쪽 고른 사람의 기준급여 (좁은 화면은 한 줄로).
+   각 열은 제목·안내·툴바·표 네 줄의 subgrid: 안내문 길이가 달라도 두 표의 윗선이 맞는다 */
+.people-split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); grid-template-rows: auto auto auto auto; gap: 0 24px; align-items: start; }
+.people-col { display: grid; grid-template-rows: subgrid; grid-row: span 4; }
+.people-col > h2 { margin-top: 0; }
+.people-col > .toolbar { justify-content: flex-end; }
+.people-col > .toolbar .btn-primary { margin-left: 0; }
+@media (max-width: 1100px) { .people-split { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; } .people-col { grid-template-rows: none; grid-row: auto; } .people-col + .people-col > h2 { margin-top: 18px; } }
 #salary-who { font-weight: 400; color: var(--ink-2); }
 #people-table tbody tr[data-row] { cursor: pointer; }
 #people-table tbody tr[data-row]:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
-#people-table tbody tr.selected td:first-child { box-shadow: inset 2px 0 0 var(--primary); font-weight: 700; }
+#people-table tbody tr.selected td { background: var(--primary-bg); }
+#people-table tbody tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--primary); font-weight: 700; color: var(--primary-dark); }
+#people-table tbody tr.selected:hover td { background: var(--primary-bg); }
+#people-table td.actions .btn-ghost { color: var(--ink-2); }
+#people-table td.actions .btn-ghost:hover { color: var(--ink); }
 table.grid.compact th, table.grid.compact td { height: 24px; }
 table.grid.compact .btn-sm { min-height: 22px; padding: 0 7px; }
 table.grid th.sortable { cursor: pointer; user-select: none; }

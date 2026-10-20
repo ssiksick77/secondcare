@@ -17,6 +17,8 @@ Two-column app frame and table polish (branch claude/dashboard-ui-improvement-4f
   - 품의: 지출예정일 is the only date in the table and form; the form writes 원인발생일 = 지출예정일; old rows fall back to 원인발생일 on screen.
   - 예산: both tables uniform 104 px item columns, bold 예산현액 합계, 재원 column dropped from 변경 내역, 내부인건비·연구개발부담비 hidden, numbered rounds must net to zero except 발생이자 (server `_validate` + form pre-check + API tests).
 
+- Merged main 3e5d95a (people tab layout, salary name column, row select) into this branch on 2026-10-20; conflicts in app.js (집행 button vs btn-ghost people button, both kept) and progress.md (this file kept).
+
 ## In progress
 
 None. The merge into main is the next step (see Next action).
