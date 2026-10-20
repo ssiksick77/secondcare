@@ -1203,7 +1203,8 @@ $("#dash-fund").addEventListener("change", renderDashboard);
 $("#dash-year").addEventListener("change", renderDashboard);
 $("#btn-reload").addEventListener("click", load);
 // 로그인 사용자 표시 · 로그아웃 (auth.py)
-api("GET", "/api/me").then(u => { if (u && u.email) { $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
+let ME = {};  // /api/me: {email, name, is_master}
+api("GET", "/api/me").then(u => { if (u && u.email) { ME = u; $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
 $("#btn-logout").addEventListener("click", async () => { try { await api("POST", "/auth/logout"); } catch { } location.href = "/login"; });
 document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
@@ -1479,6 +1480,8 @@ async function openSettings() {
     if (typeof requestSettingsOpen === "function") requestSettingsOpen();
     refreshDriveStatus();
     memoRender();
+    $("#s-users").hidden = !ME.is_master;
+    if (ME.is_master) usersRender();
     $("#dlg-settings").showModal();
   } catch (e) { showAlert("설정을 불러오지 못했습니다: " + e.message, "error"); }
 }
@@ -1518,6 +1521,43 @@ $("#s-clear-key").addEventListener("click", async () => {
   catch (err) { setMsg("삭제 실패: " + err.message, true); }
 });
 
+
+// ---------- 로그인 허용 계정 (설정 패널 · 마스터만 · /api/users) ----------
+function usersMsg(text, warn) { const m = $("#users-msg"); if (!m) return; m.textContent = text || ""; m.classList.toggle("warn", !!warn); }
+async function usersRender() {
+  const box = $("#users-list"); if (!box) return;
+  try {
+    const r = await api("GET", "/api/users");
+    const rows = r.users || [];
+    box.innerHTML = `<table><thead><tr><th>이메일</th><th>이름</th><th>추가일</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(u => `<tr data-email="${esc(u.email)}"><td>${esc(u.email)}</td><td>${u.name ? esc(u.name) : '<span class="muted" title="아직 로그인하지 않음">—</span>'}</td><td>${u.master ? '<span class="muted">마스터 (.env)</span>' : esc((u.added_at || "").slice(0, 10))}</td><td class="actions">${u.master || u.email === ME.email ? "" : `<button type="button" class="btn btn-sm btn-ghost" data-user-del="${esc(u.email)}" aria-label="${esc(u.email)} 삭제">삭제</button>`}</td></tr>`).join("")}</tbody></table>`;
+    const add = $("#users-add"), inp = $("#users-email");
+    add.disabled = inp.disabled = !r.db;
+    usersMsg(r.db ? "" : "xlsx 저장소에서는 app/.env 의 LEDGER_ALLOWED_EMAILS 만 씁니다.", !r.db);
+  } catch (e) { box.innerHTML = `<div class="empty">목록을 불러오지 못했습니다: ${esc(e.message)}</div>`; }
+}
+async function usersAdd() {
+  const inp = $("#users-email"), email = inp.value.trim();
+  if (!email) { usersMsg("이메일을 입력하세요.", true); inp.focus(); return; }
+  try {
+    const r = await api("POST", "/api/users", { email });
+    if (r.added) inp.value = "";
+    await usersRender();
+    if (r.added) usersMsg(`${r.email} 을(를) 추가했습니다. 이 계정으로 구글 로그인하면 바로 들어올 수 있습니다.`); else usersMsg(r.message, true);
+    inp.focus();
+  } catch (e) { usersMsg(e.message, true); inp.focus(); }
+}
+$("#users-add")?.addEventListener("click", usersAdd);
+$("#users-email")?.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); usersAdd(); } });  // Enter 가 설정 저장(submit)으로 가지 않게
+$("#users-list")?.addEventListener("click", async e => {
+  const b = e.target.closest("[data-user-del]"); if (!b) return;
+  const email = b.dataset.userDel;
+  const ok = await confirmDlg({ title: "허용 계정 삭제", body: `${email}
+
+삭제하면 이 계정은 다음 요청부터 로그인할 수 없습니다. 이 계정이 작성한 행과 이름은 그대로 남습니다.`, verb: "삭제", danger: true });
+  if (!ok) return;
+  try { await api("DELETE", `/api/users/${encodeURIComponent(email)}`); await usersRender(); usersMsg(`${email} 을(를) 허용 목록에서 지웠습니다.`); }
+  catch (err) { usersMsg(err.message, true); }
+});
 
 // ---------- 메모 (설정 패널 · AI 도우미가 read_memo 로 읽는 장부 밖 지식) ----------
 function memoRender() {

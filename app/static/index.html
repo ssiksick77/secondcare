@@ -578,6 +578,16 @@
         <label class="wide" for="s-org">기관명 (결의서·발주서 머리글) <small>(비우면 분당서울대학교병원 의료인공지능센터)</small><input id="s-org" name="LEDGER_ORG" type="text" autocomplete="off" maxlength="80"></label>
       </div>
     </fieldset>
+    <fieldset class="wide s-group" id="s-users" style="margin:0 0 14px" hidden>
+      <legend>로그인 허용 계정 (마스터 전용)</legend>
+      <p class="toolbar-note" style="margin:4px 0 8px">여기에 적은 구글 계정만 로그인할 수 있습니다. 마스터 계정은 <code>app/.env</code>의 <code>LEDGER_ALLOWED_EMAILS</code>에 있어 여기서 지울 수 없습니다. 이름은 그 사람이 처음 로그인하면 채워집니다. 추가·삭제는 바로 적용됩니다(아래 저장 버튼과 무관).</p>
+      <div id="users-list" class="memo-list" aria-live="polite"></div>
+      <div class="users-add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">
+        <label for="users-email" style="flex:1 1 260px;margin:0">추가할 계정 <small>(구글 이메일)</small><input id="users-email" type="email" autocomplete="off" inputmode="email" placeholder="name@example.com"></label>
+        <button type="button" class="btn btn-sm" id="users-add">추가</button>
+      </div>
+      <p class="toolbar-note" id="users-msg" aria-live="polite" style="margin:6px 0 0"></p>
+    </fieldset>
     <fieldset class="wide s-group" id="s-memo" style="margin:0 0 14px">
       <legend>메모 (AI 도우미가 참고하는 장부 밖 지식)</legend>
       <p class="toolbar-note" style="margin:4px 0 8px">재원·거래처별 특이사항과 일반 규정(예: 어떤 결제에 어떤 증빙이 필요한가)을 적어 두면 AI 도우미가 답할 때 참고합니다. 장부의 '메모' 시트에 저장되며, AI 가 대화 중 제안한 메모도 승인해야 저장됩니다.</p>

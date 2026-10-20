@@ -305,6 +305,32 @@ def main() -> int:
                 cells = pg.evaluate("[...document.querySelectorAll('#voucher-sheet .vc-sign td')].map(td => td.textContent.trim())")
                 ck("결의서 담당 칸: 작성자 이름", cells[:1] == ["검사자"] and "오인선" in cells, cells)
         ck("상단: 로그아웃 버튼", pg.is_visible("#btn-logout"))
+        # ---- 허용 계정 관리 (설정 패널 · 마스터만) ----
+        pg.evaluate("document.querySelectorAll('dialog[open]').forEach(d => d.close())")
+        pg.click("#btn-settings"); pg.wait_for_timeout(800)
+        ck("허용 계정: 마스터에게 묶음 표시, .env 계정은 마스터·삭제 버튼 없음",
+           pg.is_visible("#s-users") and sv.TEST_EMAIL in pg.inner_text("#users-list") and "마스터" in pg.inner_text("#users-list")
+           and not pg.query_selector(f"#users-list [data-user-del='{sv.TEST_EMAIL}']"), pg.inner_text("#users-list"))
+        if sv.mode == "db":
+            pg.fill("#users-email", "New.Person@Example.com"); pg.press("#users-email", "Enter"); pg.wait_for_timeout(800)
+            ck("허용 계정: Enter 로 추가, 소문자, 이름 '—', 설정 패널 그대로",
+               pg.evaluate("document.querySelector('#dlg-settings').open") and "new.person@example.com" in pg.inner_text("#users-list")
+               and "—" in pg.inner_text("#users-list") and "추가했습니다" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            pg.fill("#users-email", "new.person@example.com"); pg.click("#users-add"); pg.wait_for_timeout(600)
+            ck("허용 계정: 중복은 안내만", "이미" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            pg.fill("#users-email", "no-at"); pg.click("#users-add"); pg.wait_for_timeout(600)
+            ck("허용 계정: 형식 오류 안내", "형식" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            pg.evaluate("$('#dlg-settings').close()"); pg.reload(); pg.wait_for_timeout(1000)
+            pg.click("#btn-settings"); pg.wait_for_timeout(800)
+            ck("허용 계정: 새로고침 뒤에도 목록에 남음", "new.person@example.com" in pg.inner_text("#users-list"))
+            pg.click("#users-list [data-user-del='new.person@example.com']"); pg.wait_for_timeout(400)
+            pg.click("#dlg-confirm button:has-text('삭제')"); pg.wait_for_timeout(800)
+            ck("허용 계정: 삭제 뒤 목록에서 빠짐", "new.person@example.com" not in pg.inner_text("#users-list") and "지웠습니다" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+        else:
+            ck("허용 계정: xlsx 는 추가 비활성 + .env 안내", pg.evaluate("document.querySelector('#users-add').disabled") and ".env" in pg.inner_text("#users-msg"))
+        pg.evaluate("$('#dlg-settings').close(); ME.is_master = false; openSettings()"); pg.wait_for_timeout(800)
+        ck("허용 계정: 마스터가 아니면 묶음 숨김", pg.evaluate("document.querySelector('#dlg-settings').open") and not pg.is_visible("#s-users"))
+        pg.evaluate("$('#dlg-settings').close()")
         pg.goto(sv.base + "/login?err=denied&email=x%40y.z"); pg.wait_for_timeout(300)
         ck("로그인 화면: 우회 중이면 / 로 이동", pg.url.rstrip("/") == sv.base, pg.url)
         b.close()
