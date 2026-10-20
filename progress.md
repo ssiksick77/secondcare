@@ -4,9 +4,13 @@ Updated: 2026-10-20
 
 ## Goal
 
-2026-10-20 (fork session): rename vendor 알파 to 알파미금역점 everywhere, code 알파 unchanged. Done; next task not defined.
+Move the ledger store from the xlsx file to SQLite so several users can work on one ledger, before the store code grows further. Screens and API behave the same; the existing tests pass; an xlsx export keeps the Excel view.
 
 ## Done
+
+- ef7ffc0 Session 1: `app/db.py` (schema: one table per sheet, `id` + `author` columns, `meta`, `changelog`), `app/import_xlsx.py` (xlsx -> SQLite, fills author, refuses to overwrite without `--force`), `store.read_all` split into `_raw_xlsx` / `_raw_db` / `_derive` and reads SQLite when `LEDGER_DB` is set, `tests/test_db.py` (45 checks: counts, 금액 totals, every column equal between xlsx and SQLite on the QA ledger), `db` group in `tests/run.py`.
+
+## Done before the migration (xlsx era, kept for reference)
 
 - 5926413 fix: startup sheet check leaked a read_only workbook handle; every save since 10-18 13:32 failed at os.replace (backups piled up, ledger mtime frozen). Regression test in tests/test_api.py. User re-entered the lost entries.
 - 85f8c23 예산목 잔액 (집행 표·결의서 재원 현황) counts only budget rows with 신청일자 ≤ 원인발생일; 신청일자 required; blank → Jan 1 of ledger year on fix-up.
@@ -24,11 +28,24 @@ Updated: 2026-10-20
 
 ## In progress
 
-- (none)
+SQLite migration, first version (brainstormed 2026-10-20). Done conditions:
+- Store on SQLite: calc 32, API 95, UI 56 tests pass; screen and API behaviour unchanged. (read path done, write paths pending)
+- Every record has a stable id: API and frontend address records by id, not by row number. (SQLite read_all returns `_row` = id; frontend rename pending)
+- One-shot import script xlsx -> SQLite: on the QA ledger, every sheet's row count and amount totals equal the source. (done ef7ffc0)
+- Export SQLite -> xlsx: the exported file opens in Excel with the same sheets and columns as the current ledger.
+- Backup and undo on SQLite: a backup file exists before each write; undo works.
+- Runs on Linux: `python main.py` starts without the .bat files.
+- Change log has an author column (email); the import fills existing rows with 안윤아 (snubh.ai.center.01@gmail.com). (schema and import done; write paths do not log yet)
+
+Session order: (1) schema + import script + read_all — done, (2) write paths create/update/delete, (3) numbering, evidence, requests, orders, (4) export, backup, tests, docs.
 
 ## Open issues
 
-- checks: pass (smoke; test: calc 32, API 95, UI 56, about 3 minutes — run with a timeout above 300 s). No lint or typecheck. Two sessions running check.sh at the same time collide on tests/.tmp/ (one run fails); run checks from one session at a time.
+- Migration state: `LEDGER_DB` only switches `read_all`. Every write path still loads and saves the xlsx, so running the app with `LEDGER_DB` set shows stale data after a write. Do not set `LEDGER_DB` in `app/.env` until session 2 moves the writes.
+- `store.py` write paths take `_row` as the xlsx row number (`_find_row`, `_write_row`, `_delete_row`, every `*_action`). Session 2 must map `_row` to the SQLite `id` for every kind in `_SHEETS` plus `fixlog`.
+- The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run.
+- `tests/test_api.py` child-process stderr decoding is a cp949 flake (see ideas.md `[later][fix]` 2026-10-20); one full check run failed on it, the rerun passed.
+- checks: pass (smoke; test: calc 32, API 95, db 45, UI 56, about 3 minutes — run with a timeout above 300 s). No lint or typecheck. Two sessions running check.sh at the same time collide on tests/.tmp/ (one run fails); run checks from one session at a time.
 - The app running on port 8791 must be restarted to read the new REQUEST_SUPPLIERS in app/.env.
 - Live ledger follow-ups for the user: enter 배송일 for order 알파-20260703-01 (11 requests then become 완료); review auto-registered vendor codes in the 거래처 tab (codes are immutable once used in a number).
 - Existing evidence files keep old-rule names (with 적요) until their exec's 재원/금액 is edited; a one-shot rename script could be offered. Folder names were fixed by [드라이브 동기화] on 2026-10-20.
@@ -62,8 +79,12 @@ Updated: 2026-10-20
 - 2026-10-20 (user) 증빙 교체([교체] 버튼, replace=1, 옛 파일 휴지통) 9ff0690; 드라이브가 기준: 지운(휴지통) 파일의 증빙 행은 조회·[드라이브 동기화] 때 장부에서 삭제, 폴더 이름은 현재 번호로 수정(drive.fix_folder_name) b6d17cf; 증빙번호는 지운 번호 재사용(베타, 메타 최고값 폐기). 실제 장부에 동기화 1회 실행: AX 증빙 8건 삭제(사용자가 일부러 지움), 폴더 3개 이름 수정, 백업 manual_before_drivesync_*. drive.file 권한이라 직접 넣은 파일은 못 봄(README).
 - 2026-10-20 (user) 증빙 업로드 시 원본파일명 보존 안 함(열은 남기되 빈 값), 실제 장부의 기존 값 9건 비움(백업 manual_before_origname_*). 신청 첨부는 그대로.
 - 2026-10-20 (user) 거래처 이름 알파 → 알파미금역점, 코드는 알파 유지. My calls: 적립번호·주문번호·메타 키·적요·비고·품목명은 그대로, 거래처 탭 비고는 "이전 이름 알파 (코드 알파)".
+- 2026-10-20 SQLite schema (my calls): one table per sheet with the Korean headers as column names; empty cells NULL, numeric columns REAL, other columns untyped so 변경회차 keeps int vs text; dates as 'YYYY-MM-DD' text; `_row` carries the SQLite id so screens work unchanged until the frontend is renamed; `author` stores the email only (name mapping comes with login).
+- 2026-10-20 (user) SQLite migration, multi-user. Target: 3 (several accountants + researchers filing requests), external access, centre Linux server later, tunnel from a centre PC first. Login = Google, allow-list of emails managed by the accountant, first accountant in app/.env. Roles, login, external access, deployment are all later; the migration only adds stable ids and an author column. Existing rows get author 안윤아 (snubh.ai.center.01@gmail.com). SQLite before PostgreSQL (2026-10-19 decision kept).
 - 2026-10-20 (user) 한 문서(사전결재안 등)를 여러 거래의 증빙으로: 증빙 행 [복사] → 거래번호 여러 개 → 그 거래 폴더로 drive.copy(그 거래 기준 이름), 독립 증빙 항목(비고 '복사: 원본'). 연결(공유 파일)·드라이브 바로가기 방식은 사용자가 거절. POST /api/evidence/{번호}/copy.
 
 ## Next action
 
-Pick the next task with the user. Candidates: one-shot rename of existing evidence files to the new rule (needs Drive connected), LEDGER_HOST + server role check, 학회·기타 review leftovers.
+Session 2 on branch claude/sqlite-migration-difficulty-9c1e10: move the write paths (`create`, `update`, `delete`, then the `*_action` functions) to SQLite behind `USE_DB`, logging each write to `changelog` with the author column empty. Start with `create`/`update`/`delete` for `exec` and make the API test pass with `LEDGER_DB` set in `tests/_env.py`.
+
+Previous candidates: Candidates: one-shot rename of existing evidence files to the new rule (needs Drive connected), LEDGER_HOST + server role check, 학회·기타 review leftovers.
