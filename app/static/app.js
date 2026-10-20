@@ -1,8 +1,8 @@
-/* Second Care (caih-rfm): 의료인공지능센터 연구비 관리 시스템 - 프론트엔드 */
+/* SECONDCare (caih-rfm): 의료인공지능센터 연구비 관리 시스템 - 프론트엔드 */
 "use strict";
 
 // 프로그램 이름 (settings.py 의 APP_NAME / APP_FULL_NAME 과 같은 값). 화면은 짧은 이름, 인쇄물은 정식 명칭.
-const APP_NAME = "Second Care";
+const APP_NAME = "SECONDCare";
 const APP_FULL = "의료인공지능센터 연구비 관리 시스템";
 
 const $ = (s, el = document) => el.querySelector(s);

@@ -1,4 +1,4 @@
-"""Second Care (caih-rfm): 의료인공지능센터 연구비 관리 시스템 - FastAPI 서버.
+"""SECONDCare (caih-rfm): 의료인공지능센터 연구비 관리 시스템 - FastAPI 서버.
 
 실행:  python main.py   (또는 run.bat)
 """
