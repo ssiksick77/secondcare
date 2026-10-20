@@ -9,6 +9,7 @@ AI chat history lives only in the browser: a refresh loses it, several users can
 ## Done
 
 - 137e869 AI chat rooms, first version: `app/chat_store.py` (`app/chats.sqlite`, rooms per login email, 7-day purge unless kept, history limit 40), routes `/api/chats…` (old `/api/ai/chat` removed), `ai.chat_in_room` (stores question and answer with calls/proposals only on success), panel room bar (select, 새 대화, 이름, 보관, 삭제), past proposal cards status-only, notice text, persona 행정보조 김연구 / button 김연구 호출하기, `LEDGER_AI_FAKE=1` canned answer for UI tests. Checks: calc 32, API 110, db 55, ai 158, api-db 120, UI 84, ui-db 86.
+- Memo kind 비세목 (예산목·세목·세세목 target, active when the row matches any of the three; `tools.memos_for`; suggest prompt sends 관련메모). ai 166.
 - 7475b7c chat answers rendered as markdown (shared `.md` styles).
 - AI helper overhaul first version (9dd63f1..d5f0afe, merged eb02756) and real-model check of 6 sample questions (all correct). Details in git log.
 
