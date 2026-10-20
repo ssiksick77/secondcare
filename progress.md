@@ -4,22 +4,27 @@ Updated: 2026-10-20
 
 ## Goal
 
-AI chat history lives only in the browser: a refresh loses it, several users cannot be told apart, and one conversation cannot be split by topic. Store chats on the server per login user, in several rooms, with a 7-day auto-delete unless the user keeps a room.
+Let the master accountant add and remove login-allowed accounts in the settings dialog, with a role (required) and a name (optional), without editing `app/.env` or restarting. Checked by: an account added in the dialog can log in with that role; a removed one gets 401 on the next request; non-master accounts cannot see or call the management API.
 
 ## Done
+
+- 2104461 / 6c3b01e Allow-list in the SQLite `users` table (`allowed`, `added_at`, `added_by`); `auth.is_allowed` = `.env` masters OR allowed rows; `auth.is_master`; `GET/POST/DELETE /api/users` (master only, 403 otherwise); settings fieldset "로그인 허용 계정" (`#s-users`, hidden for non-masters): table email · role · name ("—" until first login) · added date · [삭제], add row, masters shown without a delete button; lowercase, format check, duplicate = notice only, self and master delete refused; deleted accounts keep their row and name (voucher 담당 cell). xlsx mode: list shows `.env` only, add disabled.
+- 4d171e0 Role (manager / staff / researcher per `docs/권한_설계_2026-10-20.md`) required on add, name optional (20 chars); a name set by the master skips the first-login name prompt; `/api/me` carries `role` (`master` for `.env` accounts); rows allowed before the role column exist are backfilled as `staff`.
+- 7a7f92d Role design doc copied from branch claude/permission-hierarchy-design-15c7d4 with a note that storage is now `.env` masters + SQLite `users` (not `users.json`).
+- 1c1a46b / a3ebb19 Settings list header on one line; stacked labels in the add row. b0e843b README login section.
+- 782b992 Merged main into this branch; merged back into main after dffd6a5 (chat rooms, memo kind 비세목), progress.md and ideas.md conflicts resolved by hand.
+- Checked in the browser on a SQLite copy of the QA ledger (add, duplicate notice, delete, role column, backfill).
+
+## Done before this task (kept for reference)
 
 - 137e869 AI chat rooms, first version: `app/chat_store.py` (`app/chats.sqlite`, rooms per login email, 7-day purge unless kept, history limit 40), routes `/api/chats…` (old `/api/ai/chat` removed), `ai.chat_in_room` (stores question and answer with calls/proposals only on success), panel room bar (select, 새 대화, 이름, 보관, 삭제), past proposal cards status-only, notice text, persona 행정보조 김연구 / button 김연구 호출하기, `LEDGER_AI_FAKE=1` canned answer for UI tests. Checks: calc 32, API 110, db 55, ai 158, api-db 120, UI 84, ui-db 86.
 - Memo kind 비세목 (예산목·세목·세세목 target, active when the row matches any of the three; `tools.memos_for`; suggest prompt sends 관련메모). ai 166.
 - 7475b7c chat answers rendered as markdown (shared `.md` styles).
 - AI helper overhaul first version (9dd63f1..d5f0afe, merged eb02756) and real-model check of 6 sample questions (all correct). Details in git log.
-
-## Done before this task (main, merged 2026-10-20)
-
+- AI helper overhaul, first version (this branch, 2026-10-20): 9dd63f1 `app/tools.py` shared read tools (MCP wraps them, `tool_schema`, `call`); d8ba018 `budget_balance`, `search_ledger` (집행·신청·품의), `get_exec` with 증빙·연결품의·적립금연결, `fx_rate` (frankfurter.app, live check once); c245e15 memo store (sheet/table `메모`, validation, settings panel CRUD, `read_memo`); a20d1c9 chat as a tool-calling agent (`AGENT_SYSTEM`, `summary_context`, `agent_tools`, `run_tool`, 10 rounds, 40k char cap, `propose_memo` card, "조회" line); d5f0afe AI 추천·검증 keeps a filled 예산목. Test group `ai` (tests/test_ai.py, 122 checks, stubbed client, no API calls). Merged main (Second Care rename, Google login, first-login name) on 2026-10-20.
+- Finding: receipt extract and suggest never sent the whole ledger (the first survey said so); only chat and report did. Report and the OpenAI chat path still do (later).
 - 9da4d04 First-login name: `users` table (`db.USERS_DDL`, `user_names`, `set_user_name`), `store.author_names` / `user_name` / `set_user_name` (1-20 chars), `meta.authors`; middleware sends a nameless account to `/welcome` (API 403) except `/api/me` and `POST /api/me/name`; `welcome.html` prefilled with the Google profile name; header shows the name; voucher 담당 cell = `authorSigner(r)` from `_author`. Bypass accounts have no profile name and are never sent to `/welcome`. Tests: fixed `LEDGER_SESSION_SECRET` and `LEDGER_ALLOWED_EMAILS` in `tests/_env.py` (`session_cookie()` forges a login cookie; `call`/`get_raw` take a cookie), API +4/+14, UI +3 (ui-db). checks: pass (calc 32, API 110, db 53, api-db 120, UI 64, ui-db 66).
 - 950dca2 / 41642cb Google login first version with allow-list and PKCE fix (verified by the user 2026-10-20).
-
-## Done before this task (kept for reference)
-
 - 8a738a4 feat: print signer names on voucher approval box (`VOUCHER_SIGNER_NAMES` in app.js, `.vc-sign-n` styles). 담당 cell stays empty until login gives an email-to-name map.
 - 2026-10-20 SQLite migration complete and live (a91649d merge, d202ab6 export, 7ee9405/f389f7f write paths, ef7ffc0 schema/import). Details in git log.
 
@@ -39,10 +44,15 @@ AI chat history lives only in the browser: a refresh loses it, several users can
 
 ## In progress
 
-None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE on the QA copy (room bar, title from first question, table rendering, notice). Not yet tried with the real model in rooms (the room layer only changes storage and history; the model path is the one verified earlier).
+None. The allowed-account screen with roles is complete; the user has not yet tried it with real accounts.
 
 ## Open issues
 
+- checks: pass on the final tree (calc 32, API 120, db 55, ai 122, api-db 149, UI 79, ui-db 89; about 6 minutes). Run with a timeout above 360 s.
+- Server role checks are not implemented: `role` is stored and shown only. Design doc §4 and §8 step 3 describe the checks. `extra.admin` from the request screen is still trusted.
+- No UI to change an account's role or name after adding; delete and add again. Masters are `.env` only.
+- krds-improve / impeccable were not run on the new fieldset; it follows the existing memo fieldset pattern (label, aria-live, button names).
+- The design doc §5.3 (no-login local mode) and §6 (`users.json`) are superseded; the note at the top of the doc says so.
 - Live ledger is SQLite since 2026-10-20 14:58. `의료인공지능센터_지출장부_2026.xlsx` is frozen at that moment: do not edit it by hand, it is no longer read. For an Excel view run `python app/export_xlsx.py <sqlite> <copy.xlsx>`. Backups are `app/backup/*.sqlite`. `_row` in the API is the SQLite id.
 - Worktree branches claude/sqlite-migration-difficulty-9c1e10, claude/resolution-signature-names-196bd0 and claude/google-login-implementation-33c005 are merged and can be deleted.
 - Static files have no version query, so a code change can show stale CSS until a hard refresh (ideas.md [later][fix] 2026-10-20).
@@ -65,6 +75,8 @@ None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_
 
 ## Decisions
 
+- 2026-10-20 (user) Allowed-account management: store in the SQLite `users` table (option 2 of 3), only master accounts (`.env` `LEDGER_ALLOWED_EMAILS`) may manage; on add set a role (required) and a name (optional) per `docs/권한_설계_2026-10-20.md`. My calls: fieldset inside the settings dialog (not a separate page); delete keeps the row and name; allow check runs in the middleware on every request so removal needs no restart; xlsx mode uses `.env` only; a master-given name skips the first-login prompt; re-adding an allowed account changes nothing; no title field; pre-existing allowed rows default to `staff`.
+- 2026-10-20 (user) Allowed-email management: store the allow-list in the SQLite `users` table (approach 2 of 3; `.env` emails stay as bootstrap masters that cannot be removed), and only master accounts (now: the `.env` emails) may manage it. Rejected: `.env`-only text field (no names, no room for roles); a separate `/users` page (too big now). My calls: removing keeps the users row and name (author names on ledger rows stay readable) and only clears allowed; the middleware checks the allow-list on every request so removal needs no restart; master is derived from `.env` only, no role column yet; xlsx mode uses the `.env` list only.
 - 2026-10-20 (user) First-login name entry instead of an email-to-name map in .env: ask once, no change UI yet; the imported author (snubh.ai.center.01@gmail.com) is asked like everyone else. My calls: `users` table in SQLite, prefill from the Google profile, xlsx mode skips the prompt, voucher 담당 cell reads the row author.
 - 2026-10-20 (user) 결의서 결재란 이름: 매니저 오인선, 선임연구원 이진영, 센터장 류지원 with small '직무대행' above the name, bold italic; 담당 cell stays empty until login gives an email-to-name map (per-transaction author, not a fixed setting). My calls: name 11pt, tag 6.5pt with -0.2mm tracking inside the name width.
 - 2026-10-16 (user) 여비 계산기: 기본 정보 외 필수 없음; 출장 기간과 학회 기간 별도 입력; 학회 전후 각 1일만 인정, 초과 출장일은 공제일수로 일비·식비에서 자동 제외(숙박은 그대로, my choice since the user named 일비/식비 only).
@@ -101,5 +113,5 @@ None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_
 
 ## Next action
 
-Merge claude/ai-assistant-overhaul-c6df4b into main (137e869). Then pick the next AI step: OpenAI path tool calling (session card), receipt OCR, report, researcher agent; or misuse detection + master forwarding (notice only so far).
+Pick with the user: server role checks (design doc §4.2, §8 step 3: one FastAPI dependency, 403 by role, drop `extra.admin`), or the role/name edit UI, or multi-PC access (LEDGER_HOST, HTTPS redirect URI).
 
