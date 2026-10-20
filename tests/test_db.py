@@ -81,6 +81,27 @@ def main() -> int:
     pr = subprocess.run([sys.executable, "-c", undo], cwd=APP, env=dict(os.environ, LEDGER_XLSX=xlsx, LEDGER_DB=sqlite, PYTHONIOENCODING="utf-8"),
                         capture_output=True, text=True, encoding="utf-8")
     ck("쓰기 → 백업 생성, 되돌리기 동작, 오래된 되돌리기 거부, changelog 기록", pr.returncode == 0 and pr.stdout.strip().endswith("ok"), pr.stderr[-600:])
+
+    # ---- 내보내기: SQLite -> xlsx, 다시 가져와도 같고, xlsx 를 직접 읽어도 같다 ----
+    export = os.path.join(d, "export.xlsx")
+    reimport = os.path.join(d, "reimport.sqlite")
+    pr = subprocess.run([sys.executable, "-I", "export_xlsx.py", sqlite, export], cwd=APP, capture_output=True, text=True, encoding="utf-8")
+    ck("내보내기 스크립트 종료 코드 0", pr.returncode == 0, pr.stderr[-500:])
+    pr = subprocess.run([sys.executable, "-I", "import_xlsx.py", export, reimport], cwd=APP, capture_output=True, text=True, encoding="utf-8")
+    ck("내보낸 xlsx 다시 가져오기", pr.returncode == 0, pr.stderr[-500:])
+    src = read_all({"LEDGER_XLSX": export, "LEDGER_DB": sqlite})
+    again = read_all({"LEDGER_XLSX": export, "LEDGER_DB": reimport})
+    direct = read_all({"LEDGER_XLSX": export})
+    for name, other in (("재가져오기", again), ("xlsx 직접 읽기", direct)):
+        bad = [k for k in kinds if strip(src[k]) != strip(other[k])]
+        ck(f"내보내기 → {name}: 모든 시트 같음", not bad, bad)
+    ck("내보낸 xlsx 에 수식 셀 없음", direct["meta"]["formula_count"] == 0)
+    import openpyxl
+    wb = openpyxl.load_workbook(export)
+    ck("시트 이름 = 이전 장부 + 거래처·보완이력", wb.sheetnames == ["인원", "기준급여", "지급처", "인건비지급", "인건비조정", "재원", "집행내역", "품의내역", "예산변동",
+                                               "적립금", "거래처", "태그", "증빙", "보완이력", "신청", "주문", "신청첨부", "메타"], wb.sheetnames)
+    ck("메타 시트 숨김, 예산변동 8행 머리글·7행 합계", wb["메타"].sheet_state == "hidden" and wb["예산변동"].cell(8, 1).value == "재원" and wb["예산변동"].cell(7, 5).value is not None)
+    wb.close()
     return ck.done("db")
 
 
