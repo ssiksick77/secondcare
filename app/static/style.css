@@ -223,8 +223,9 @@ table.grid.compact { font-size: 12px; }
 .people-split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 24px; align-items: start; }
 @media (max-width: 1100px) { .people-split { grid-template-columns: minmax(0, 1fr); } }
 #salary-who { font-weight: 400; color: var(--ink-2); }
-#people-table .rowbtn { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
-#people-table .rowbtn[aria-pressed="true"] { font-weight: 700; text-decoration: none; }
+#people-table tbody tr[data-row] { cursor: pointer; }
+#people-table tbody tr[data-row]:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+#people-table tbody tr.selected td:first-child { box-shadow: inset 2px 0 0 var(--primary); font-weight: 700; }
 table.grid.compact th, table.grid.compact td { height: 24px; }
 table.grid.compact .btn-sm { min-height: 22px; padding: 0 7px; }
 table.grid th.sortable { cursor: pointer; user-select: none; }

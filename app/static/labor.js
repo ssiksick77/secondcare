@@ -7,7 +7,7 @@ FILTERS.labor = {}; FILTERS.people = {}; FILTERS.salary = {};  // salary 이름 
 Object.assign(COLS, {
   labor: [{ k: "지급월" }, { k: "귀속월" }, { k: "이름" }, { k: "지급처" }, { k: "지급처명", calc: r => payeeName(r["지급처"]), wrap: true }, { k: "금액", t: "num", amt: true },
     { k: "상태", t: "badge" }, { k: "지급일", t: "date" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
-  people: [{ k: "이름", html: r => `<button type="button" class="rowbtn" aria-pressed="${FILTERS.salary["이름"] === r["이름"]}" title="이 사람의 기준급여 내역 보기">${esc(r["이름"])}</button>${r["숨김"] === "Y" ? ' <span class="muted">(숨김)</span>' : ""}` }, { k: "인건비구분", label: "구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
+  people: [{ k: "이름", html: r => `${esc(r["이름"])}${r["숨김"] === "Y" ? ' <span class="muted">(숨김)</span>' : ""}` }, { k: "인건비구분", label: "구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
     { k: "이월선급", t: "num", amt: true, title: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", wrap: true }],
   salary: [{ k: "이름" }, { k: "시작월" }, { k: "종료월" }, { k: "월액", label: "월지급액", t: "num", amt: true }, { k: "비고", wrap: true }],
   payee: [{ k: "지급처코드" }, { k: "지급처명", wrap: true }, { k: "인건비예산", t: "num", amt: true }, { k: "사용건수", t: "num", calc: r => DATA.labor.filter(x => x["지급처"] === r["지급처코드"]).length }, { k: "비고", wrap: true }],
@@ -216,7 +216,10 @@ function renderPrepaid() {
 $("#labor-year").addEventListener("change", () => { FILTERS.labor.year = ""; renderLabor(); });
 
 // ---------- 인원 · 기준급여 (2단: 왼쪽 이름을 누르면 오른쪽에 그 사람의 기준급여) ----------
-SEL_HOOK.people = { head: () => "", cell: () => "", rowCls: r => FILTERS.salary["이름"] === r["이름"] ? " selected" : "" };
+SEL_HOOK.people = {
+  head: () => "", cell: () => "", rowCls: r => FILTERS.salary["이름"] === r["이름"] ? " selected" : "",
+  after: () => $$("#people-table tbody tr[data-row]").forEach(tr => { tr.tabIndex = 0; tr.setAttribute("role", "button"); tr.setAttribute("aria-pressed", tr.classList.contains("selected")); tr.title = "클릭하면 오른쪽에 기준급여 내역"; }),
+};
 SEL_HOOK.salary = {
   head: () => "", cell: () => "", rowCls: () => "",
   empty: () => FILTERS.salary["이름"] ? `${esc(FILTERS.salary["이름"])}의 기준급여 내역이 없습니다.` : "왼쪽 인원 목록에서 이름을 누르면 기준급여 내역이 보입니다.",
@@ -229,11 +232,17 @@ function renderPeople() {
 function selectPerson(name) {
   FILTERS.salary["이름"] = FILTERS.salary["이름"] === name ? "" : name;  // 같은 이름을 다시 누르면 선택 해제
   renderPeople();
-  $(`#people-table tbody tr .rowbtn[aria-pressed="true"]`)?.focus();
 }
-$("#people-table").addEventListener("click", e => {
-  const b = e.target.closest(".rowbtn"); if (!b) return;
-  const r = DATA.people.find(x => x._row === Number(b.closest("tr[data-row]").dataset.row)); if (r) selectPerson(r["이름"]);
+// 인원 행 전체가 선택 버튼 (작업 열 버튼은 제외). 키보드: 행에 포커스 후 Enter/Space
+function personRowOf(e) {
+  const tr = e.target.closest("#people-table tbody tr[data-row]");
+  if (!tr || e.target.closest("button, input, a, select")) return null;
+  return DATA.people.find(x => x._row === Number(tr.dataset.row)) || null;
+}
+$("#people-table").addEventListener("click", e => { const r = personRowOf(e); if (r) selectPerson(r["이름"]); });
+$("#people-table").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const r = personRowOf(e); if (r && e.target.matches("tr")) { e.preventDefault(); selectPerson(r["이름"]); }
 });
 async function togglePersonHidden(row) {
   const r = DATA.people.find(x => x._row === row); if (!r) return;

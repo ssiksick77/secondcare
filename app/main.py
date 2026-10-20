@@ -117,7 +117,7 @@ def welcome_page(request: Request):
     user = request.state.user
     if not user or not user.get("needs_name"):
         return RedirectResponse("/", status_code=302)
-    return FileResponse(STATIC / "welcome.html")
+    return _page("welcome.html")
 
 
 @app.post("/api/me/name")
@@ -168,7 +168,7 @@ def users_remove(request: Request, email: str):
 def login_page(request: Request):
     if auth.user_from_request(request):
         return RedirectResponse("/", status_code=302)
-    return FileResponse(STATIC / "login.html")
+    return _page("login.html")
 
 
 @app.get("/auth/login")
@@ -223,9 +223,22 @@ def _q(v: str) -> str:
     return quote(v, safe="")
 
 
+def _page(name: str):
+    """정적 HTML 에 버전 쿼리(?v=파일 mtime)를 붙여 보낸다. 코드를 바꿔도 브라우저가 옛 JS/CSS 를 쓰는 일을 막는다 (2026-10-20)."""
+    from fastapi.responses import HTMLResponse
+    html = (STATIC / name).read_text(encoding="utf-8")
+
+    def ver(m):
+        f = STATIC / m.group(1)
+        v = int(f.stat().st_mtime) if f.exists() else 0
+        return f'/static/{m.group(1)}?v={v}"'
+    html = re.sub(r'/static/([\w.-]+\.(?:js|css))"', ver, html)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    return _page("index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -237,13 +250,13 @@ def favicon():
 @app.get("/labor")
 def labor_page():
     """인건비 화면: 같은 페이지, 주소로 모드 전환."""
-    return FileResponse(STATIC / "index.html")
+    return _page("index.html")
 
 
 @app.get("/request")
 def request_page():
     """신청 화면: 같은 페이지, 주소로 모드 전환 (직접 접속은 연구원 화면)."""
-    return FileResponse(STATIC / "index.html")
+    return _page("index.html")
 
 
 @app.post("/api/undo")
