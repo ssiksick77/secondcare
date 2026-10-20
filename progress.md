@@ -4,12 +4,35 @@ Updated: 2026-10-20
 
 ## Goal
 
-People tab (인건비 > 인원) UI fix: notes under the headings, the two columns aligned, no name column in the salary table, a clear selected row, a quiet hide button. Checked by `scripts/check.sh` and in the browser pane on the QA copy.
+Post-login menu screen `/enter` with three square buttons (연구비 / 인건비 / 신청) for every login account. 회계대장 moves to `/fund`, 신청 becomes `/`, old `/request` redirects to `/`. Settings has "기본 화면" (menu / 연구비 / 인건비 / 신청) per account; the default is the menu. Checked by `scripts/check.sh` and by screenshots of the QA copy.
 
 ## Done
 
-- 0dace3e People tab: notes move from the toolbars to a `.defs` line under each heading; `.people-col` is a four-row subgrid (heading, note, toolbar, table) so both tables start on one line; stacked below 1100px. Salary column 이름 has `hide: true` (CSV keeps it). Selected person row: full-row `--primary-bg`, 3px left bar, bold name. Hide button is `btn-ghost`. UI test reads salary rows by `data-row` and checks that 이름 is not a heading.
-- Before this task (same branch, merged to main earlier): 6a2ba76 staff tab split view, hide, 기타 kind; 994ed62 row click selects, static cache bust.
+- d83e60e Menu screen `app/static/enter.html` (SECONDCare wordmark, three square buttons with icons, name and logout in the header, footer "분당서울대학교병원 의료인공지능센터"). Routes: `/enter` (menu; redirects to the account's home unless `?menu=1`), `/fund` (회계대장), `/` (신청), `/request` → 301 `/`. Login callback, `/login` when logged in, and `/welcome` after the name go to `/enter`. `users.home` column (`db.set_user_home`, `store.HOME_PATHS`), `/api/me` returns `home` and `db`, `POST /api/me/home`. Settings fieldset "기본 화면" saves on change (SQLite per account, xlsx localStorage `ledger-home`). Header: 메뉴 button (`/enter?menu=1`); back buttons read 연구비. `labor.js` MODE_PATH updated. Menu 신청 button sets `request-admin` for non-researcher roles. Tests: API +12, UI +10. README and PRODUCT.md route text updated.
+- Previous goal (people tab layout) ended at 0dace3e; merged to main earlier.
+
+## In progress
+
+None.
+
+## Open issues
+
+- checks: pass on d83e60e (calc 32, API 133/165, db 56, ai 166, UI 107/117; about 7 minutes). Run with a timeout above 420 s.
+- Researcher accounts cannot change "기본 화면" because the settings dialog is hidden in the researcher view. Their only screen is 신청, so this is accepted for now.
+- `.claude/launch.json` (QA preview on port 8795 with LEDGER_AUTH_BYPASS) is local and uncommitted; the QA ledger copy lives in `%TEMP%\claude\preview_qa`.
+- Hidden people still appear in the 계획표 and 선급·미지급 tables when they have pay or accrual that year (my call: hiding must not drop money from totals).
+- Server role checks are not implemented: `role` is stored and shown only. Design doc §4 and §8 step 3 describe the checks. `extra.admin` from the request screen is still trusted.
+- No UI to change an account's role or name after adding; delete and add again. Masters are `.env` only.
+
+## Decisions
+
+- 회계대장 path is `/fund` (matches the menu label 연구비); the internal home key is `fund`. Chosen by the user over `/ledger`.
+- The home preference is per account in SQLite, not in `.env`, because researchers and staff want different screens. xlsx mode keeps it in the browser only.
+- `/` direct access stays the researcher view. Only the menu button and the header 신청 button grant 담당자 mode.
+
+## Next action
+
+Merge this branch into main (user asked on 2026-10-20), restart the live app, and open `/enter` once on the live ledger to confirm the `users.home` column is added and the menu loads.
 
 ## Done before this task (kept for reference)
 
