@@ -1,4 +1,6 @@
-# 센터 회계대장 관리도구 — 사용 안내
+# Second Care: 의료인공지능센터 연구비 관리 시스템 — 사용 안내
+
+코드명 `caih-rfm`. 짧은 이름 "Second Care"는 병원 ERP BESTCare 옆에서 연구비 집행을 보조하는 센터 자체 도구라는 뜻입니다. 공문·보고서에는 정식 명칭 "의료인공지능센터 연구비 관리 시스템"을 씁니다. 집행·품의·예산·적립금을 다루는 본 화면은 "회계대장" 화면이라고 부릅니다(인건비·신청 화면과 구분).
 
 `의료인공지능센터_지출장부_2026.xlsx`를 원본으로 쓰는 로컬 웹앱입니다. 엑셀 파일이 곧 데이터베이스이고, 앱은 그 파일을 읽고 씁니다. 엑셀에서도 언제든 열어 볼 수 있습니다.
 
@@ -296,15 +298,15 @@ Python 실행 파일 경로를 먼저 확인합니다(명령 프롬프트에서 
 **Claude Code** (모든 폴더에서 쓰려면 `-s user`):
 
 ```text
-claude mcp add ledger -s user -- python "C:/Users/parkj/Desktop/Project/dev/CAIH_회계장부_2026/app/mcp_server.py"
+claude mcp add caih-rfm -s user -- python "C:/Users/parkj/Desktop/Project/dev/CAIH_회계장부_2026/app/mcp_server.py"
 ```
 
-**Claude Desktop**: 설정 → 개발자 → "구성 편집"으로 `%APPDATA%\Claude\claude_desktop_config.json`을 열고 `mcpServers` 안에 아래 항목을 추가합니다(이미 다른 서버가 있으면 쉼표로 이어 붙임). 저장 후 Claude Desktop을 완전히 종료했다가 다시 실행합니다. 같은 내용의 예시 파일이 `app\claude_desktop_config.ledger.json`에 있습니다.
+**Claude Desktop**: 설정 → 개발자 → "구성 편집"으로 `%APPDATA%\Claude\claude_desktop_config.json`을 열고 `mcpServers` 안에 아래 항목을 추가합니다(이미 다른 서버가 있으면 쉼표로 이어 붙임). 저장 후 Claude Desktop을 완전히 종료했다가 다시 실행합니다. 같은 내용의 예시 파일이 `app\claude_desktop_config.ledger.json`에 있습니다. 예전 이름 `ledger`로 등록했다면 그 항목을 지우고 다시 등록합니다.
 
 ```json
 {
   "mcpServers": {
-    "ledger": {
+    "caih-rfm": {
       "command": "python",
       "args": ["C:/Users/parkj/Desktop/Project/dev/CAIH_회계장부_2026/app/mcp_server.py"]
     }
@@ -312,7 +314,7 @@ claude mcp add ledger -s user -- python "C:/Users/parkj/Desktop/Project/dev/CAIH
 }
 ```
 
-등록 확인: Claude에게 "ledger 의 list_funds 를 실행해 줘"라고 말해 재원 목록이 나오면 됩니다. `run_mcp.bat`은 직접 실행하는 파일이 아닙니다.
+등록 확인: Claude에게 "caih-rfm 의 list_funds 를 실행해 줘"라고 말해 재원 목록이 나오면 됩니다. `run_mcp.bat`은 직접 실행하는 파일이 아닙니다.
 
 ## 9. 시트 구조 요약
 

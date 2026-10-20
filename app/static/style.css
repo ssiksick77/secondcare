@@ -52,6 +52,8 @@ body {
 ::-webkit-scrollbar-thumb { background: #C3C9D1; border: 2px solid var(--bg); border-radius: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: -.01em; }
+h1 .app-name { letter-spacing: 0; }
+h1 .app-full { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 10px; letter-spacing: 0; }
 h2 { font-size: 13px; margin: 18px 0 6px; font-weight: 700; color: var(--ink); text-transform: none; }
 h3 { font-size: 13px; }
 a { color: var(--primary-dark); text-underline-offset: 2px; }

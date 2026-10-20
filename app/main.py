@@ -1,4 +1,4 @@
-"""센터 회계대장 관리도구 - FastAPI 서버.
+"""Second Care (caih-rfm): 의료인공지능센터 연구비 관리 시스템 - FastAPI 서버.
 
 실행:  python main.py   (또는 run.bat)
 """
@@ -32,8 +32,8 @@ import store  # noqa: E402
 HOST, PORT = "127.0.0.1", int(os.environ.get("LEDGER_PORT", "8791"))
 STATIC = Path(__file__).resolve().parent / "static"
 
-app = FastAPI(title="센터 회계대장 관리도구")
-log = logging.getLogger("ledger")
+app = FastAPI(title=f"{settings.APP_NAME}: {settings.APP_FULL_NAME}")
+log = logging.getLogger(settings.APP_SLUG)
 
 
 @app.exception_handler(store.LedgerLocked)

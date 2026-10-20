@@ -1,5 +1,9 @@
-/* 센터 회계대장 관리도구 - 프론트엔드 */
+/* Second Care (caih-rfm): 의료인공지능센터 연구비 관리 시스템 - 프론트엔드 */
 "use strict";
+
+// 프로그램 이름 (settings.py 의 APP_NAME / APP_FULL_NAME 과 같은 값). 화면은 짧은 이름, 인쇄물은 정식 명칭.
+const APP_NAME = "Second Care";
+const APP_FULL = "의료인공지능센터 연구비 관리 시스템";
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -586,8 +590,8 @@ window.addEventListener("beforeprint", () => {
   if (dash) name += ` (${$("#panel-dash .subtabs [aria-selected=true]")?.textContent.trim() || ""})`;
   const note = dash ? $("#dash-note").textContent.trim() : "";
   // 신청 화면: 숨은 회계대장 탭의 재원·예산 값 대신 연도·구매처·상태 (request.js reqPrintHead)
-  if (document.body.classList.contains("request-mode") && typeof reqPrintHead === "function") $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(reqPrintHead())} · 출력일 ${today()}`;
-  else $("#print-head").innerHTML = `<b>의료인공지능센터 회계대장</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
+  if (document.body.classList.contains("request-mode") && typeof reqPrintHead === "function") $("#print-head").innerHTML = `<b>${APP_FULL}</b> · ${esc(reqPrintHead())} · 출력일 ${today()}`;
+  else $("#print-head").innerHTML = `<b>${APP_FULL}</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
   $$("details.defs-box").forEach(d => { if (!d.open) { d.open = true; d.dataset.printOpened = "1"; } });
 });
 window.addEventListener("afterprint", () => {
