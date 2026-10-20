@@ -115,8 +115,8 @@ function formFields(kind) {
     { k: "연결거래번호", type: "ro" },
   ];
   if (kind === "memo") return [
-    { k: "종류", type: "select", opts: DATA.meta.memo_kinds || ["재원", "거래처", "일반"], req: true, hint: "재원·거래처별 특이사항, 일반 규정" },
-    { k: "대상", type: "datalist", list: "대상", hint: "재원코드 또는 거래처명 · 일반은 비움" },
+    { k: "종류", type: "select", opts: DATA.meta.memo_kinds || ["재원", "거래처", "비세목", "일반"], req: true, hint: "재원·거래처·비세목(예산목·세목)별 규칙, 일반 규정" },
+    { k: "대상", type: "datalist", list: "대상", hint: "재원코드 · 거래처명 · 예산목/세목/세세목 이름 (일반은 비움)" },
     { k: "작성일", type: "date", hint: "비우면 오늘" },
     { k: "내용", type: "text", cls: "wide", req: true, hint: "AI 도우미가 답할 때 그대로 참고" },
     { k: "비고", type: "text", cls: "wide" },
@@ -1203,7 +1203,8 @@ $("#dash-fund").addEventListener("change", renderDashboard);
 $("#dash-year").addEventListener("change", renderDashboard);
 $("#btn-reload").addEventListener("click", load);
 // 로그인 사용자 표시 · 로그아웃 (auth.py)
-api("GET", "/api/me").then(u => { if (u && u.email) { $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
+let ME = {};  // /api/me: {email, name, is_master}
+api("GET", "/api/me").then(u => { if (u && u.email) { ME = u; $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
 $("#btn-logout").addEventListener("click", async () => { try { await api("POST", "/auth/logout"); } catch { } location.href = "/login"; });
 document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
@@ -1225,8 +1226,9 @@ load();
 
 // ================= AI 기능 =================
 let AI = { enabled: false, model: "" };
-const CHAT = [];
 let CHAT_BUSY = false;
+// 채팅방: 서버(app/chats.sqlite)에 사용자별로 저장. ROOMS = 내 방 목록, CUR_ROOM = 열려 있는 방 id (없으면 첫 질문 때 만든다)
+let ROOMS = [], CUR_ROOM = null;
 
 async function aiInit() {
   try {
@@ -1239,12 +1241,11 @@ async function aiInit() {
 function applyAIState() {
   const b = $("#btn-ai");
   b.hidden = false; b.disabled = !AI.enabled;
-  b.title = AI.enabled ? `AI 도우미 (${AI.provider} · ${AI.model})` : "AI 도우미를 쓰려면 오른쪽 위 설정(톱니)에서 API 키를 입력하세요";
+  b.title = AI.enabled ? `행정보조 김연구 — AI 도우미 (${AI.provider} · ${AI.model})` : "AI 도우미(김연구)를 쓰려면 오른쪽 위 설정(톱니)에서 API 키를 입력하세요";
   $("#report-box").hidden = !AI.enabled;
   $("#ai-model").textContent = AI.enabled ? `${AI.provider} · ${AI.model}` : "";
 }
 $$(".chip-ex").forEach(c => c.addEventListener("click", () => { $("#ai-input").value = c.textContent; $("#ai-input").focus(); }));
-let CHAT_TURN = 0;
 
 // ---- 채팅 패널 ----
 function toggleDrawer(open) {
@@ -1253,7 +1254,7 @@ function toggleDrawer(open) {
   document.body.classList.toggle("ai-open", !d.hidden);
   if (!d.hidden && !$("#rep-out").dataset.raw) { $("#rep-fund").value = $("#dash-fund").value; $("#rep-year").value = $("#dash-year").value; $("#rep-month").value = $("#dash-month").value || ""; }
   $("#btn-ai").setAttribute("aria-expanded", String(!d.hidden));
-  if (!d.hidden) $("#ai-input").focus();
+  if (!d.hidden) { loadRooms(); $("#ai-input").focus(); }
 }
 function addMsg(role, text, cls = "") {
   const el = document.createElement("div");
@@ -1263,9 +1264,68 @@ function addMsg(role, text, cls = "") {
   $("#ai-log").scrollTop = $("#ai-log").scrollHeight;
   return el;
 }
+function addNote(text) {  // 제안 처리 알림: 작은 글씨 한 줄
+  const el = document.createElement("div"); el.className = "ai-note"; el.textContent = text; $("#ai-log").appendChild(el);
+}
+function addCalls(calls) {  // 근거 확인용: 실행된 조회 도구 한 줄
+  if (!calls?.length) return;
+  const c = document.createElement("div"); c.className = "ai-calls";
+  c.textContent = "조회: " + calls.map(x => `${x.tool}(${Object.entries(x.input || {}).filter(([, v]) => v !== "" && v != null).map(([k, v]) => `${k}=${v}`).join(", ")})${x.error ? " (오류)" : ""}`).join(" · ");
+  $("#ai-log").appendChild(c);
+}
+function clearLog() { $$("#ai-log .msg, #ai-log .ai-calls, #ai-log .ai-note, #ai-log .toolbar-note").forEach(m => m.remove()); }
+function roomLabel(r) { return `${r.kept ? "[보관] " : ""}${r.title || "(새 대화)"}`; }
+function renderRooms() {
+  const sel = $("#ai-room");
+  sel.innerHTML = ROOMS.map(r => `<option value="${r.id}"${r.id === CUR_ROOM ? " selected" : ""}>${esc(roomLabel(r))}${r.count ? ` · ${r.count}` : ""}</option>`).join("") || '<option value="">(대화 없음 — 질문하면 새 방이 생깁니다)</option>';
+  const cur = ROOMS.find(r => r.id === CUR_ROOM);
+  $("#ai-room-keep").textContent = cur?.kept ? "보관 해제" : "보관";
+  ["#ai-room-rename", "#ai-room-keep", "#ai-room-del"].forEach(id => { $(id).disabled = !cur; });
+}
+async function loadRooms(selectId) {
+  try { ROOMS = await api("GET", "/api/chats"); } catch (e) { ROOMS = []; }
+  if (selectId !== undefined) CUR_ROOM = selectId;
+  if (!ROOMS.some(r => r.id === CUR_ROOM)) CUR_ROOM = ROOMS[0]?.id ?? null;
+  renderRooms();
+  await showRoom(CUR_ROOM);
+}
+async function showRoom(id) {
+  CUR_ROOM = id; clearLog();
+  if (!id) return;
+  let msgs = [];
+  try { msgs = await api("GET", `/api/chats/${id}/messages`); } catch (e) { addMsg("assistant", "대화를 불러오지 못했습니다: " + e.message, "error"); return; }
+  msgs.forEach(m => {
+    if (m.note) { addNote(m.content); return; }
+    if (m.role === "user") { addMsg("user", m.content); return; }
+    const el = addMsg("assistant", ""); el.innerHTML = mdToHtml(m.content || "(제안만 생성)"); el.classList.add("md");
+    addCalls(m.calls);
+    (m.proposals || []).forEach(p => renderProposal(p, { past: true }));  // 지난 턴의 제안: 상태만, 버튼 없음
+  });
+  $("#ai-log").scrollTop = $("#ai-log").scrollHeight;
+}
 $("#btn-ai").addEventListener("click", () => toggleDrawer());
 $("#ai-close").addEventListener("click", () => toggleDrawer(false));
-$("#ai-clear").addEventListener("click", () => { CHAT.length = 0; $$("#ai-log .msg").forEach(m => m.remove()); });
+$("#ai-room").addEventListener("change", e => showRoom(Number(e.target.value) || null).then(renderRooms));
+$("#ai-room-new").addEventListener("click", () => { if (CHAT_BUSY) return; CUR_ROOM = null; clearLog(); renderRooms(); $("#ai-input").focus(); });  // 방은 첫 질문 때 만든다
+$("#ai-room-rename").addEventListener("click", async () => {
+  const cur = ROOMS.find(r => r.id === CUR_ROOM); if (!cur) return;
+  const name = await confirmDlg({ title: "대화 이름 변경", body: "", verb: "변경", input: { label: "이름", value: cur.title, required: true } });
+  if (!name || name === true) return;
+  try { await api("PATCH", `/api/chats/${cur.id}`, { title: name }); await loadRooms(cur.id); } catch (e) { showAlert(e.message, "error"); }
+});
+$("#ai-room-keep").addEventListener("click", async () => {
+  const cur = ROOMS.find(r => r.id === CUR_ROOM); if (!cur) return;
+  try { await api("PATCH", `/api/chats/${cur.id}`, { kept: !cur.kept }); await loadRooms(cur.id); showAlert(cur.kept ? "보관을 해제했습니다. 마지막 메시지 7일 뒤 자동 삭제됩니다." : "보관했습니다. 자동 삭제되지 않습니다.", "ok"); } catch (e) { showAlert(e.message, "error"); }
+});
+$("#ai-room-del").addEventListener("click", async () => {
+  const cur = ROOMS.find(r => r.id === CUR_ROOM); if (!cur) return;
+  if (!await confirmDlg({ title: "대화 삭제", body: `"${roomLabel(cur)}" 대화를 지웁니다. 되돌릴 수 없습니다.`, verb: "삭제", danger: true })) return;
+  try { await api("DELETE", `/api/chats/${cur.id}`); await loadRooms(); } catch (e) { showAlert(e.message, "error"); }
+});
+async function chatNote(text) {  // 제안 처리 결과를 대화에 남긴다 (모델 이력에도 포함)
+  addNote(text);
+  if (CUR_ROOM) { try { await api("POST", `/api/chats/${CUR_ROOM}/notes`, { content: text }); } catch { } }
+}
 $("#ai-input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#ai-form").requestSubmit(); } });
 $("#ai-form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -1273,37 +1333,31 @@ $("#ai-form").addEventListener("submit", async e => {
   if (!q || CHAT_BUSY) return;
   CHAT_BUSY = true;
   $("#ai-input").value = "";
-  addMsg("user", q);
-  const qIdx = CHAT.push({ role: "user", content: q }) - 1;
+  const mine = addMsg("user", q);
   const pending = addMsg("assistant", "답변 생성 중… (필요한 범위를 장부에서 조회합니다)", "pending");
   $("#ai-send").disabled = true; $("#ai-input").disabled = true;
-  CHAT_TURN++;
   try {
-    const r = await api("POST", "/api/ai/chat", { messages: CHAT.slice(-24), turn: CHAT_TURN });
+    if (!CUR_ROOM) { const room = await api("POST", "/api/chats", {}); CUR_ROOM = room.id; }
+    const r = await api("POST", `/api/chats/${CUR_ROOM}/messages`, { content: q });
     pending.innerHTML = mdToHtml(r.answer || "(제안만 생성)"); pending.classList.remove("pending"); pending.classList.add("md");  // 답변의 표·굵게·목록을 렌더링 (mdToHtml 은 먼저 이스케이프)
-    CHAT.push({ role: "assistant", content: r.answer || "(제안 생성)" });
-    if (r.calls?.length) {  // 근거 확인용: 이번 답변에 실행된 조회 도구 한 줄
-      const c = document.createElement("div"); c.className = "ai-calls";
-      c.textContent = "조회: " + r.calls.map(x => `${x.tool}(${Object.entries(x.input || {}).filter(([, v]) => v !== "" && v != null).map(([k, v]) => `${k}=${v}`).join(", ")})${x.error ? " (오류)" : ""}`).join(" · ");
-      $("#ai-log").appendChild(c);
-    }
-    (r.proposals || []).forEach(renderProposal);
-    if (r.usage) { const u = document.createElement("div"); u.className = "toolbar-note"; u.style.alignSelf = "flex-start"; u.textContent = `이번 질문 입력 약 ${(r.usage.input || 0).toLocaleString()} 토큰${r.usage.cached ? ` (캐시 ${(r.usage.cached).toLocaleString()})` : ""}`; $("#ai-log").appendChild(u); }
+    addCalls(r.calls);
+    (r.proposals || []).forEach(p => renderProposal(p));
+    if (r.usage?.input) { const u = document.createElement("div"); u.className = "toolbar-note"; u.style.alignSelf = "flex-start"; u.textContent = `이번 질문 입력 약 ${(r.usage.input || 0).toLocaleString()} 토큰${r.usage.cached ? ` (캐시 ${(r.usage.cached).toLocaleString()})` : ""}`; $("#ai-log").appendChild(u); }
+    if (r.chat) { const i = ROOMS.findIndex(x => x.id === r.chat.id); if (i >= 0) ROOMS[i] = r.chat; else ROOMS.unshift(r.chat); ROOMS.sort((x, y) => (y.updated || "").localeCompare(x.updated || "")); renderRooms(); }
   } catch (err) {
     pending.textContent = "답변을 받지 못했습니다: " + err.message; pending.className = "msg error";
     const rb = document.createElement("button"); rb.type = "button"; rb.className = "btn btn-sm retry"; rb.textContent = "다시 보내기";
-    rb.addEventListener("click", () => { $("#ai-input").value = q; pending.remove(); $("#ai-form").requestSubmit(); });
+    rb.addEventListener("click", () => { $("#ai-input").value = q; pending.remove(); mine.remove(); $("#ai-form").requestSubmit(); });
     pending.appendChild(rb);
-    CHAT.splice(qIdx, 1);
     $("#ai-input").value = q;
   } finally { CHAT_BUSY = false; $("#ai-send").disabled = false; $("#ai-input").disabled = false; $("#ai-input").focus(); }
 });
 
 // ---- 거래 제안 카드 (사용자 확인·수정 후 저장) ----
 const PROPOSAL_LABEL = { propose_exec: "집행 추가", propose_req: "품의 추가", propose_deposit: "적립금 기록", propose_update: "행 수정", propose_req_to_exec: "품의→집행 전환", propose_memo: "메모 저장" };
-function renderProposal(p) {
+function renderProposal(p, opts = {}) {
   const card = document.createElement("div");
-  card.className = "msg assistant proposal";
+  card.className = "msg assistant proposal" + (opts.past ? " past" : "");
   const inp = p.input || {};
   const KIND_KO = { exec: "집행", req: "품의", deposit: "적립금", budget: "예산변동", funds: "재원" };
   const rowDesc = (kind, row) => { const r = DATA[kind]?.find(x => x._row === row); if (!r) return `(${KIND_KO[kind] || kind} 행 ${row} — 현재 목록에 없음, 새로고침 필요)`; return [r["거래번호"] || r["품의번호"] || r["재원코드"] || `${r["일자"] || ""} ${r["거래처"] || ""}`, r["거래처"], r["금액"] != null ? fmt(r["금액"]) + "원" : "", (r["적요"] || "").slice(0, 20)].filter(Boolean).join(" · "); };
@@ -1315,10 +1369,11 @@ function renderProposal(p) {
   else if (p.tool === "propose_req_to_exec") detail = `품의 ${rowDesc("req", inp.row)} 를 집행으로 전환` + (inp.reason ? `\n이유: ${inp.reason}` : "");
   else detail = Object.entries(inp).filter(([, v]) => v !== "" && v != null).map(([k, v]) => `${k}: ${k === "금액" ? fmt(v) + "원" : v}`).join("\n");
   card.innerHTML = `<div class="proposal-head">제안 ${esc(p.id)} · ${esc(PROPOSAL_LABEL[p.tool] || p.tool)}</div><div class="proposal-body">${esc(detail)}</div>
-    <div class="proposal-actions"><button type="button" class="btn btn-sm btn-primary" data-pact="review" title="입력 폼이 열립니다. 저장 전에는 장부가 바뀌지 않습니다">검토 후 저장</button><button type="button" class="btn btn-sm" data-pact="skip">무시</button></div>`;
+    <div class="proposal-actions">${opts.past ? '<span class="proposal-done muted">지난 턴의 제안 — 처리 결과는 아래 알림 참고, 다시 적용하려면 새로 요청</span>' : '<button type="button" class="btn btn-sm btn-primary" data-pact="review" title="입력 폼이 열립니다. 저장 전에는 장부가 바뀌지 않습니다">검토 후 저장</button><button type="button" class="btn btn-sm" data-pact="skip">무시</button>'}</div>`;
   $("#ai-log").appendChild(card); $("#ai-log").scrollTop = $("#ai-log").scrollHeight;
+  if (opts.past) return;
   const done = (text) => { card.querySelector(".proposal-actions").innerHTML = `<span class="proposal-done">${esc(text)}</span>`; };
-  card.querySelector("[data-pact=skip]").addEventListener("click", () => { done("무시함"); CHAT.push({ role: "user", content: `[알림] 제안 ${p.id} 는 사용자가 무시했습니다.` }); });
+  card.querySelector("[data-pact=skip]").addEventListener("click", () => { done("무시함"); chatNote(`[알림] 제안 ${p.id} 는 사용자가 무시했습니다.`); });
   card.querySelector("[data-pact=review]").addEventListener("click", async () => {
     try {
       if (p.tool === "propose_req_to_exec") {
@@ -1326,7 +1381,7 @@ function renderProposal(p) {
         if (!r) throw new Error("해당 품의 행을 찾을 수 없습니다. 새로고침 후 다시 시도하세요.");
         const rec = await toExec(inp.row);  // 전환 폼에서 저장해야 반영
         if (!rec) return;  // 취소: 카드 유지
-        done(`처리됨 (${rec["거래번호"]})`); CHAT.push({ role: "user", content: `[알림] 제안 ${p.id} 를 사용자가 확인하여 품의 ${r["품의번호"]} 를 집행 ${rec["거래번호"]} 로 전환했습니다.` });
+        done(`처리됨 (${rec["거래번호"]})`); chatNote(`[알림] 제안 ${p.id} 를 사용자가 확인하여 품의 ${r["품의번호"]} 를 집행 ${rec["거래번호"]} 로 전환했습니다.`);
         return;
       }
       let kind, row = null, preset = {};
@@ -1341,7 +1396,7 @@ function renderProposal(p) {
       DLG_ON_SAVED = (saved) => {
         const no = saved["거래번호"] || saved["품의번호"] || (saved["종류"] ? `메모 ${saved["종류"]}${saved["대상"] ? " " + saved["대상"] : ""}` : `행 ${saved._row}`);
         done(`저장됨 (${no})`);
-        CHAT.push({ role: "user", content: `[알림] 제안 ${p.id} 를 사용자가 검토·수정 후 저장했습니다: ${no}` });
+        chatNote(`[알림] 제안 ${p.id} 를 사용자가 검토·수정 후 저장했습니다: ${no}`);
       };
       openForm(kind, row, preset);
       if (p.tool === "propose_update") {
@@ -1479,6 +1534,8 @@ async function openSettings() {
     if (typeof requestSettingsOpen === "function") requestSettingsOpen();
     refreshDriveStatus();
     memoRender();
+    $("#s-users").hidden = !ME.is_master;
+    if (ME.is_master) usersRender();
     $("#dlg-settings").showModal();
   } catch (e) { showAlert("설정을 불러오지 못했습니다: " + e.message, "error"); }
 }
@@ -1519,10 +1576,49 @@ $("#s-clear-key").addEventListener("click", async () => {
 });
 
 
+// ---------- 로그인 허용 계정 (설정 패널 · 마스터만 · /api/users) ----------
+const ROLE_LABELS = { master: "마스터", manager: "관리자", staff: "담당자", researcher: "연구원" };  // docs/권한_설계_2026-10-20.md
+function usersMsg(text, warn) { const m = $("#users-msg"); if (!m) return; m.textContent = text || ""; m.classList.toggle("warn", !!warn); }
+async function usersRender() {
+  const box = $("#users-list"); if (!box) return;
+  try {
+    const r = await api("GET", "/api/users");
+    const rows = r.users || [];
+    box.innerHTML = `<table><thead><tr><th>이메일</th><th>권한</th><th>이름</th><th>추가일</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(u => `<tr data-email="${esc(u.email)}"><td>${esc(u.email)}</td><td>${esc(ROLE_LABELS[u.role] || u.role || "")}</td><td>${u.name ? esc(u.name) : '<span class="muted" title="아직 로그인하지 않음">—</span>'}</td><td>${u.master ? '<span class="muted">(.env)</span>' : esc((u.added_at || "").slice(0, 10))}</td><td class="actions">${u.master || u.email === ME.email ? "" : `<button type="button" class="btn btn-sm btn-ghost" data-user-del="${esc(u.email)}" aria-label="${esc(u.email)} 삭제">삭제</button>`}</td></tr>`).join("")}</tbody></table>`;
+    const add = $("#users-add"), inp = $("#users-email");
+    add.disabled = inp.disabled = $("#users-role").disabled = $("#users-name").disabled = !r.db;
+    usersMsg(r.db ? "" : "xlsx 저장소에서는 app/.env 의 LEDGER_ALLOWED_EMAILS 만 씁니다.", !r.db);
+  } catch (e) { box.innerHTML = `<div class="empty">목록을 불러오지 못했습니다: ${esc(e.message)}</div>`; }
+}
+async function usersAdd() {
+  const inp = $("#users-email"), role = $("#users-role"), nm = $("#users-name"), email = inp.value.trim();
+  if (!email) { usersMsg("이메일을 입력하세요.", true); inp.focus(); return; }
+  if (!role.value) { usersMsg("권한을 고르세요.", true); role.focus(); return; }
+  try {
+    const r = await api("POST", "/api/users", { email, role: role.value, name: nm.value.trim() });
+    if (r.added) { inp.value = ""; nm.value = ""; role.value = ""; }
+    await usersRender();
+    if (r.added) usersMsg(`${r.email} 을(를) 추가했습니다. 이 계정으로 구글 로그인하면 바로 들어올 수 있습니다.`); else usersMsg(r.message, true);
+    inp.focus();
+  } catch (e) { usersMsg(e.message, true); inp.focus(); }
+}
+$("#users-add")?.addEventListener("click", usersAdd);
+["#users-email", "#users-name"].forEach(sel => $(sel)?.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); usersAdd(); } }));  // Enter 가 설정 저장(submit)으로 가지 않게
+$("#users-list")?.addEventListener("click", async e => {
+  const b = e.target.closest("[data-user-del]"); if (!b) return;
+  const email = b.dataset.userDel;
+  const ok = await confirmDlg({ title: "허용 계정 삭제", body: `${email}
+
+삭제하면 이 계정은 다음 요청부터 로그인할 수 없습니다. 이 계정이 작성한 행과 이름은 그대로 남습니다.`, verb: "삭제", danger: true });
+  if (!ok) return;
+  try { await api("DELETE", `/api/users/${encodeURIComponent(email)}`); await usersRender(); usersMsg(`${email} 을(를) 허용 목록에서 지웠습니다.`); }
+  catch (err) { usersMsg(err.message, true); }
+});
+
 // ---------- 메모 (설정 패널 · AI 도우미가 read_memo 로 읽는 장부 밖 지식) ----------
 function memoRender() {
   const box = $("#memo-list"); if (!box) return;
-  $("#dl-대상").innerHTML = [...new Set([...DATA.funds.map(f => f["재원코드"]), ...DATA.vendor.map(v => v["거래처명"]), ...DATA.exec.map(r => r["거래처"])].filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join("");
+  $("#dl-대상").innerHTML = [...new Set([...DATA.funds.map(f => f["재원코드"]), ...DATA.vendor.map(v => v["거래처명"]), ...DATA.exec.map(r => r["거래처"]), ...DATA.meta.budget_items, ...DATA.exec.flatMap(r => [r["세목"], r["세세목"]])].filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join("");
   const rows = [...(DATA.memo || [])].sort((a, b) => (a["종류"] || "").localeCompare(b["종류"] || "") || (a["대상"] || "").localeCompare(b["대상"] || "") || a._row - b._row);
   box.innerHTML = rows.length ? `<table><thead><tr><th>종류</th><th>대상</th><th>내용</th><th>작성일</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r["종류"])}</td><td>${esc(r["대상"] || "-")}</td><td class="wrap">${esc(r["내용"])}${r["비고"] ? `<div class="muted">${esc(r["비고"])}</div>` : ""}</td><td>${esc(r["작성일"] || "")}</td><td class="actions"><button type="button" class="btn btn-sm" data-memo-edit="${r._row}">수정</button> <button type="button" class="btn btn-sm btn-ghost" data-memo-del="${r._row}">삭제</button></td></tr>`).join("")}</tbody></table>`
     : '<p class="empty">메모가 없습니다. [메모 추가]로 재원·거래처 특이사항이나 규정을 적어 두세요.</p>';

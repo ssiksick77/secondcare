@@ -32,7 +32,7 @@ def find_row(pg, item):
 
 def main() -> int:
     ck = Check()
-    with Server("ui") as sv, sync_playwright() as pw:
+    with Server("ui", extra_env={"LEDGER_AI_FAKE": "1"}) as sv, sync_playwright() as pw:  # 채팅방 검사: 모델 없이 가짜 답
         b = pw.chromium.launch()
         pg = b.new_page(viewport={"width": 1366, "height": 900})
         errs = []
@@ -283,14 +283,42 @@ def main() -> int:
         pg.evaluate("document.querySelector('#f-예산목').value = ''"); pg.click("#dlg-suggest"); pg.wait_for_timeout(600)
         ck("추천: 빈 예산목은 채움", pg.evaluate("document.querySelector('#f-예산목').value === DATA.meta.budget_items[1]"))
         pg.evaluate("$('#dlg').dataset.initial = ''; $('#dlg').close()")
-        # ---- 채팅 답변의 마크다운(표·굵게) 렌더링 + '조회' 줄 (가짜 /api/ai/chat) ----
-        pg.evaluate("toggleDrawer(true)"); pg.fill("#ai-input", "재원 목록 표로"); pg.press("#ai-input", "Enter")
-        for _ in range(20):
-            if pg.evaluate("!!document.querySelector('#ai-log .msg.assistant.md table')"):
+        # ---- 채팅방 (LEDGER_AI_FAKE=1: 모델 없이 가짜 답): 질문 → 표 렌더링·조회 줄 → 새로고침 후 이력 → 새 대화 → 삭제 → 고지문 ----
+        pg.evaluate("toggleDrawer(true)"); pg.wait_for_timeout(500)
+        ck("채팅: 고지문 표시", "마스터 계정으로 전송될 수 있습니다" in pg.inner_text("#ai-notice"))
+        ck("채팅: 처음엔 방 없음", pg.evaluate("document.querySelector('#ai-room').options.length === 1 && document.querySelector('#ai-room').value === ''"))
+        pg.fill("#ai-input", "첫 질문입니다"); pg.press("#ai-input", "Enter")
+        for _ in range(30):
+            if "(가짜 답변) 첫 질문입니다" in pg.inner_text("#ai-log"):
                 break
             pg.wait_for_timeout(200)
-        ck("채팅: 마크다운 표·굵게 렌더링", pg.evaluate("(() => { const m = document.querySelector('#ai-log .msg.assistant.md'); return !!m && m.querySelectorAll('table tbody tr').length === 2 && !!m.querySelector('b') && !m.textContent.includes('|'); })()"))
-        ck("채팅: 조회 줄", "조회: list_funds()" in pg.inner_text("#ai-log"))
+        ck("채팅: 답변·마크다운 표·조회 줄", pg.evaluate("(() => { const m = document.querySelector('#ai-log .msg.assistant.md'); return !!m && m.querySelectorAll('table tbody tr').length === 1 && !m.textContent.includes('|'); })()") and "조회: list_funds()" in pg.inner_text("#ai-log"))
+        ck("채팅: 방이 생기고 제목은 첫 질문", pg.evaluate("[...document.querySelector('#ai-room').options].map(o => o.textContent)") == ["첫 질문입니다 · 2"])
+        pg.reload(); pg.wait_for_timeout(900)
+        pg.evaluate("toggleDrawer(true)")
+        for _ in range(30):
+            if "(가짜 답변) 첫 질문입니다" in pg.inner_text("#ai-log"):
+                break
+            pg.wait_for_timeout(200)
+        ck("채팅: 새로고침 뒤 이력 복원", "첫 질문입니다" in pg.inner_text("#ai-log .msg.user") and "(가짜 답변) 첫 질문입니다" in pg.inner_text("#ai-log"))
+        pg.click("#ai-room-new"); pg.wait_for_timeout(200)
+        ck("채팅: 새 대화는 빈 화면", pg.evaluate("document.querySelectorAll('#ai-log .msg').length === 0"))
+        pg.fill("#ai-input", "둘째 질문"); pg.press("#ai-input", "Enter")
+        for _ in range(30):
+            if "(가짜 답변) 둘째 질문" in pg.inner_text("#ai-log"):
+                break
+            pg.wait_for_timeout(200)
+        ck("채팅: 방 2개, 최근 방이 앞", pg.evaluate("[...document.querySelector('#ai-room').options].map(o => o.textContent)") == ["둘째 질문 · 2", "첫 질문입니다 · 2"])
+        pg.click("#ai-room-keep"); pg.wait_for_timeout(500)
+        ck("채팅: 보관 표시", pg.evaluate("document.querySelector('#ai-room').selectedOptions[0].textContent").startswith("[보관] ") and pg.inner_text("#ai-room-keep") == "보관 해제")
+        pg.click("#ai-room-del"); pg.wait_for_timeout(300)
+        ck("채팅: 삭제 확인 대화상자", pg.evaluate("document.querySelector('#dlg-confirm').open"))
+        pg.click("#confirm-ok")
+        for _ in range(20):
+            if pg.evaluate("document.querySelector('#ai-room').options.length === 1"):
+                break
+            pg.wait_for_timeout(200)
+        ck("채팅: 삭제 뒤 남은 방 하나가 열림", pg.evaluate("[...document.querySelector('#ai-room').options].map(o => o.textContent)") == ["첫 질문입니다 · 2"] and "(가짜 답변) 첫 질문입니다" in pg.inner_text("#ai-log"))
         ck("페이지 오류 없음", not errs, errs)
 
         # ---- 로그인: 상단 계정 표시, 로그인 화면 구조 ----
@@ -305,6 +333,40 @@ def main() -> int:
                 cells = pg.evaluate("[...document.querySelectorAll('#voucher-sheet .vc-sign td')].map(td => td.textContent.trim())")
                 ck("결의서 담당 칸: 작성자 이름", cells[:1] == ["검사자"] and "오인선" in cells, cells)
         ck("상단: 로그아웃 버튼", pg.is_visible("#btn-logout"))
+        # ---- 허용 계정 관리 (설정 패널 · 마스터만) ----
+        pg.evaluate("document.querySelectorAll('dialog[open]').forEach(d => d.close())")
+        pg.click("#btn-settings"); pg.wait_for_timeout(800)
+        ck("허용 계정: 마스터에게 묶음 표시, .env 계정은 마스터·삭제 버튼 없음",
+           pg.is_visible("#s-users") and sv.TEST_EMAIL in pg.inner_text("#users-list") and "마스터" in pg.inner_text("#users-list")
+           and not pg.query_selector(f"#users-list [data-user-del='{sv.TEST_EMAIL}']"), pg.inner_text("#users-list"))
+        if sv.mode == "db":
+            pg.fill("#users-email", "New.Person@Example.com"); pg.press("#users-email", "Enter"); pg.wait_for_timeout(600)
+            ck("허용 계정: 권한 없이 추가하면 안내", "권한" in pg.inner_text("#users-msg") and "new.person" not in pg.inner_text("#users-list"), pg.inner_text("#users-msg"))
+            pg.select_option("#users-role", "researcher"); pg.press("#users-email", "Enter"); pg.wait_for_timeout(800)
+            ck("허용 계정: Enter 로 추가, 소문자, 권한 열, 이름 '—', 설정 패널 그대로",
+               pg.evaluate("document.querySelector('#dlg-settings').open") and "new.person@example.com" in pg.inner_text("#users-list")
+               and "연구원" in pg.inner_text("#users-list") and "—" in pg.inner_text("#users-list") and "추가했습니다" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            ck("허용 계정: 추가 뒤 입력칸 비움", pg.evaluate("$('#users-email').value + $('#users-role').value + $('#users-name').value") == "")
+            pg.fill("#users-email", "named.person@example.com"); pg.select_option("#users-role", "manager"); pg.fill("#users-name", "김관리"); pg.click("#users-add"); pg.wait_for_timeout(800)
+            ck("허용 계정: 이름 포함 추가 → 이름 표시", "김관리" in pg.inner_text("#users-list") and "관리자" in pg.inner_text("#users-list"), pg.inner_text("#users-list"))
+            pg.fill("#users-email", "new.person@example.com"); pg.select_option("#users-role", "staff"); pg.click("#users-add"); pg.wait_for_timeout(600)
+            ck("허용 계정: 중복은 안내만", "이미" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            pg.fill("#users-email", "no-at"); pg.select_option("#users-role", "staff"); pg.click("#users-add"); pg.wait_for_timeout(600)
+            ck("허용 계정: 형식 오류 안내", "형식" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            pg.evaluate("$('#dlg-settings').close()"); pg.reload(); pg.wait_for_timeout(1000)
+            pg.click("#btn-settings"); pg.wait_for_timeout(800)
+            ck("허용 계정: 새로고침 뒤에도 목록에 남음", "new.person@example.com" in pg.inner_text("#users-list"))
+            pg.click("#users-list [data-user-del='new.person@example.com']"); pg.wait_for_timeout(400)
+            pg.click("#dlg-confirm button:has-text('삭제')"); pg.wait_for_timeout(800)
+            ck("허용 계정: 삭제 뒤 목록에서 빠짐", "new.person@example.com" not in pg.inner_text("#users-list") and "지웠습니다" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            pg.click("#users-list [data-user-del='named.person@example.com']"); pg.wait_for_timeout(400)
+            pg.click("#dlg-confirm button:has-text('삭제')"); pg.wait_for_timeout(800)
+            ck("허용 계정: 이름 포함 계정 삭제", "named.person@example.com" not in pg.inner_text("#users-list"))
+        else:
+            ck("허용 계정: xlsx 는 추가 비활성 + .env 안내", pg.evaluate("document.querySelector('#users-add').disabled") and ".env" in pg.inner_text("#users-msg"))
+        pg.evaluate("$('#dlg-settings').close(); ME.is_master = false; openSettings()"); pg.wait_for_timeout(800)
+        ck("허용 계정: 마스터가 아니면 묶음 숨김", pg.evaluate("document.querySelector('#dlg-settings').open") and not pg.is_visible("#s-users"))
+        pg.evaluate("$('#dlg-settings').close()")
         pg.goto(sv.base + "/login?err=denied&email=x%40y.z"); pg.wait_for_timeout(300)
         ck("로그인 화면: 우회 중이면 / 로 이동", pg.url.rstrip("/") == sv.base, pg.url)
         b.close()

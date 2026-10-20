@@ -74,23 +74,83 @@ def create_schema(con: sqlite3.Connection):
     con.execute("CREATE TABLE IF NOT EXISTS changelog (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, "
                 f"{AUTHOR_COL} TEXT, kind TEXT NOT NULL, row_id INTEGER, action TEXT NOT NULL, detail TEXT)")
     con.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', ?)", (SCHEMA_VERSION,))
-    con.execute(USERS_DDL)
+    _ensure_users(con)
     con.commit()
 
 
-# 사용자 이름 (최초 로그인 때 입력, 2026-10-20). author 열의 이메일 → 표시 이름
-USERS_DDL = "CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL)"
+# 사용자 표 (2026-10-20): 최초 로그인 때 입력한 이름 + 로그인 허용 목록.
+#  name: 표시 이름 ('' 이면 아직 로그인 전). allowed: 1 이면 로그인 허용 (.env 의 마스터 계정은 표와 무관하게 항상 허용)
+#  role: manager(관리자) / staff(담당자) / researcher(연구원) — docs/권한_설계_2026-10-20.md 2절. 마스터는 .env 에 있으므로 표에 없다.
+USERS_DDL = ("CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, "
+             "allowed INTEGER NOT NULL DEFAULT 0, added_at TEXT, added_by TEXT, role TEXT)")
+_USERS_NEW_COLS = (("allowed", "INTEGER NOT NULL DEFAULT 0"), ("added_at", "TEXT"), ("added_by", "TEXT"), ("role", "TEXT"))
+ROLES = ("manager", "staff", "researcher")
+
+
+def _ensure_users(con: sqlite3.Connection):
+    """users 표를 만들고, 이름만 있던 옛 표에는 허용 열을 더한다."""
+    con.execute(USERS_DDL)
+    have = {r["name"] for r in con.execute("PRAGMA table_info(users)")}
+    for col, typ in _USERS_NEW_COLS:
+        if col not in have:
+            con.execute(f"ALTER TABLE users ADD COLUMN {col} {typ}")
+    # 역할 열이 생기기 전에 허용된 계정은 담당자로 본다 (설계 문서 2절: 입력하는 사람)
+    con.execute("UPDATE users SET role = 'staff' WHERE allowed = 1 AND (role IS NULL OR role = '')")
+
+
+def _now() -> str:
+    return dt.datetime.now().isoformat(timespec="seconds")
 
 
 def user_names(con: sqlite3.Connection) -> dict[str, str]:
-    con.execute(USERS_DDL)
-    return {r["email"]: r["name"] for r in con.execute("SELECT email, name FROM users")}
+    _ensure_users(con)
+    return {r["email"]: r["name"] for r in con.execute("SELECT email, name FROM users WHERE name != ''")}
 
 
 def set_user_name(con: sqlite3.Connection, email: str, name: str):
-    con.execute(USERS_DDL)
+    _ensure_users(con)
     con.execute("INSERT INTO users (email, name, created_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET name = excluded.name",
-                (email.lower(), name, dt.datetime.now().isoformat(timespec="seconds")))
+                (email.lower(), name, _now()))
+
+
+def allowed_emails(con: sqlite3.Connection) -> set[str]:
+    _ensure_users(con)
+    return {r["email"] for r in con.execute("SELECT email FROM users WHERE allowed = 1")}
+
+
+def allowed_users(con: sqlite3.Connection) -> list[dict]:
+    """허용된 계정 목록 (추가한 순)."""
+    _ensure_users(con)
+    return [dict(r) for r in con.execute(
+        "SELECT email, name, role, added_at, added_by FROM users WHERE allowed = 1 ORDER BY added_at, email")]
+
+
+def user_role(con: sqlite3.Connection, email: str) -> str | None:
+    _ensure_users(con)
+    r = con.execute("SELECT role FROM users WHERE email = ? AND allowed = 1", (email.lower(),)).fetchone()
+    return r["role"] if r else None
+
+
+def allow_user(con: sqlite3.Connection, email: str, by: str | None, role: str, name: str = "") -> bool:
+    """허용 목록에 넣는다 (역할 필수, 이름 선택). 이미 허용된 계정이면 False (바꾸지 않음).
+    이름을 주면 그 사람의 표시 이름이 된다 (처음 로그인 때 이름을 묻지 않는다)."""
+    _ensure_users(con)
+    email = email.lower()
+    r = con.execute("SELECT allowed FROM users WHERE email = ?", (email,)).fetchone()
+    if r and r["allowed"]:
+        return False
+    con.execute("INSERT INTO users (email, name, created_at, allowed, added_at, added_by, role) VALUES (?, ?, ?, 1, ?, ?, ?) "
+                "ON CONFLICT(email) DO UPDATE SET allowed = 1, added_at = excluded.added_at, added_by = excluded.added_by, "
+                "role = excluded.role, name = CASE WHEN excluded.name != '' THEN excluded.name ELSE users.name END",
+                (email, name or "", _now(), _now(), by, role))
+    return True
+
+
+def disallow_user(con: sqlite3.Connection, email: str) -> bool:
+    """허용을 끈다 (행과 이름은 남긴다: 장부 작성자 이름 표시용). 허용 상태가 아니었으면 False."""
+    _ensure_users(con)
+    cur = con.execute("UPDATE users SET allowed = 0 WHERE email = ? AND allowed = 1", (email.lower(),))
+    return cur.rowcount > 0
 
 
 @contextlib.contextmanager

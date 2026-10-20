@@ -26,7 +26,7 @@
     <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
   </svg>
 </button>
-  <button type="button" class="btn btn-primary" id="btn-ai" aria-controls="ai-drawer" aria-expanded="false" hidden>AI 도우미</button>
+  <button type="button" class="btn btn-primary" id="btn-ai" aria-controls="ai-drawer" aria-expanded="false" hidden>김연구 호출하기</button>
 </header>
 
 <nav class="tabs main" id="main-tabs" aria-label="주요 메뉴">
@@ -375,12 +375,18 @@
   <div class="drawer-body" id="rd-body"></div>
 </aside>
 
-<aside id="ai-drawer" class="drawer" aria-label="AI 도우미" hidden>
+<aside id="ai-drawer" class="drawer" aria-label="행정보조 김연구 (AI 도우미)" hidden>
   <div class="drawer-head">
-    <strong>AI 도우미</strong>
+    <strong>행정보조 김연구</strong>
     <span class="drawer-model" id="ai-model"></span>
-    <button type="button" class="btn btn-sm" id="ai-clear">대화 지우기</button>
     <button type="button" class="btn btn-sm btn-x" id="ai-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="ai-rooms" role="group" aria-label="대화 목록">
+    <select id="ai-room" aria-label="대화 선택"></select>
+    <button type="button" class="btn btn-sm btn-primary" id="ai-room-new" title="새 대화를 시작합니다 (첫 질문 때 방이 생깁니다)">새 대화</button>
+    <button type="button" class="btn btn-sm" id="ai-room-rename" title="대화 이름 변경">이름</button>
+    <button type="button" class="btn btn-sm" id="ai-room-keep" title="보관한 대화는 자동 삭제되지 않습니다">보관</button>
+    <button type="button" class="btn btn-sm btn-ghost" id="ai-room-del" title="대화 삭제 (되돌릴 수 없음)">삭제</button>
   </div>
   <details id="report-box" class="ai-report" hidden>
     <summary>보고서 초안 생성</summary>
@@ -405,7 +411,9 @@
       <p style="margin:0 0 6px"><b>조회</b> 예: <button type="button" class="chip-ex">QA01 연구활동비 지금 얼마 쓸 수 있어?</button> <button type="button" class="chip-ex">모니터 전에 샀을 때 얼마였지?</button> <button type="button" class="chip-ex">회의비는 어떤 증빙 필요해?</button> <button type="button" class="chip-ex">오늘 달러 환율?</button></p>
       <p style="margin:0 0 6px"><b>입력 제안</b> 예: <button type="button" class="chip-ex">5/20 ABC식당 회의 식대 85,000원 집행 기록해줘</button> <button type="button" class="chip-ex">품의 2026-AI01-001 집행으로 전환해줘</button></p>
       <p style="margin:0 0 6px">제안은 카드로 표시되고 "검토 후 저장"을 눌러야 장부에 반영됩니다. 금액·날짜는 꼭 확인하세요.</p>
-      <p style="margin:0">AI 는 재원 목록 요약만 보고, 나머지는 필요한 범위를 도구로 조회합니다 (답변 아래 '조회' 줄). 규정·특이사항은 설정의 메모를 참고하며, 대화 중 메모 제안도 승인해야 저장됩니다. 긴 대화는 "대화 지우기" 후 새로 시작하세요.</p>
+      <p style="margin:0 0 6px">김연구는 재원 목록 요약만 보고, 나머지는 필요한 범위를 도구로 조회합니다 (답변 아래 '조회' 줄). 규정·특이사항은 설정의 메모를 참고하며, 대화 중 메모 제안도 승인해야 저장됩니다.</p>
+      <p style="margin:0 0 6px">대화는 사용자별로 서버에 저장되고 본인만 볼 수 있습니다. 보관하지 않은 대화는 마지막 메시지 7일 뒤 자동 삭제됩니다. 주제가 바뀌면 "새 대화"로 나누세요.</p>
+      <p class="ai-notice" style="margin:0" id="ai-notice">이용 안내: 부적절한 사용이 감지된 대화는 마스터 계정으로 전송될 수 있습니다.</p>
     </div>
   </div>
   <form class="drawer-foot" id="ai-form">
@@ -579,9 +587,21 @@
         <label class="wide" for="s-org">기관명 (결의서·발주서 머리글) <small>(비우면 분당서울대학교병원 의료인공지능센터)</small><input id="s-org" name="LEDGER_ORG" type="text" autocomplete="off" maxlength="80"></label>
       </div>
     </fieldset>
+    <fieldset class="wide s-group" id="s-users" style="margin:0 0 14px" hidden>
+      <legend>로그인 허용 계정 (마스터 전용)</legend>
+      <p class="toolbar-note" style="margin:4px 0 8px">여기에 적은 구글 계정만 로그인할 수 있습니다. 마스터 계정은 <code>app/.env</code>의 <code>LEDGER_ALLOWED_EMAILS</code>에 있어 여기서 지울 수 없습니다. 권한: 관리자 = 열람·결재, 담당자 = 장부 입력·신청 처리, 연구원 = 본인 신청 (서버 검사는 다음 단계). 이름을 비우면 그 사람이 처음 로그인할 때 직접 적습니다. 추가·삭제는 바로 적용됩니다(아래 저장 버튼과 무관).</p>
+      <div id="users-list" class="memo-list" aria-live="polite"></div>
+      <div class="users-add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+        <label for="users-email" style="flex:1 1 220px;margin:0;display:flex;flex-direction:column;gap:2px">추가할 계정 <small>(구글 이메일)</small><input id="users-email" type="email" autocomplete="off" inputmode="email" placeholder="name@example.com"></label>
+        <label for="users-role" style="flex:0 1 130px;margin:0;display:flex;flex-direction:column;gap:2px">권한 <small>(필수)</small><select id="users-role" required><option value="">선택</option><option value="staff">담당자</option><option value="manager">관리자</option><option value="researcher">연구원</option></select></label>
+        <label for="users-name" style="flex:0 1 150px;margin:0;display:flex;flex-direction:column;gap:2px">이름 <small>(선택)</small><input id="users-name" type="text" autocomplete="off" maxlength="20" placeholder="홍길동"></label>
+        <button type="button" class="btn btn-sm" id="users-add">추가</button>
+      </div>
+      <p class="toolbar-note" id="users-msg" aria-live="polite" style="margin:6px 0 0"></p>
+    </fieldset>
     <fieldset class="wide s-group" id="s-memo" style="margin:0 0 14px">
       <legend>메모 (AI 도우미가 참고하는 장부 밖 지식)</legend>
-      <p class="toolbar-note" style="margin:4px 0 8px">재원·거래처별 특이사항과 일반 규정(예: 어떤 결제에 어떤 증빙이 필요한가)을 적어 두면 AI 도우미가 답할 때 참고합니다. 장부의 '메모' 시트에 저장되며, AI 가 대화 중 제안한 메모도 승인해야 저장됩니다.</p>
+      <p class="toolbar-note" style="margin:4px 0 8px">재원·거래처별 특이사항, 비세목(예산목·세목·세세목) 규칙, 일반 규정(예: 어떤 결제에 어떤 증빙이 필요한가)을 적어 두면 AI 도우미가 답할 때와 폼의 추천·검증에서 참고합니다. 비세목 메모는 입력 행의 예산목·세목·세세목 중 하나와 대상이 같을 때 적용됩니다. 장부의 '메모' 시트에 저장되며, AI 가 대화 중 제안한 메모도 승인해야 저장됩니다.</p>
       <div id="memo-list" class="memo-list"></div>
       <div style="margin-top:8px"><button type="button" class="btn btn-sm" id="memo-add">메모 추가</button></div>
     </fieldset>

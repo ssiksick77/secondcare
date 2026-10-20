@@ -44,7 +44,14 @@ def effort() -> str:
     return settings.get("LEDGER_EFFORT") or "medium"
 
 
+def fake() -> bool:
+    """LEDGER_AI_FAKE=1: 모델 호출 없이 정해진 답을 돌려준다 (화면 검사 전용, 실제 운영에서는 설정하지 말 것)."""
+    return os.environ.get("LEDGER_AI_FAKE") == "1"
+
+
 def enabled() -> bool:
+    if fake():
+        return True
     if provider() == "openai":
         return bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_BASE_URL"))
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
@@ -238,13 +245,13 @@ def finalize_answer(answer: str, stop: str, proposals: list) -> dict:
 
 
 # ========== 도구 호출 에이전트 (채팅, Anthropic) ==========
-AGENT_SYSTEM = """당신은 Second Care(분당서울대학교병원 의료인공지능센터 연구비 관리 시스템)의 AI 도우미로, 연구비 회계 담당자를 돕습니다. 한국어로 간결하게 답하세요.
+AGENT_SYSTEM = """당신은 Second Care(분당서울대학교병원 의료인공지능센터 연구비 관리 시스템)의 AI 도우미 '행정보조 김연구'입니다. 연구비 회계 담당자를 돕는 행정보조 역할로, 자신을 소개할 때는 "행정보조 김연구"라고 하세요. 한국어로 간결하고 공손하게 답하세요.
 장부(회계대장)는 아래 <summary> 요약만 보입니다. 그 밖의 모든 사실은 도구로 조회해야 합니다. 조회하지 않은 내용은 추측하지 말고, 도구로 확인하거나 모른다고 답하세요.
 
 도구 사용 규칙:
 - 잔액, "얼마 쓸 수 있나" → budget_balance(재원코드, 예산목). 재원코드는 <summary> 의 재원 목록에서 고르고, 사용자가 과제명으로 말하면 코드로 바꿔 부르세요.
 - 품목·장비·거래처 이름으로 "전에 얼마에 샀나", "언제 어느 재원으로 샀나" → search_ledger. 한 건의 상세·진행 상태·증빙·연결 품의 → get_exec(거래번호).
-- 집행 규정, 어떤 증빙이 필요한가, 재원·거래처별 특이사항 → 먼저 read_memo. 메모에 없으면 일반 원칙은 일반 원칙임을 밝히고 담당자 확인을 권하세요.
+- 집행 규정, 어떤 증빙이 필요한가, 재원·거래처별 특이사항, 예산목·세목별 규칙(종류 '비세목') → 먼저 read_memo. 메모에 없으면 일반 원칙은 일반 원칙임을 밝히고 담당자 확인을 권하세요.
 - 환율 → fx_rate. 유럽중앙은행 기준이라 은행 고시 환율과 다를 수 있음을 함께 알리세요.
 - 재원×예산목 집계 표 → get_dashboard. 목록 → list_exec / list_req / list_budget / list_deposit. 태그·거래처 목록 → list_tags / list_vendors.
 - 한 번에 필요한 도구를 여러 개 불러도 됩니다. 결과가 길면 limit 를 줄이거나 조건을 더 주세요.
@@ -389,6 +396,7 @@ def suggest_prompt(rec: dict, kind: str) -> tuple[str, str]:
     budget_rows = [t for t in dash["table"] if t["재원"] == rec.get("재원")]
     system = (
         "회계 입력 보조원입니다. 입력 중인 행을 보고 예산목·세목·태그를 추천하고 이상 징후를 경고하세요.\n"
+        "관련메모는 담당자가 적어 둔 규칙(재원·거래처·비세목·일반)이며 이 행에 해당하는 것만 골라 넣었습니다. 메모와 어긋나는 입력은 경고에 포함하세요.\n"
         f"예산목 목록: {store.BUDGET_ITEMS}\n"
         f"기존 세목 목록: {sorted({r['세목'] for r in data['exec'] if r.get('세목')})[:200]}\n"
         f"태그 목록(센터 내부 계정, 1개만 선택): {[(t['태그명'], t['분류'], t['설명']) for t in data['tags']][:200]}\n"
@@ -397,6 +405,7 @@ def suggest_prompt(rec: dict, kind: str) -> tuple[str, str]:
     user = json.dumps({
         "입력중인행": rec, "종류": "집행" if kind == "exec" else "품의",
         "같은거래처_최근이력": history, "같은금액_최근이력": similar, "해당재원_예산현황": budget_rows,
+        "관련메모": [{k: m.get(k) for k in ("종류", "대상", "내용")} for m in tools.memos_for(rec, data.get("memo", []))],
     }, ensure_ascii=False, default=str)
     return system, user
 
@@ -459,9 +468,28 @@ def chat(messages: list[dict], turn: int = 0) -> dict:
         raise AIError("마지막 메시지는 사용자 질문이어야 합니다.")
     msgs = [{"role": m["role"], "content": str(m["content"])} for m in messages if m.get("role") in ("user", "assistant")]
     prefix = f"t{turn}-" if turn else ""
+    if fake():
+        q = msgs[-1]["content"]
+        return {"answer": f"(가짜 답변) {q}\n\n| 항목 | 값 |\n|---|---|\n| 질문 | {q} |", "proposals": [], "calls": [{"tool": "list_funds", "input": {}, "error": False}],
+                "usage": {"input": 0, "cached": 0, "output": 0}}
     if provider() == "openai":
         return _oa().chat(msgs, prefix)
     return _chat_anthropic(msgs, prefix)
+
+
+def chat_in_room(owner: str, chat_id: int, question: str) -> dict:
+    """채팅방에 질문 하나를 더한다: 최근 이력(chat_store.HISTORY_LIMIT) + 질문 → 모델 → 질문과 답(조회·제안 포함)을 저장.
+    모델 호출이 실패하면 아무것도 저장하지 않는다 (화면이 질문을 되돌려 다시 보낼 수 있게). 반환: chat() 결과 + message(저장된 답) + chat."""
+    import chat_store
+    q = str(question or "").strip()
+    if not q:
+        raise AIError("질문을 입력하세요.")
+    hist = chat_store.history(owner, chat_id)
+    out = chat(hist + [{"role": "user", "content": q}], turn=len(hist) // 2 + 1)
+    chat_store.add_message(owner, chat_id, "user", q)
+    out["message"] = chat_store.add_message(owner, chat_id, "assistant", out["answer"], out.get("calls"), out.get("proposals"))
+    out["chat"] = chat_store.get_chat(owner, chat_id)
+    return out
 
 
 def extract_receipt(file_bytes: bytes, media_type: str) -> dict:

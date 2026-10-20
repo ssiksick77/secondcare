@@ -54,7 +54,10 @@ class Server:
     TEST_EMAIL = "test@example.com"  # LEDGER_AUTH_BYPASS: 검사 서버는 이 이메일로 로그인한 것으로 본다 (구글 호출 없음)
     SESSION_SECRET = "test-session-secret"
 
-    def __init__(self, name: str, auth_bypass: bool = True):
+    OTHER_EMAIL = "other@example.com"  # 두 번째 허용 사용자 (채팅방 격리 검사)
+
+    def __init__(self, name: str, auth_bypass: bool = True, extra_env: dict | None = None):
+        self.extra_env = extra_env or {}
         self.name = name
         self.auth_bypass = auth_bypass
         self.port = free_port()
@@ -84,7 +87,9 @@ class Server:
                    PYTHONIOENCODING="utf-8")
         env.pop("LEDGER_AUTH_BYPASS", None)
         env["LEDGER_SESSION_SECRET"] = self.SESSION_SECRET  # 고정: 서버가 qa.env 에 비밀키를 쓰지 않게, 검사가 쿠키를 만들 수 있게
-        env["LEDGER_ALLOWED_EMAILS"] = self.TEST_EMAIL
+        env["LEDGER_ALLOWED_EMAILS"] = f"{self.TEST_EMAIL},{self.OTHER_EMAIL}"
+        env["LEDGER_CHAT_DB"] = os.path.join(self.dir, "chats.sqlite")  # 채팅방 저장소도 검사 폴더 안에
+        env.update(self.extra_env)
         env["LEDGER_OAUTH_CLIENT"] = os.path.join(self.dir, "no_oauth_client.json")  # 검사는 구글을 부르지 않는다: 클라이언트 파일 없음으로 고정
         if self.auth_bypass:
             env["LEDGER_AUTH_BYPASS"] = self.TEST_EMAIL
