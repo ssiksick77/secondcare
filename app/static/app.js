@@ -645,7 +645,7 @@ window.addEventListener("beforeprint", () => {
   if (document.body.classList.contains("request-mode")) name = "지출 신청 " + ($("#request-tabs [aria-selected=true]")?.dataset.rtype || "") + (typeof reqSub === "function" && reqSub() === "주문" ? " · 주문" : "");
   if (dash) name += ` (${$("#panel-dash .subtabs [aria-selected=true]")?.textContent.trim() || ""})`;
   const note = dash ? $("#dash-note").textContent.trim() : "";
-  // 신청 화면: 숨은 회계대장 탭의 재원·예산 값 대신 연도·구매처·상태 (request.js reqPrintHead)
+  // 신청 화면: 숨은 연구비 탭의 재원·예산 값 대신 연도·구매처·상태 (request.js reqPrintHead)
   if (document.body.classList.contains("request-mode") && typeof reqPrintHead === "function") $("#print-head").innerHTML = `<b>${APP_FULL}</b> · ${esc(reqPrintHead())} · 출력일 ${today()}`;
   else $("#print-head").innerHTML = `<b>${APP_FULL}</b> · ${esc(name)} · 재원 ${esc(fund || "전체")} · ${esc(period)} · 출력 ${today()}${note ? `<p>${esc(note)}</p>` : ""}`;
   $$("details.defs-box").forEach(d => { if (!d.open) { d.open = true; d.dataset.printOpened = "1"; } });

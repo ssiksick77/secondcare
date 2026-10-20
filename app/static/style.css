@@ -53,6 +53,8 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: -.01em; }
 h1 .app-name { letter-spacing: 0; }
+h1 a.app-home { color: inherit; text-decoration: none; }   /* 제목 = 시작 화면 링크 (헤더 메뉴 버튼 대신, 2026-10-21) */
+h1 a.app-home:hover { text-decoration: underline; text-underline-offset: 3px; }
 h1 .app-full { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 10px; letter-spacing: 0; }
 h2 { font-size: 13px; margin: 18px 0 6px; font-weight: 700; color: var(--ink); text-transform: none; }
 h3 { font-size: 13px; }

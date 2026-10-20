@@ -11,11 +11,10 @@
 <a class="skip" href="#main">본문 바로가기</a>
 
 <header class="top">
-  <h1><span class="app-name">SECONDCare</span><small class="app-full">의료인공지능센터 연구비 관리 시스템</small></h1>
+  <h1><a class="app-name app-home" href="/enter?menu=1" title="시작 화면 (연구비 · 인건비 · 신청)">SECONDCare</a><small class="app-full">의료인공지능센터 연구비 관리 시스템</small></h1>
   <label class="top-year" title="대시보드 집계 연도">연도 <select id="dash-year"></select></label>
   <div class="top-status" id="file-status" aria-live="polite"></div>
   <button type="button" class="btn btn-ghost" id="btn-reload">새로고침</button>
-  <a class="btn btn-ghost" id="btn-enter" href="/enter?menu=1" title="메뉴 화면 (연구비 · 인건비 · 신청)">메뉴</a>
   <span class="top-sep" aria-hidden="true"></span>
   <button type="button" class="btn btn-ghost btn-mode" id="btn-mode" title="인건비 관리 화면으로 전환">인건비</button>
   <button type="button" class="btn btn-ghost btn-mode" id="btn-request" title="지출 신청 화면으로 전환 (담당자)">신청</button>
@@ -62,7 +61,7 @@
     <li><button role="tab" id="rtab-학회" data-rtype="학회" aria-controls="rpanel" aria-selected="false">학회</button></li>
     <li><button role="tab" id="rtab-기타" data-rtype="기타" aria-controls="rpanel" aria-selected="false">기타</button></li>
   </ul>
-  <span class="req-role req-admin-only" title="회계대장에서 들어와 승인·반려·품의 전환·주문을 처리할 수 있습니다">담당자</span>
+  <span class="req-role req-admin-only" title="연구비 화면에서 들어와 승인·반려·품의 전환·주문을 처리할 수 있습니다">담당자</span>
   <button type="button" class="lnk req-prev-year" id="req-prev-year" hidden title="이전 연도에 아직 '신청' 상태로 남은 건을 봅니다"></button>
   <label class="tabs-year">연도 <select id="request-year"></select></label>
 </nav>

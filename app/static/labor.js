@@ -98,13 +98,14 @@ function prepaid(p, year, through) {
   return { opening: p["이월선급"] || 0, accrued, paid, adj, balance: (p["이월선급"] || 0) + paid - accrued + adj };
 }
 
-// ---------- 화면 전환 (회계대장 / 인건비 / 신청: 서로 배타) ----------
-// 2026-10-20: 신청이 / (연구원 기본 화면), 회계대장은 /fund. 메뉴는 /enter (enter.html)
-const MODE_PATH = { main: "/fund", labor: "/labor", request: "/" };
-const pathMode = () => location.pathname === "/labor" ? "labor" : location.pathname === "/fund" ? "main" : "request";
+// ---------- 화면 전환 (연구비 / 인건비 / 신청: 서로 배타) ----------
+// 2026-10-21: 연구비 /fund, 인건비 /labor, 신청 /request. / 는 라우터(/enter 시작 화면으로). 용어는 CLAUDE.md Terms
+const MODE_PATH = { fund: "/fund", labor: "/labor", request: "/request" };
+const pathMode = () => location.pathname === "/labor" ? "labor" : location.pathname === "/request" ? "request" : "fund";
 function setMode(mode, push = true) {
-  if (mode === true) mode = "labor"; else if (!MODE_PATH[mode]) mode = "main";  // 예전 호출 setMode(true/false) 호환
+  if (mode === true) mode = "labor"; else if (mode === "main") mode = "fund"; else if (!MODE_PATH[mode]) mode = "fund";  // 예전 호출 setMode(true/false/"main") 호환
   const labor = mode === "labor", req = mode === "request";
+  document.body.classList.toggle("fund-mode", mode === "fund");
   document.body.classList.toggle("labor-mode", labor);
   document.body.classList.toggle("request-mode", req);
   $("#labor-tabs").hidden = !labor; $("#main-tabs").hidden = labor || req;
@@ -113,10 +114,10 @@ function setMode(mode, push = true) {
   $$("#main-tabs [role=tab]").forEach(b => { $("#" + b.getAttribute("aria-controls")).hidden = labor || req || b.getAttribute("aria-selected") !== "true"; });
   $$("#labor-tabs [role=tab]").forEach(b => { $("#" + b.getAttribute("aria-controls")).hidden = !labor || b.getAttribute("aria-selected") !== "true"; });
   $("#btn-mode").textContent = labor ? "연구비" : "인건비";
-  $("#btn-mode").title = labor ? "연구비(회계대장) 화면으로 돌아가기" : "인건비 관리 화면으로 전환";
+  $("#btn-mode").title = labor ? "연구비 화면으로 돌아가기" : "인건비 화면으로 전환";
   const br = $("#btn-request");
-  if (br) { br.textContent = req ? "연구비" : "신청"; br.title = req ? "연구비(회계대장) 화면으로 돌아가기" : "지출 신청 화면으로 전환 (담당자)"; }
-  // 연구원 화면(/ 직접 접속, 담당자 표시 없음)은 회계대장이 아니라 '지출 신청' 화면으로 부른다
+  if (br) { br.textContent = req ? "연구비" : "신청"; br.title = req ? "연구비 화면으로 돌아가기" : "신청 화면으로 전환 (담당자)"; }
+  // 연구원 화면(/request 직접 접속, 담당자 표시 없음)은 '지출 신청' 화면으로 부른다
   const researcher = req && !document.body.classList.contains("req-admin");
   document.title = labor ? `${APP_NAME} · 인건비` : researcher ? "의료인공지능센터 지출 신청" : req ? `${APP_NAME} · 지출 신청` : APP_NAME;
   const sub = $(".top h1 .app-full"); if (sub) sub.textContent = researcher ? "의료인공지능센터 지출 신청" : APP_FULL;
@@ -130,7 +131,7 @@ function switchLaborTab(name) {
   try { localStorage.setItem("ledger-ltab", name); } catch { }
 }
 $$("#labor-tabs [role=tab]").forEach(b => b.addEventListener("click", () => switchLaborTab(b.id.replace("ltab-", ""))));
-$("#btn-mode").addEventListener("click", () => setMode(document.body.classList.contains("labor-mode") ? "main" : "labor"));
+$("#btn-mode").addEventListener("click", () => setMode(document.body.classList.contains("labor-mode") ? "fund" : "labor"));
 window.addEventListener("popstate", () => setMode(pathMode(), false));
 try { const t = localStorage.getItem("ledger-ltab"); if (t && $("#ltab-" + t)) switchLaborTab(t); } catch { }
 setMode(pathMode(), false);
@@ -170,7 +171,7 @@ function renderLaborFunds() {
   const u = rows.filter(r => r.b == null).reduce((a, r) => ({ n: a.n + 1, done: a.done + r.done, plan: a.plan + r.plan }), { n: 0, done: 0, plan: 0 });
   const cell = (v, neg) => `<td class="num${neg ? " neg" : ""}">${v == null ? '<span class="muted" title="인건비예산 미입력">-</span>' : fmt(v)}</td>`;
   const line = r => `<tr><td>${esc(r.c)}${r.external ? ' <span class="muted">(외부)</span>' : ""}</td><td class="wrap">${esc(r.name)}</td><td class="num amt">${r.b == null ? '<span class="muted">예산 미입력</span>' : fmt(r.b)}</td>${cell(r.done)}${cell(r.plan)}${cell(r.b == null ? null : r.b - r.done, r.b != null && r.b - r.done < 0)}${cell(r.b == null ? null : r.b - r.done - r.plan, r.b != null && r.b - r.done - r.plan < 0)}</tr>`;
-  $("#labor-funds").innerHTML = `<thead><tr><th>지급처</th><th>과제명 · 지급처명</th><th class="num amt">인건비 예산</th><th class="num">확정 지급</th><th class="num">예정</th><th class="num" title="잔액 = 인건비 예산 − 확정 지급">잔액</th><th class="num" title="가용잔액 = 잔액 − 예정">가용잔액</th></tr></thead><tbody>${rows.map(line).join("") || `<tr><td class="empty" colspan="7">${y}년 인건비 예산과 지급 건이 없습니다. 예산은 회계대장 [예산변동]의 내부·외부인건비, 또는 [재원]·[지급처]의 인건비예산 열에서 입력합니다.</td></tr>`}</tbody>${rows.length ? `<tfoot><tr class="total"><td>합계 (예산 관리 지급처)</td><td></td><td class="num amt">${fmt(t.b)}</td><td class="num">${fmt(t.done)}</td><td class="num">${fmt(t.plan)}</td><td class="num${t.b - t.done < 0 ? " neg" : ""}">${fmt(t.b - t.done)}</td><td class="num${t.b - t.done - t.plan < 0 ? " neg" : ""}">${fmt(t.b - t.done - t.plan)}</td></tr>${u.n ? `<tr class="sub"><td>예산 미입력 지급처 ${u.n}곳</td><td class="muted">잔액 계산 제외</td><td class="num amt"></td><td class="num">${fmt(u.done)}</td><td class="num">${fmt(u.plan)}</td><td></td><td></td></tr>` : ""}</tfoot>` : ""}`;
+  $("#labor-funds").innerHTML = `<thead><tr><th>지급처</th><th>과제명 · 지급처명</th><th class="num amt">인건비 예산</th><th class="num">확정 지급</th><th class="num">예정</th><th class="num" title="잔액 = 인건비 예산 − 확정 지급">잔액</th><th class="num" title="가용잔액 = 잔액 − 예정">가용잔액</th></tr></thead><tbody>${rows.map(line).join("") || `<tr><td class="empty" colspan="7">${y}년 인건비 예산과 지급 건이 없습니다. 예산은 연구비 화면 [예산]의 내부·외부인건비, 또는 [재원]·[지급처]의 인건비예산 열에서 입력합니다.</td></tr>`}</tbody>${rows.length ? `<tfoot><tr class="total"><td>합계 (예산 관리 지급처)</td><td></td><td class="num amt">${fmt(t.b)}</td><td class="num">${fmt(t.done)}</td><td class="num">${fmt(t.plan)}</td><td class="num${t.b - t.done < 0 ? " neg" : ""}">${fmt(t.b - t.done)}</td><td class="num${t.b - t.done - t.plan < 0 ? " neg" : ""}">${fmt(t.b - t.done - t.plan)}</td></tr>${u.n ? `<tr class="sub"><td>예산 미입력 지급처 ${u.n}곳</td><td class="muted">잔액 계산 제외</td><td class="num amt"></td><td class="num">${fmt(u.done)}</td><td class="num">${fmt(u.plan)}</td><td></td><td></td></tr>` : ""}</tfoot>` : ""}`;
   $("#labor-funds").closest(".table-wrap").classList.toggle("empty", !rows.length);
 }
 function renderLaborPlan() {

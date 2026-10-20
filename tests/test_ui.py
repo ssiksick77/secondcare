@@ -37,7 +37,7 @@ def main() -> int:
         pg = b.new_page(viewport={"width": 1366, "height": 900})
         errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
-        pg.goto(sv.base + "/"); pg.wait_for_timeout(800)
+        pg.goto(sv.base + "/request"); pg.wait_for_timeout(800)
         pg.evaluate("sessionStorage.setItem('request-admin','1')"); pg.reload(); pg.wait_for_timeout(800)
 
         # ---- 학회 ----
@@ -91,7 +91,7 @@ def main() -> int:
         pg.evaluate("switchReqSub('신청')"); pg.wait_for_timeout(300)
         pg.click("#request-tabs [data-rtype='학회']"); pg.wait_for_timeout(300)
         # ---- 기타 ----
-        pg.goto(sv.base + "/"); pg.wait_for_timeout(800)
+        pg.goto(sv.base + "/request"); pg.wait_for_timeout(800)
         pg.click("#request-tabs [data-rtype='기타']"); pg.wait_for_timeout(300)
         ck("기타: 연구원 안내문", "구독" in pg.inner_text(".req-researcher-note"))
         pg.click("button:has-text('신청 추가')"); pg.wait_for_timeout(400)
@@ -396,12 +396,15 @@ def main() -> int:
         # ---- 메뉴 화면 (enter.html): 버튼 세 개, 신청은 담당자 모드로, 기본 화면 설정 ----
         ck("메뉴: 버튼 세 개 연구비·인건비·신청", pg.evaluate("[...document.querySelectorAll('.enter-btn')].map(a=>a.textContent.trim())") == ["연구비", "인건비", "신청"])
         ck("메뉴: 버튼마다 아이콘", pg.evaluate("document.querySelectorAll('.enter-btn svg').length") == 3)
-        ck("메뉴: 주소 /fund /labor /", pg.evaluate("[...document.querySelectorAll('.enter-btn')].map(a=>a.getAttribute('href'))") == ["/fund", "/labor", "/"])
+        ck("시작 화면: 주소 /fund /labor /request", pg.evaluate("[...document.querySelectorAll('.enter-btn')].map(a=>a.getAttribute('href'))") == ["/fund", "/labor", "/request"])
         ck("메뉴: 상단 계정 표시", sv.TEST_EMAIL in pg.get_attribute("#top-user", "title"))
         pg.evaluate("sessionStorage.removeItem('request-admin')")
         pg.click(".enter-btn[data-home=request]"); pg.wait_for_timeout(1000)
-        ck("메뉴 → 신청: 담당자 모드 (연구원 아닌 계정)", pg.url.rstrip("/") == sv.base and pg.evaluate("document.body.classList.contains('req-admin')"), pg.url)
-        ck("상단: 메뉴 버튼 → /enter?menu=1", pg.get_attribute("#btn-enter", "href") == "/enter?menu=1")
+        ck("시작 화면 → 신청: 담당자 모드 (연구원 아닌 계정)", pg.url.endswith("/request") and pg.evaluate("document.body.classList.contains('req-admin')"), pg.url)
+        ck("헤더: 제목 링크 → /enter?menu=1 (메뉴 버튼 없음)", pg.get_attribute("h1 a.app-home", "href") == "/enter?menu=1" and not pg.query_selector("#btn-enter"))
+        pg.goto(sv.base + "/"); pg.wait_for_timeout(800)
+        ck("라우터: / → /enter", pg.url.endswith("/enter"), pg.url)
+        pg.goto(sv.base + "/request"); pg.wait_for_timeout(800)  # 설정 검사는 앱 페이지에서
         pg.evaluate("openSettings()"); pg.wait_for_timeout(600)
         pg.select_option("#s-home-sel", "fund"); pg.wait_for_timeout(500)
         ck("설정: 기본 화면 저장됨", pg.inner_text("#s-home-msg").strip() == "저장됨", pg.inner_text("#s-home-msg"))
