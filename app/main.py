@@ -693,7 +693,7 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
             existing.append(name)
             up = drive.upload(folder, name, data, f.content_type or "")
             uploaded.append(up["id"])
-            items.append({"거래번호": number, "증빙종류": kind.strip(), "파일명": name, "원본파일명": f.filename or "",
+            items.append({"거래번호": number, "증빙종류": kind.strip(), "파일명": name, "원본파일명": "",  # 원본 이름은 남기지 않음 (2026-10-20 사용자 결정)
                           "드라이브파일ID": up["id"], "크기": up["size"], "업로드일": dt.date.today().isoformat(), "비고": note})
         if target is not None:  # 실물만 항목에 첨부(또는 교체): 파일 열만 채움 (증빙번호·종류·비고 유지)
             saved = [store.evidence_attach(target["_row"], {c: items[0][c] for c in store.EVID_FILE_COLS},
