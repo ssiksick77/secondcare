@@ -10,7 +10,7 @@ APP_DIR = Path(__file__).resolve().parent
 
 # 프로그램 이름. 화면·인쇄·MCP 에서 쓴다 (프론트엔드는 app.js 의 APP_NAME / APP_FULL 에 같은 값).
 APP_SLUG = "caih-rfm"                          # 코드명 (MCP 서버 이름, 로그 이름)
-APP_NAME = "Second Care"                       # 짧은 이름 (헤더, 탭 제목)
+APP_NAME = "SECONDCare"                       # 짧은 이름 (헤더, 탭 제목)
 APP_FULL_NAME = "의료인공지능센터 연구비 관리 시스템"  # 정식 명칭 (인쇄물, 공식 문서)
 
 
