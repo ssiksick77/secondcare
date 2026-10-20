@@ -660,6 +660,58 @@ def set_user_name(email: str, name: str) -> str:
     return name
 
 
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def norm_email(email) -> str:
+    """허용 목록용 이메일 정규화: 앞뒤 공백 제거, 소문자. 형식이 아니면 ValueError."""
+    e = str(email or "").strip().lower()
+    if not e:
+        raise ValueError("이메일을 입력하세요.")
+    if not EMAIL_RE.match(e):
+        raise ValueError(f"이메일 형식이 아닙니다: {e}")
+    return e
+
+
+def allowed_set() -> set[str]:
+    """users 표에서 로그인 허용된 이메일. xlsx 모드는 빈 집합 (.env 목록만 쓴다)."""
+    if not USE_DB:
+        return set()
+    with db.session() as con:
+        return db.allowed_emails(con)
+
+
+def allowed_users() -> list[dict]:
+    if not USE_DB:
+        return []
+    with db.session() as con:
+        return db.allowed_users(con)
+
+
+def allow_email(email, by: str | None) -> tuple[str, bool]:
+    """허용 목록에 추가. (정규화한 이메일, 새로 추가됐는지)."""
+    e = norm_email(email)
+    if not USE_DB:
+        raise ValueError("xlsx 저장소에서는 허용 계정을 저장하지 않습니다. app/.env 의 LEDGER_ALLOWED_EMAILS 를 고치세요.")
+    with _lock, db.session() as con:
+        return e, db.allow_user(con, e, by)
+
+
+def disallow_email(email, masters: set[str], me: str | None) -> str:
+    """허용 목록에서 제거. 마스터(.env)·본인은 거부. 행과 이름은 남긴다."""
+    e = norm_email(email)
+    if e in masters:
+        raise ValueError("마스터 계정(app/.env)은 여기서 삭제할 수 없습니다.")
+    if me and e == me.lower():
+        raise ValueError("본인 계정은 삭제할 수 없습니다.")
+    if not USE_DB:
+        raise ValueError("xlsx 저장소에서는 허용 계정을 저장하지 않습니다.")
+    with _lock, db.session() as con:
+        if not db.disallow_user(con, e):
+            raise ValueError(f"허용 목록에 없는 계정입니다: {e}")
+    return e
+
+
 def last_write_id() -> str | None:
     return LAST_WRITE.get("id") if LAST_WRITE else None
 
