@@ -249,6 +249,14 @@ def main() -> int:
         ck("교체: 증빙번호 유지·새 파일·목록 1건", rp.get("replaced") is True and len(ev2["items"]) == 1 and it["증빙번호"] == ev["items"][0]["증빙번호"] and it["파일명"] == "QA01_영수증_4500_260308.png"
            and (it["드라이브파일ID"] != old_id or open(mock_path, "rb").read() == b"\x89PNG new"), (rp, ev2.get("items")))  # 모의 드라이브는 같은 경로 = 같은 id
         ck("교체: 옛 파일은 모의 휴지통으로 (같은 경로면 덮어씀)", old_id == it["드라이브파일ID"] or os.path.exists(os.path.join(sv.dir, "mock", "_trash", "QA01_영수증_4500_260308.png")), old_id)
+        # ---- 증빙 복사: 다른 거래 폴더에 그 거래 기준 이름으로, 독립 항목 ----
+        s, r = sv.call("POST", "/api/exec", {"재원": "QA02", "예산목": "연구활동비", "원인발생일": "2026-03-09", "거래처": "검사", "금액": 1200, "적요": "복사 대상"})
+        cp_row, cp_no = r.get("_row"), r.get("거래번호")
+        s, r = sv.call("POST", f"/api/evidence/{quote(rn_no)}/copy", {"row": ev_row, "targets": [cp_no, rn_no, "2026-없음-999"]})
+        ck("복사: 대상 1건 성공, 같은 거래·없는 번호는 오류", s == 200 and len(r["copied"]) == 1 and r["copied"][0]["거래번호"] == cp_no and r["copied"][0]["파일명"] == "QA02_영수증_1200_260309.png" and len(r["errors"]) == 2, (s, r))
+        ck("복사: 대상 폴더에 파일", os.path.exists(os.path.join(sv.dir, "mock", "증빙관리", "2026", "QA02", cp_no, "QA02_영수증_1200_260309.png")))
+        s2, ev3 = sv.call("GET", f"/api/evidence/{quote(cp_no)}")
+        ck("복사: 대상 거래의 독립 증빙 항목 (비고에 원본 번호)", s2 == 200 and len(ev3["items"]) == 1 and ev3["items"][0]["증빙번호"] == f"{cp_no}-1" and ev3["items"][0]["비고"].startswith("복사: "), ev3.get("items"))
         rec = sv.rec("exec", rn_row); rec["비고"] = "메모만"
         s, r = sv.call("PUT", f"/api/exec/{rn_row}", {"rec": rec})
         ck("이름과 무관한 수정은 파일명 그대로", s == 200 and not r.get("_renamed"), (s, r.get("_renamed")))

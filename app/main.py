@@ -595,6 +595,52 @@ def evidence_list(number: str):
     return {"items": items, "drive": drive.status()}
 
 
+def _evid_folder_and_name(number: str, kind: str, ext: str) -> tuple[dict, dict, str]:
+    """한 거래(거래번호·적립번호)의 증빙 폴더와 규칙 이름({재원|거래처}_종류_금액_YYMMDD) → (행, 폴더, 이름)."""
+    subj = store.evidence_subject(number)
+    if subj is None:
+        raise HTTPException(404, f"{number}: 집행 또는 적립금 행을 찾을 수 없습니다.")
+    rec, is_dep = subj["rec"], subj["kind"] == "deposit"
+    d = (rec["일자"] if is_dep else rec["원인발생일"]) or dt.date.today().isoformat()
+    year, yymmdd = d[:4], d[2:4] + d[5:7] + d[8:10]
+    folder = drive.ensure_folder([year, "적립금", drive.safe_part(rec["거래처"]), number] if is_dep else [year, rec["재원"], number])
+    name = drive.build_filename(rec["거래처"] if is_dep else rec["재원"], kind, rec["금액"], yymmdd, ext, store.evidence_names(number))
+    return rec, folder, name
+
+
+@app.post("/api/evidence/{number}/copy")
+def evidence_copy(number: str, body: dict):
+    """증빙 파일을 다른 거래들에 복사한다 (2026-10-20: 사전결재안처럼 한 문서가 여러 거래의 증빙일 때).
+    body: {row: 증빙 시트 행, targets: ["2026-AX-003", ...]} → 거래마다 파일을 그 폴더로 복사(이름은 그 거래 기준)하고 독립된 증빙 항목을 만든다.
+    → {copied: [{거래번호, 증빙번호, 파일명}], errors: [..]}"""
+    src = next((e for e in store.evidence_for(number) if e["_row"] == int(body.get("row") or 0)), None)
+    if src is None or not src.get("드라이브파일ID"):
+        raise HTTPException(404, "복사할 증빙(파일 있는 항목)을 찾을 수 없습니다.")
+    targets = [str(t).strip() for t in (body.get("targets") or []) if str(t).strip()]
+    if not targets:
+        raise HTTPException(400, "복사할 거래번호를 입력하세요.")
+    st = drive.status()
+    if not (st.get("connected") or st.get("mock")):
+        raise HTTPException(400, "구글 드라이브가 연결되지 않았습니다.")
+    ext = src["파일명"].rsplit(".", 1)[-1] if "." in src["파일명"] else ""
+    out = {"copied": [], "errors": []}
+    for t in targets:
+        if t == number:
+            out["errors"].append(f"{t}: 같은 거래입니다."); continue
+        try:
+            _, folder, name = _evid_folder_and_name(t, src["증빙종류"] or "", ext)
+            up = drive.copy(src["드라이브파일ID"], folder, name)
+            items = store.evidence_add([{"거래번호": t, "증빙종류": src["증빙종류"], "파일명": name, "원본파일명": "", "드라이브파일ID": up["id"],
+                                         "크기": up["size"] or src.get("크기") or "", "업로드일": dt.date.today().isoformat(),
+                                         "비고": f"복사: {src['증빙번호']}" + (f" · {src['비고']}" if src.get("비고") else "")}], folder["url"])
+            out["copied"].append({"거래번호": t, "증빙번호": items[0]["증빙번호"], "파일명": name})
+        except HTTPException as e:
+            out["errors"].append(f"{t}: {e.detail}")
+        except Exception as e:
+            out["errors"].append(f"{t}: {e}")
+    return out
+
+
 @app.post("/api/evidence/sync-all")
 def evidence_sync_all():
     """모든 증빙을 드라이브와 맞춘다: 이름 변경 반영, 지운(휴지통) 파일의 증빙 행 삭제, 번호 재부여로 어긋난 폴더 이름 수정.

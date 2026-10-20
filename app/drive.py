@@ -231,6 +231,20 @@ def upload(folder: dict, name: str, data: bytes, mime: str) -> dict:
     return _guard(run)
 
 
+def copy(file_id: str, folder: dict, name: str) -> dict:
+    """드라이브 파일을 다른 폴더로 복사 → {id, url, size}. 모의 모드는 파일 복사."""
+    if file_id.startswith("mock:"):
+        src = MOCK_DIR / file_id[5:]
+        dst = MOCK_DIR.joinpath(*folder["id"].split("/")) / name
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(src, dst)
+        return {"id": f"mock:{dst.relative_to(MOCK_DIR).as_posix()}", "url": dst.resolve().as_uri(), "size": dst.stat().st_size}
+    def run():
+        f = _svc().files().copy(fileId=file_id, body={"name": name, "parents": [folder["id"]]}, fields="id, webViewLink, size").execute()
+        return {"id": f["id"], "url": f.get("webViewLink", ""), "size": int(f.get("size") or 0)}
+    return _guard(run)
+
+
 def trash(file_id: str):
     """드라이브 휴지통으로 이동 (복구 가능)."""
     if not file_id:

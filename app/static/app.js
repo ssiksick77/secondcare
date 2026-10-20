@@ -1941,7 +1941,7 @@ function evidRowHtml(e) {
     ? `<button type="button" class="btn btn-sm" data-evattach="${e._row}" data-replace="1"${conn ? "" : " disabled"} title="${conn ? "파일을 새 파일로 바꿉니다 (증빙번호·종류·비고 유지, 옛 파일은 드라이브 휴지통)" : "구글 드라이브를 연결하면 교체할 수 있습니다"}">교체</button>`
     : `<button type="button" class="btn btn-sm" data-evattach="${e._row}"${conn ? "" : " disabled"} title="${conn ? "이 항목에 파일 1개를 올려 붙입니다" : "구글 드라이브를 연결하면 첨부할 수 있습니다"}">파일 첨부</button>`;
   const label = has ? n : `${e["증빙번호"]} ${e["증빙종류"]}`;
-  return `<tr${has ? "" : ' class="evid-row-nofile"'}><td class="xd-th-cell">${thumb}</td><td class="evid-id"><span class="evid-kind">${esc(e["증빙종류"])}</span><span class="evid-no">${esc(e["증빙번호"])}</span></td><td class="evid-name">${file}</td><td class="evid-note">${esc(e["비고"])}</td><td class="evid-acts"><button type="button" class="btn btn-sm" data-evmount="${e._row}" title="이 증빙의 첨부 양식 인쇄">양식</button>${attach}<button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(label)}" data-file="${has ? 1 : ""}" title="${has ? "장부에서 삭제하고 드라이브 휴지통으로 이동" : "장부에서 이 항목을 삭제"}">삭제</button></td></tr>`;
+  return `<tr${has ? "" : ' class="evid-row-nofile"'}><td class="xd-th-cell">${thumb}</td><td class="evid-id"><span class="evid-kind">${esc(e["증빙종류"])}</span><span class="evid-no">${esc(e["증빙번호"])}</span></td><td class="evid-name">${file}</td><td class="evid-note">${esc(e["비고"])}</td><td class="evid-acts"><button type="button" class="btn btn-sm" data-evmount="${e._row}" title="이 증빙의 첨부 양식 인쇄">양식</button>${has ? `<button type="button" class="btn btn-sm" data-evcopy="${e._row}"${conn ? "" : " disabled"} title="이 파일을 다른 거래의 증빙으로 복사 (그 거래 폴더에, 그 거래 기준 이름으로)">복사</button>` : ""}${attach}<button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(label)}" data-file="${has ? 1 : ""}" title="${has ? "장부에서 삭제하고 드라이브 휴지통으로 이동" : "장부에서 이 항목을 삭제"}">삭제</button></td></tr>`;
 }
 function bindXdBody() {
   const body = $("#xd-body");
@@ -2018,6 +2018,21 @@ function bindEvidForm(c) {
   $("#evid-copy")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText($(".evid-list code").textContent); showAlert("증빙목록을 복사했습니다.", "ok"); } catch { } });
   $$("#xd-body [data-evmount]").forEach(b => b.addEventListener("click", () => {
     const e = (XD.evid || []).find(x => x._row === Number(b.dataset.evmount)); if (e) openMount([e], 0, b);
+  }));
+  // [복사]: 같은 파일을 다른 거래(들)의 증빙으로 — 거래번호를 쉼표로 여러 개 (2026-10-20)
+  $$("#xd-body [data-evcopy]").forEach(b => b.addEventListener("click", async () => {
+    const e = (XD.evid || []).find(x => x._row === Number(b.dataset.evcopy)); if (!e) return;
+    const v = await confirmDlg({ title: `증빙 복사 · ${e["증빙번호"]}`, body: `'${e["파일명"]}' 을 다른 거래의 증빙으로 복사합니다. 파일은 그 거래의 드라이브 폴더에 그 거래 기준 이름으로 저장되고, 각 거래에 독립된 증빙 항목이 생깁니다.`, verb: "복사", input: { label: "복사할 거래번호 (여러 개면 쉼표)", value: "", required: true } });
+    if (v === null) return;
+    const targets = String(v).split(/[,\s]+/).map(x => x.trim()).filter(Boolean);
+    if (!targets.length) return;
+    b.disabled = true;
+    try {
+      const r = await api("POST", `/api/evidence/${encodeURIComponent(c.number)}/copy`, { row: e._row, targets });
+      const ok = r.copied.map(x => `${x["거래번호"]} (${x["증빙번호"]})`).join(", ");
+      showAlert(`${r.copied.length}건 복사${ok ? ": " + ok : ""}${r.errors.length ? ` · 실패 ${r.errors.length}건: ${r.errors.join("; ")}` : ""}`, r.errors.length ? "warn" : "ok");
+      await load(); await c.rerender();
+    } catch (err) { showAlert("복사 실패: " + err.message, "error"); b.disabled = false; }
   }));
   $$("#xd-body [data-evdel]").forEach(b => b.addEventListener("click", async () => {
     const body = b.dataset.file ? `'${b.dataset.name}' 을 장부에서 지우고 드라이브 휴지통으로 옮깁니다.` : `'${b.dataset.name}' 항목을 장부에서 지웁니다(파일 없음).`;
