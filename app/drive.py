@@ -266,12 +266,32 @@ def file_meta(file_id: str) -> dict | None:
         return {"name": p.name, "trashed": False} if p.exists() else None
     def run():
         try:
-            f = _svc().files().get(fileId=file_id, fields="name, trashed").execute()
+            f = _svc().files().get(fileId=file_id, fields="name, trashed, parents").execute()
         except Exception as e:
             if "404" in str(e) or "notFound" in str(e):
                 return None
             raise
-        return {"name": f.get("name") or "", "trashed": bool(f.get("trashed"))}
+        return {"name": f.get("name") or "", "trashed": bool(f.get("trashed")), "parents": list(f.get("parents") or [])}
+    return _guard(run)
+
+
+def fix_folder_name(folder_id: str, expected: str) -> bool:
+    """폴더 이름이 expected(현재 번호)와 다르면 바꾸고 캐시 키도 옮긴다 (번호 재부여 뒤 정리). 바꿨으면 True."""
+    if not folder_id or folder_id.startswith("mock:") or mock():
+        return False
+    def run():
+        f = _svc().files().get(fileId=folder_id, fields="name").execute()
+        if (f.get("name") or "") == expected:
+            return False
+        _svc().files().update(fileId=folder_id, body={"name": expected}, fields="id").execute()
+        with _lock:
+            cache = _cache_load()
+            for k, v in list(cache.items()):
+                if v.get("id") == folder_id:
+                    del cache[k]
+                    cache["/".join(k.split("/")[:-1] + [expected])] = v
+            _cache_save(cache)
+        return True
     return _guard(run)
 
 

@@ -589,10 +589,43 @@ def evidence_thumb(file_id: str):
 def evidence_list(number: str):
     """증빙 목록. 드라이브가 연결돼 있으면 파일의 현재 이름을 반영하고(바뀌면 장부도 수정) 없는 파일은 missing 으로 표시."""
     st = drive.status()
-    items = store.evidence_sync(number, drive.file_meta) if (st.get("connected") or st.get("mock")) else store.evidence_for(number)
+    items = store.evidence_sync(number, drive.file_meta)["items"] if (st.get("connected") or st.get("mock")) else store.evidence_for(number)
     for it in items:
         it["url"] = drive.file_url(it["드라이브파일ID"]) if it.get("드라이브파일ID") else ""
     return {"items": items, "drive": drive.status()}
+
+
+@app.post("/api/evidence/sync-all")
+def evidence_sync_all():
+    """모든 증빙을 드라이브와 맞춘다: 이름 변경 반영, 지운(휴지통) 파일의 증빙 행 삭제, 번호 재부여로 어긋난 폴더 이름 수정.
+    → {numbers, renamed, removed: [증빙번호…], folders_fixed, errors: [..]}"""
+    st = drive.status()
+    if not (st.get("connected") or st.get("mock")):
+        raise HTTPException(400, "구글 드라이브가 연결되지 않았습니다.")
+    out = {"numbers": 0, "renamed": 0, "removed": [], "folders_fixed": 0, "errors": []}
+    for number in store.evidence_numbers_with_files():
+        out["numbers"] += 1
+        try:
+            res = store.evidence_sync(number, drive.file_meta)
+        except Exception as e:
+            out["errors"].append(f"{number}: {e}"); continue
+        out["renamed"] += res["renamed"]; out["removed"] += res["removed"]
+        seen_folders = set()
+        for it in res["items"]:  # 남은 파일의 부모 폴더 이름이 현재 번호와 다르면 수정 (한 폴더는 한 번만)
+            fid = it.get("드라이브파일ID")
+            if not fid or fid.startswith("mock:"):
+                continue
+            try:
+                meta = drive.file_meta(fid) or {}
+                for pid in meta.get("parents") or []:
+                    if pid in seen_folders:
+                        continue
+                    seen_folders.add(pid)
+                    if drive.fix_folder_name(pid, number):
+                        out["folders_fixed"] += 1
+            except Exception as e:
+                out["errors"].append(f"{number} 폴더: {e}")
+    return out
 
 
 @app.post("/api/evidence/{number}/entry")

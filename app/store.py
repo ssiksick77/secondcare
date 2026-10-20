@@ -1202,32 +1202,20 @@ def _assign_order_number(wb, ws, rec):
     _meta_set(wb, _order_hw_key(stem), mx + 1)
 
 
-def _evid_hw_key(number: str) -> str:
-    return f"증빙번호최고-{number}"
-
-
 def _evid_suffix(number: str, evno) -> int:
     """증빙번호가 '{거래번호}-{n}' 이면 n, 아니면 0."""
     v, prefix = str(evno or "").strip(), f"{number}-"
     return int(v[len(prefix):]) if number and v.startswith(prefix) and v[len(prefix):].isdigit() else 0
 
 
-def _bump_evid_hw(wb, number: str, evno):
-    """지운(또는 쓴) 증빙번호를 거래번호별 최고값으로 기록 (지운 마지막 번호가 다시 쓰이지 않도록)."""
-    n = _evid_suffix(number, evno)
-    if n > int(_to_num(_meta_get(wb, _evid_hw_key(number)))):
-        _meta_set(wb, _evid_hw_key(number), n)
-
-
 def _assign_evid_number(wb, ws, rec):
-    """증빙번호 {거래번호}-{n}: 그 거래번호의 메타 최고값과 시트에 있는 번호 중 큰 값 + 1."""
+    """증빙번호 {거래번호}-{n}: 시트에 있는 그 거래번호의 번호 중 최대값 + 1. 지운 번호는 다시 쓴다 (2026-10-20 사용자 결정, 베타 기간)."""
     number = str(rec.get("거래번호") or "").strip()
-    mx = int(_to_num(_meta_get(wb, _evid_hw_key(number))))
+    mx = 0
     for e in _rows(ws, EVID_COLS):
         if e["거래번호"] == number:
             mx = max(mx, _evid_suffix(number, e.get("증빙번호")))
     rec["증빙번호"] = f"{number}-{mx + 1}"
-    _meta_set(wb, _evid_hw_key(number), mx + 1)
 
 
 def _ledger_year(wb) -> str:
@@ -1281,14 +1269,13 @@ def _ensure_evid_numbers(wb, head_font) -> bool:
     rows = _rows(ws, EVID_COLS)
     for e in blank:
         number = e["거래번호"]
-        mx = int(_to_num(_meta_get(wb, _evid_hw_key(number))))
+        mx = 0
         for x in rows:
             if x["거래번호"] == number:
                 mx = max(mx, _evid_suffix(number, x.get("증빙번호")))
         e["증빙번호"] = f"{number}-{mx + 1}"
         ws.cell(e["_row"], ci).value = e["증빙번호"]
         next(x for x in rows if x["_row"] == e["_row"])["증빙번호"] = e["증빙번호"]
-        _meta_set(wb, _evid_hw_key(number), mx + 1)
     return True
 
 
@@ -2041,8 +2028,6 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
             raise ValueError(f"재원코드 '{existing['재원코드']}' 는 인건비 지급 내역에서 사용 중이라 삭제할 수 없습니다.")
         if kind == "labor" and existing.get("연결거래번호"):
             _remove_labor_exec(wb, existing["연결거래번호"])
-        if kind == "evidence":
-            _bump_evid_hw(wb, existing["거래번호"], existing.get("증빙번호"))
         if kind == "request":
             state = _req_state(wb)
             status = request_status(existing, state)
@@ -2599,12 +2584,13 @@ def evidence_add(items: list[dict], folder_url: str | None = None) -> list[dict]
         return out
 
 
-def evidence_sync(number: str, lookup) -> list[dict]:
-    """증빙 목록을 드라이브 현재 상태에 맞춘다 (2026-10-19 사용자 결정: 원래 이름은 남기지 않음).
-    lookup(드라이브파일ID) → {name, trashed} | None. 이름이 바뀐 파일은 증빙 시트 파일명을 고쳐 저장하고,
-    없거나 휴지통인 파일은 missing=True 로 표시만 한다(장부는 그대로). 드라이브 오류는 그 파일만 건너뛴다."""
+def evidence_sync(number: str, lookup) -> dict:
+    """증빙 목록을 드라이브 현재 상태에 맞춘다 (2026-10-19/20 사용자 결정).
+    lookup(드라이브파일ID) → {name, trashed} | None. 이름이 바뀐 파일은 증빙 시트 파일명을 고치고,
+    없거나 휴지통인 파일은 그 증빙 행을 장부에서 지운다(드라이브에서 지운 것이 기준). 드라이브 오류는 그 파일만 건너뛴다.
+    반환 {"items": 남은 목록, "renamed": n, "removed": [지운 증빙번호…]}."""
     items = evidence_for(number)
-    changed = []
+    changed, gone = [], []
     for it in items:
         fid = str(it.get("드라이브파일ID") or "").strip()
         if not fid:
@@ -2614,19 +2600,38 @@ def evidence_sync(number: str, lookup) -> list[dict]:
         except Exception:
             continue
         if meta is None or meta.get("trashed"):
-            it["missing"] = True
+            gone.append(it)
             continue
         name = str(meta.get("name") or "").strip()
         if name and name != str(it.get("파일명") or ""):
             it["파일명"] = name
             changed.append(it)
-    if changed:
+    if changed or gone:
         with _write_session() as wb:
             ws = wb[SHEET_EVID]
             for it in changed:
                 _write_row(ws, EVID_COLS, it["_row"], {"파일명": it["파일명"]})
+            for it in sorted(gone, key=lambda x: -x["_row"]):  # 아래 행부터 지워야 행 번호가 밀리지 않는다
+                _delete_row(ws, it["_row"])
+            _sync_exec_evidence(wb, number)
             _save(wb)
-    return items
+        gone_rows = {it["_row"] for it in gone}
+        items = [it for it in items if it["_row"] not in gone_rows]
+        if gone:
+            items = evidence_for(number)  # 행 번호가 바뀌었으므로 다시 읽는다
+    return {"items": items, "renamed": len(changed), "removed": [it["증빙번호"] for it in gone]}
+
+
+def evidence_numbers_with_files() -> list[str]:
+    """파일이 붙은 증빙이 있는 거래번호·적립번호 목록 (전체 동기화용)."""
+    with _lock:
+        wb = _load()
+        seen, out = set(), []
+        for e in _rows(wb[SHEET_EVID], EVID_COLS):
+            no = str(e.get("거래번호") or "").strip()
+            if no and e.get("드라이브파일ID") and no not in seen:
+                seen.add(no); out.append(no)
+        return out
 
 
 def evidence_set_file(row: int, name: str, file_id: str | None = None):
@@ -2648,7 +2653,6 @@ def evidence_delete(row: int, expect: dict | None = None) -> dict:
         if rec is None:
             raise NotFound("증빙 행을 찾을 수 없습니다.")
         _check_expect("evidence", rec, expect)
-        _bump_evid_hw(wb, rec["거래번호"], rec.get("증빙번호"))  # 지운 번호(마지막 번호 포함)는 다시 쓰지 않음
         _delete_row(ws, row)
         _sync_exec_evidence(wb, rec["거래번호"])
         _save(wb)

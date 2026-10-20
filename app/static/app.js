@@ -1542,6 +1542,17 @@ function renderExecTiles() {
   ];
   $("#exec-tiles").innerHTML = tiles.map(([k, l, c]) => `<div class="card ${QUICK === k ? "on" : ""}" role="button" tabindex="0" data-quick="${k}" aria-pressed="${QUICK === k}"><div class="k">${l}</div><div class="v">${c}건</div></div>`).join("");
 }
+// 드라이브 동기화: 이름 변경 반영 · 지운 파일의 증빙 삭제 · 폴더 이름 수정 (2026-10-20)
+$("#btn-evid-sync")?.addEventListener("click", async e => {
+  const b = e.currentTarget; b.disabled = true; const t = b.textContent; b.textContent = "동기화 중…";
+  try {
+    const r = await api("POST", "/api/evidence/sync-all");
+    const parts = [`거래 ${r.numbers}건 확인`, r.renamed ? `이름 ${r.renamed}개 반영` : "", r.removed.length ? `드라이브에서 지운 증빙 ${r.removed.length}개 삭제` : "", r.folders_fixed ? `폴더 이름 ${r.folders_fixed}개 수정` : ""].filter(Boolean);
+    showAlert(parts.join(" · ") + (r.errors.length ? ` · 오류 ${r.errors.length}건: ${r.errors[0]}` : ""), r.errors.length ? "warn" : "ok");
+    await load();
+  } catch (err) { showAlert("동기화 실패: " + err.message, "error"); }
+  b.disabled = false; b.textContent = t;
+});
 $("#exec-tiles").addEventListener("click", e => { const t = e.target.closest("[data-quick]"); if (!t) return; QUICK = QUICK === t.dataset.quick ? "" : t.dataset.quick; renderExecTiles(); renderList("exec"); });
 $("#exec-tiles").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.dataset.quick) { e.preventDefault(); e.target.click(); } });
 $$("[data-filter][data-kind=exec]").forEach(el => el.addEventListener("input", renderExecTiles));
@@ -2009,7 +2020,7 @@ function bindEvidForm(c) {
     const e = (XD.evid || []).find(x => x._row === Number(b.dataset.evmount)); if (e) openMount([e], 0, b);
   }));
   $$("#xd-body [data-evdel]").forEach(b => b.addEventListener("click", async () => {
-    const body = b.dataset.file ? `'${b.dataset.name}' 을 장부에서 지우고 드라이브 휴지통으로 옮깁니다.` : `'${b.dataset.name}' 항목을 장부에서 지웁니다(파일 없음). 지운 증빙번호는 다시 쓰지 않습니다.`;
+    const body = b.dataset.file ? `'${b.dataset.name}' 을 장부에서 지우고 드라이브 휴지통으로 옮깁니다.` : `'${b.dataset.name}' 항목을 장부에서 지웁니다(파일 없음).`;
     if (!await confirmDlg({ title: "증빙 삭제", body, verb: "삭제", danger: true })) return;
     const row = Number(b.dataset.evdel); const e = (XD.evid || []).find(x => x._row === row);
     try {

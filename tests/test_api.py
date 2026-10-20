@@ -177,16 +177,22 @@ def main() -> int:
         ck("적립 증빙 목록 2건", s == 200 and len(r["items"]) == 2, (s, r))
         # ---- 드라이브 이름 변경·삭제 반영: 목록 조회 때 파일명을 맞추고 없는 파일은 missing ----
         fid = upj["items"][0]["드라이브파일ID"]
-        sync = ("import store; it = store.evidence_sync(%r, lambda fid: {'name': 'renamed.png', 'trashed': False}); "
-                "assert [x for x in it if x['드라이브파일ID'] == %r][0]['파일명'] == 'renamed.png', it; "
-                "again = store.evidence_for(%r); assert any(x['파일명'] == 'renamed.png' for x in again), again; "
-                "it2 = store.evidence_sync(%r, lambda fid: None); assert [x for x in it2 if x['드라이브파일ID'] == %r][0].get('missing') is True, it2; "
-                "assert any(x['파일명'] == 'renamed.png' for x in store.evidence_for(%r))") % (dep_no, fid, dep_no, dep_no, fid, dep_no)
+        sync = ("import store; r = store.evidence_sync(%r, lambda fid: {'name': 'renamed.png', 'trashed': False}); "
+                "assert r['renamed'] == 1 and [x for x in r['items'] if x['드라이브파일ID'] == %r][0]['파일명'] == 'renamed.png', r; "
+                "r2 = store.evidence_sync(%r, lambda fid: None); assert r2['removed'] == [%r] and not any(x.get('드라이브파일ID') for x in r2['items']), r2; "
+                "left = store.evidence_for(%r); assert len(left) == 1 and not left[0]['파일명'], left") % (dep_no, fid, dep_no, upj["items"][0]["증빙번호"], dep_no)
         pr = subprocess.run([sys.executable, "-c", sync], cwd=os.path.join(os.path.dirname(sv.dir), "..", "..", "app"),
                             env=dict(os.environ, LEDGER_XLSX=os.path.join(sv.dir, "ledger.xlsx"), LEDGER_DRIVE_MOCK="1"), capture_output=True, text=True)
-        ck("드라이브 이름 변경 → 장부 파일명 갱신, 삭제 → missing 표시", pr.returncode == 0, pr.stderr[-300:])
-        s, r = sv.call("GET", f"/api/evidence/{quote(dep_no)}")
-        ck("목록 조회(모의 드라이브): 파일 있음 → missing 없음", s == 200 and not any(x.get("missing") for x in r["items"]), r.get("items"))
+        ck("드라이브 이름 변경 → 장부 파일명 갱신, 삭제(휴지통) → 증빙 행 삭제", pr.returncode == 0, pr.stderr[-300:])
+        s, r = sv.call("POST", f"/api/evidence/{quote(dep_no)}/entry", {"증빙종류": "영수증"})
+        ck("지운 증빙번호 재사용", s == 200 and r.get("증빙번호") == f"{dep_no}-2", (s, r))
+        # 전체 동기화: 모의 드라이브에서 파일을 지우면 그 증빙 행이 사라진다
+        up3 = requests.post(f"{sv.base}/api/evidence/{quote(dep_no)}", data={"kind": "거래명세서"}, files={"files": ("c.png", b"\x89PNG c", "image/png")}).json()
+        mp = os.path.join(sv.dir, "mock", "증빙관리", "2026", "적립금", "검사 상사", dep_no, up3["items"][0]["파일명"])
+        ck("동기화 준비: 모의 파일 존재", os.path.exists(mp), mp)
+        os.remove(mp)
+        s, r = sv.call("POST", "/api/evidence/sync-all")
+        ck("드라이브 동기화: 지운 파일의 증빙 삭제", s == 200 and up3["items"][0]["증빙번호"] in r["removed"] and not r["errors"], (s, r))
         s, r = sv.call("DELETE", f"/api/deposit/{dep_row}", {})
         ck("증빙 있는 적립금 행 삭제 → 400", s == 400, (s, r))
         # ---- 옛 모양 적립번호(적립-YYYY-NNN) 보정: 새 모양으로 바꾸고 증빙 참조도 함께 ----
