@@ -4,10 +4,11 @@ Updated: 2026-10-20
 
 ## Goal
 
-AI chat history lives only in the browser: a refresh loses it, several users cannot be told apart, and one conversation cannot be split by topic. Store chats on the server per login user, in several rooms, with a 7-day auto-delete unless the user keeps a room.
+Fund kind 연구지원: payees whose name contains '연구지원' become proper funds of that kind, their codes drop the leading '연구', existing transaction codes are renamed, and the fund list sorts 국책-교육-원내-위탁-연구지원-공금-기타.
 
 ## Done
 
+- a39201b merged into main (conflict only in progress.md); the app on port 8791 was restarted with the merged code and shows 연구지원 in the 재원 종류 list.
 - 4e1c5a1 fund kind 연구지원 (FUND_TYPES order 국책-교육-원내-위탁-연구지원-공금-기타 = fund list default sort in `store.load`; app.js fallback, tools docstring, README). Live ledger migrated 2026-10-20 17:43 by a scratch script (not in repo): payees whose 지급처명 contains '연구지원' (연구김지현, 연구김용수, 연구센소리, MATRIX, 연구류지원) became funds of kind 연구지원 with 잔액미관리=Y (my call: they have no budget rows) and 과제명 = old 지급처명; codes drop the leading 연구 (김지현, 김용수, 센소리, 류지원; MATRIX unchanged); 거래번호 and 재원 in 집행내역 (18 rows), 지급처 and 연결거래번호 in 인건비지급 (27 rows) renamed; no evidence, 품의, 예산변동 or memo referenced them. Payee 서울대산학 stays a payee. Backup app/backup/manual_before_research_support_20261020_174301.sqlite (and a duplicate …_174240 from the rehearsal). Checks pass.
 - 137e869 AI chat rooms, first version: `app/chat_store.py` (`app/chats.sqlite`, rooms per login email, 7-day purge unless kept, history limit 40), routes `/api/chats…` (old `/api/ai/chat` removed), `ai.chat_in_room` (stores question and answer with calls/proposals only on success), panel room bar (select, 새 대화, 이름, 보관, 삭제), past proposal cards status-only, notice text, persona 행정보조 김연구 / button 김연구 호출하기, `LEDGER_AI_FAKE=1` canned answer for UI tests. Checks: calc 32, API 110, db 55, ai 158, api-db 120, UI 84, ui-db 86.
 - Memo kind 비세목 (예산목·세목·세세목 target, active when the row matches any of the three; `tools.memos_for`; suggest prompt sends 관련메모). ai 166.
@@ -40,7 +41,15 @@ AI chat history lives only in the browser: a refresh loses it, several users can
 
 ## In progress
 
-None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE on the QA copy (room bar, title from first question, table rendering, notice). Not yet tried with the real model in rooms (the room layer only changes storage and history; the model path is the one verified earlier).
+None.
+
+## Next action
+
+Hard-refresh the 재원 tab (Ctrl+F5) and review the five 연구지원 funds (잔액미관리=Y, 과제명 = old 지급처명); edit 과제명 or 잔액미관리 there if wanted. Delete the duplicate backup app/backup/manual_before_research_support_20261020_174240.sqlite by hand.
+
+## Earlier note
+
+Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE on the QA copy (room bar, title from first question, table rendering, notice). Not yet tried with the real model in rooms (the room layer only changes storage and history; the model path is the one verified earlier).
 
 ## Open issues
 
