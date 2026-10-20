@@ -4,42 +4,23 @@ Updated: 2026-10-20
 
 ## Goal
 
-Move the ledger store from the xlsx file to SQLite so several users can work on one ledger, before the store code grows further. Screens and API behave the same; the existing tests pass; an xlsx export keeps the Excel view.
+The AI helper sends the whole ledger on every call. It gets slow and costly as the ledger grows, the user cannot check where an answer comes from, and it cannot remember facts outside the ledger (fund or vendor notes, rules). Rebuild it as a tool-calling agent on a shared tool module, with a memo store, for the accountant role first.
 
 ## Done
 
-- d202ab6 Session 3: `app/export_xlsx.py` writes a read-only xlsx copy (old sheet order, 예산변동 header row 8 with summary rows 1-7 via `_refresh_budget_summary`, hidden 메타 sheet, values through `_write_row`). `test_db` exports, re-imports and compares `read_all` from SQLite, the re-import and the xlsx (53 checks). README section "SQLite 저장소", CLAUDE.md commands, `*.sqlite*` gitignored.
-- 7ee9405 / f389f7f Session 2: every write path runs on SQLite when `LEDGER_DB` is set. `db.Workbook` / `db.Sheet` stand in for the openpyxl workbook; `_rows`, `_write_row`, `_next_row`, `_delete_row`, `_has_value`, `_meta_get/_meta_set`, `_rename_tag`, `_load` dispatch on the type; `_ensure_structure` and `_refresh_budget_summary` are skipped for SQLite. `_write_session` = one `BEGIN IMMEDIATE` transaction, `_save` backs up the committed state (`app/backup/*.sqlite`) and commits, `undo_last` restores from that backup, `meta.write_seq` replaces the file hash and feeds `/api/meta` (`store.data_stamp`). Each create/update/delete/replace writes one `changelog` row (author empty). `import_xlsx` repeats the structure fix-up until stable. Tests: `api-db` and `ui-db` run the API and UI tests on a SQLite copy (`LEDGER_TEST_MODE=db` in `tests/_env.py`), `test_db` checks backup, undo and changelog; `test_api` child output is read as UTF-8 (cp949 flake fixed).
-- ef7ffc0 Session 1: `app/db.py` (schema: one table per sheet, `id` + `author` columns, `meta`, `changelog`), `app/import_xlsx.py` (xlsx -> SQLite, fills author, refuses to overwrite without `--force`), `store.read_all` split into `_raw_xlsx` / `_raw_db` / `_derive` and reads SQLite when `LEDGER_DB` is set, `tests/test_db.py` (45 checks: counts, 금액 totals, every column equal between xlsx and SQLite on the QA ledger), `db` group in `tests/run.py`.
-
-## Done before the migration (xlsx era, kept for reference)
-
-- 5926413 fix: startup sheet check leaked a read_only workbook handle; every save since 10-18 13:32 failed at os.replace (backups piled up, ledger mtime frozen). Regression test in tests/test_api.py. User re-entered the lost entries.
-- 85f8c23 예산목 잔액 (집행 표·결의서 재원 현황) counts only budget rows with 신청일자 ≤ 원인발생일; 신청일자 required; blank → Jan 1 of ledger year on fix-up.
-- 0cfa798 evidence on deposit rows (적립번호 key, same evidence API, drawer shared with exec via XD.kind, Drive 증빙관리/YYYY/적립금/거래처/번호).
-- 99026bd deposit stages 발주일/결제일/수령일 → 상태 (사용 rows only), action endpoint, timeline in drawer, badge column, status filter.
-- edaf8b4 vendor codes: `거래처` sheet/tab, 적립번호 = 코드-적립|사용-YYYY-NNN, auto-register unknown vendors with a unique name prefix, old numbers renumbered on fix-up.
-- 4e6df73 / 462ec27 import script docs/import_소모품대장/import.py; applied to the live ledger (68 requests, 3 orders, 6 deposit rows, 알파 balance 20,400 = source). Supplier 알파몰 → 알파 (code, settings default, UI text, app/.env by user instruction).
-- 2bc34c7 request numbers E/S/C/Z-YYYY-NNN (R- renumbered on fix-up with reference updates); 사유 as its own column. Live-ledger one-offs: requester names unified (19), '구 신청번호' notes removed (68).
-- 2651274 order list column 구매내역 = first item + "외 n건".
-- Live ledger: 거래번호 renumbered by 원인발생일 for 융합인재 (58), SDM (12), AX (6) with reference updates; scratch script renumber_fund.py (not in repo). Backups app/backup/manual_before_*.
-- 741c0c8 exec 취소 status: cancel/uncancel actions with optional reason (logged in 보완이력), excluded from every total (server active_exec, client activeExec), voucher/stage actions blocked, linked execs cannot be cancelled.
-- b2f86a0 evidence list syncs names from Drive (file_meta → store.evidence_sync), missing/trashed files flagged.
-- cdda72f vendor name 알파 → 알파미금역점 (code 알파 stays): defaults (store.SUPPLIERS_DEFAULT, settings), ORDER_PREFIXES entry, request UI text, settings placeholder, README, import script VENDOR, app/.env REQUEST_SUPPLIERS. Live ledger renamed by a scratch script (79 cells: 집행내역·적립금·주문 거래처, 신청 구매처, 거래처 tab name; numbers, 적요, 비고, 품목 untouched). Backup app/backup/manual_before_vendorrename_20261020_134506.xlsx. No 알파 deposit evidence existed on Drive, so no Drive renames.
-- e44e9ee evidence file names drop 적요 (`재원_증빙종류_금액_YYMMDD`, deposits `거래처_…`); editing 재원/금액 (deposit 거래처/금액) renames Drive files + ledger names (main.sync_evidence_names).
+- Before this task: SQLite migration merged in a91649d (see `git log` and the Decisions below).
 
 ## In progress
 
-SQLite migration, first version (brainstormed 2026-10-20). Done conditions:
-- Store on SQLite: calc 32, API 95, UI 56 tests pass; screen and API behaviour unchanged. (done: api-db 95, ui-db 56 pass)
-- Every record has a stable id: API and frontend address records by id, not by row number. (done in substance: `_row` carries the SQLite id; the field name stays `_row`, see Decisions)
-- One-shot import script xlsx -> SQLite: on the QA ledger, every sheet's row count and amount totals equal the source. (done ef7ffc0)
-- Export SQLite -> xlsx: the exported file opens in Excel with the same sheets and columns as the current ledger. (done d202ab6; opened only by openpyxl, not by Excel)
-- Backup and undo on SQLite: a backup file exists before each write; undo works. (done f389f7f)
-- Runs on Linux: `python main.py` starts without the .bat files. (verified by code reading only: the .bat files are wrappers, the lock uses fcntl on posix; no Linux machine here)
-- Change log has an author column (email); the import fills existing rows with 안윤아 (snubh.ai.center.01@gmail.com). (done; writes log with an empty author until login)
+AI helper overhaul, first version (brainstormed 2026-10-20). Order: 1, 2, 4, 3, 5, 6. Done conditions:
+1. Shared tool module `app/tools.py`: the 9 read tools of `mcp_server.py` wrap `tools.py` functions; MCP behaviour on the QA ledger is unchanged (test).
+2. New read tools `budget_balance(재원, 예산목)`, `search_exec(keyword/vendor/period)`, `get_exec` (stages, evidence, linked 품의), `fx_rate(currency)` (frankfurter.app, no key), `read_memo(target)`: each has a unit test on the QA ledger without a model call; `budget_balance` equals the exec screen balance.
+3. Chat as a tool-calling agent: the system prompt holds only a small summary (today, funds with balances, open counts); the rest comes from tools; `propose_*` cards stay. `/api/ai/chat` sends no ledger JSON (test); sample questions 1, 3, 4, 6 answer correctly on the QA ledger (manual, once each).
+4. Memo store: sheet/table `메모` (kind 재원·거래처·일반, target, text, date). CRUD in the settings panel; the AI reads with `read_memo` and proposes with `propose_memo`; the card saves on approval. CRUD API test; nothing is stored before approval (test); one rule memo answers sample question 2 (manual).
+5. `/api/ai/suggest` sends only same-vendor history and the fund budget state; the 예산목 overwrite in app.js (AI 추천·검증) is fixed. Payload has no full ledger (test); a filled 예산목 is kept.
+6. Test group `ai` in `tests/run.py`, no model calls.
 
-Session order: (1) schema + import + read_all — done, (2) write paths — done, (3) export, docs — done. Left: MCP server check against SQLite, PRODUCT.md wording ("엑셀 파일이 원본"), switching the live ledger (user decision).
+Sample questions (tool design targets): (1) 재원·예산목 잔액, (2) 어떤 증빙이 필요한가 (memo), (3) 품목 이전 가격, (4) 장비 구매 시점·재원, (5) 환율, (6) 거래 진행 상태.
 
 ## Open issues
 
@@ -88,8 +69,10 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 - 2026-10-20 (user) SQLite migration, multi-user. Target: 3 (several accountants + researchers filing requests), external access, centre Linux server later, tunnel from a centre PC first. Login = Google, allow-list of emails managed by the accountant, first accountant in app/.env. Roles, login, external access, deployment are all later; the migration only adds stable ids and an author column. Existing rows get author 안윤아 (snubh.ai.center.01@gmail.com). SQLite before PostgreSQL (2026-10-19 decision kept).
 - 2026-10-20 (user) 한 문서(사전결재안 등)를 여러 거래의 증빙으로: 증빙 행 [복사] → 거래번호 여러 개 → 그 거래 폴더로 drive.copy(그 거래 기준 이름), 독립 증빙 항목(비고 '복사: 원본'). 연결(공유 파일)·드라이브 바로가기 방식은 사용자가 거절. POST /api/evidence/{번호}/copy.
 
+- 2026-10-20 (user) AI helper overhaul: hybrid C = small summary in the system prompt + read tools (not full ledger, not summary only); one tool module for MCP and the in-app agent; memo store by target kind (재원·거래처·일반), user edits, AI proposes and the user approves; fx_rate tool in the first version; OpenAI tool calling, receipt OCR (OCI candidate), report, travel calculator, rule-document answers all later. Accountant-role version first; the researcher version is a separate agent with its own smaller tool set (restriction by tool availability, not by prompt). My calls: memo UI in the settings panel; frankfurter.app for rates; tool loop cap stays 6; chat shows one line per tool call under the answer.
+
 ## Next action
 
-Ask the user whether to switch the live ledger now: import `의료인공지능센터_지출장부_2026.xlsx` to SQLite (`import_xlsx.py`), set `LEDGER_DB` in `app/.env`, restart the app and MCP, and keep the xlsx as a read-only export. Before that, run `mcp_server.py` once against a SQLite QA copy. Then merge branch claude/sqlite-migration-difficulty-9c1e10 into main.
+Step 1: create app/tools.py from the read functions in mcp_server.py and make the MCP server wrap it; add a tools test on the QA ledger.
 
 Previous candidates: Candidates: one-shot rename of existing evidence files to the new rule (needs Drive connected), LEDGER_HOST + server role check, 학회·기타 review leftovers.
