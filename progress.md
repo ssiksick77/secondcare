@@ -4,7 +4,7 @@ Updated: 2026-10-20
 
 ## Goal
 
-2026-10-19~20 session: fix the save failure, then the user's feature list (date-aware balances, deposit evidence/stages/vendor codes, consumables import, request numbering, exec cancel, Drive-aware evidence names). All items done; next task not defined.
+2026-10-20 (fork session): rename vendor 알파 to 알파미금역점 everywhere, code 알파 unchanged. Done; next task not defined.
 
 ## Done
 
@@ -19,6 +19,7 @@ Updated: 2026-10-20
 - Live ledger: 거래번호 renumbered by 원인발생일 for 융합인재 (58), SDM (12), AX (6) with reference updates; scratch script renumber_fund.py (not in repo). Backups app/backup/manual_before_*.
 - 741c0c8 exec 취소 status: cancel/uncancel actions with optional reason (logged in 보완이력), excluded from every total (server active_exec, client activeExec), voucher/stage actions blocked, linked execs cannot be cancelled.
 - b2f86a0 evidence list syncs names from Drive (file_meta → store.evidence_sync), missing/trashed files flagged.
+- cdda72f vendor name 알파 → 알파미금역점 (code 알파 stays): defaults (store.SUPPLIERS_DEFAULT, settings), ORDER_PREFIXES entry, request UI text, settings placeholder, README, import script VENDOR, app/.env REQUEST_SUPPLIERS. Live ledger renamed by a scratch script (79 cells: 집행내역·적립금·주문 거래처, 신청 구매처, 거래처 tab name; numbers, 적요, 비고, 품목 untouched). Backup app/backup/manual_before_vendorrename_20261020_134506.xlsx. No 알파 deposit evidence existed on Drive, so no Drive renames.
 - e44e9ee evidence file names drop 적요 (`재원_증빙종류_금액_YYMMDD`, deposits `거래처_…`); editing 재원/금액 (deposit 거래처/금액) renames Drive files + ledger names (main.sync_evidence_names).
 
 ## In progress
@@ -27,7 +28,8 @@ Updated: 2026-10-20
 
 ## Open issues
 
-- checks: pass (smoke; test: calc 32, API 87, UI 56, about 3 minutes — run with a timeout above 300 s). No lint or typecheck.
+- checks: pass (smoke; test: calc 32, API 95, UI 56, about 3 minutes — run with a timeout above 300 s). No lint or typecheck. Two sessions running check.sh at the same time collide on tests/.tmp/ (one run fails); run checks from one session at a time.
+- The app running on port 8791 must be restarted to read the new REQUEST_SUPPLIERS in app/.env.
 - Live ledger follow-ups for the user: enter 배송일 for order 알파-20260703-01 (11 requests then become 완료); review auto-registered vendor codes in the 거래처 tab (codes are immutable once used in a number).
 - Existing evidence files keep old-rule names (with 적요) until their exec's 재원/금액 is edited; a one-shot rename script could be offered. Folder names were fixed by [드라이브 동기화] on 2026-10-20.
 - MCP `update_row` does not rename evidence files (only the web PUT route does).
@@ -59,6 +61,7 @@ Updated: 2026-10-20
 - 2026-10-20 (user) 증빙 파일명에서 적요 제거(짧게, 내부 메모 노출 방지); 재원·거래처·금액 수정 시 자동 변경. 거절된 대안: 증빙번호+거래처, 분류 접두. My calls: MCP update_row 는 이름 변경 안 함, 기존 파일은 수정 전까지 옛 이름.
 - 2026-10-20 (user) 증빙 교체([교체] 버튼, replace=1, 옛 파일 휴지통) 9ff0690; 드라이브가 기준: 지운(휴지통) 파일의 증빙 행은 조회·[드라이브 동기화] 때 장부에서 삭제, 폴더 이름은 현재 번호로 수정(drive.fix_folder_name) b6d17cf; 증빙번호는 지운 번호 재사용(베타, 메타 최고값 폐기). 실제 장부에 동기화 1회 실행: AX 증빙 8건 삭제(사용자가 일부러 지움), 폴더 3개 이름 수정, 백업 manual_before_drivesync_*. drive.file 권한이라 직접 넣은 파일은 못 봄(README).
 - 2026-10-20 (user) 증빙 업로드 시 원본파일명 보존 안 함(열은 남기되 빈 값), 실제 장부의 기존 값 9건 비움(백업 manual_before_origname_*). 신청 첨부는 그대로.
+- 2026-10-20 (user) 거래처 이름 알파 → 알파미금역점, 코드는 알파 유지. My calls: 적립번호·주문번호·메타 키·적요·비고·품목명은 그대로, 거래처 탭 비고는 "이전 이름 알파 (코드 알파)".
 - 2026-10-20 (user) 한 문서(사전결재안 등)를 여러 거래의 증빙으로: 증빙 행 [복사] → 거래번호 여러 개 → 그 거래 폴더로 drive.copy(그 거래 기준 이름), 독립 증빙 항목(비고 '복사: 원본'). 연결(공유 파일)·드라이브 바로가기 방식은 사용자가 거절. POST /api/evidence/{번호}/copy.
 
 ## Next action
