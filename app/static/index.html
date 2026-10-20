@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Second Care</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -33,7 +34,7 @@
     <li><button role="tab" id="tab-dash" aria-controls="panel-dash" aria-selected="true">대시보드</button></li>
     <li><button role="tab" id="tab-exec" aria-controls="panel-exec" aria-selected="false">집행내역</button></li>
     <li><button role="tab" id="tab-req" aria-controls="panel-req" aria-selected="false">품의내역</button></li>
-    <li><button role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false">예산변동</button></li>
+    <li><button role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false">예산</button></li>
     <li><button role="tab" id="tab-deposit" aria-controls="panel-deposit" aria-selected="false">적립금</button></li>
     <li><button role="tab" id="tab-tags" aria-controls="panel-tags" aria-selected="false">태그</button></li>
     <li><button role="tab" id="tab-vendor" aria-controls="panel-vendor" aria-selected="false">거래처</button></li>
@@ -269,16 +270,18 @@
     <div class="table-wrap"><table class="grid" id="req-table"></table></div>
   </section>
 
-  <!-- 예산변동 -->
+  <!-- 예산 -->
   <section id="panel-budget" role="tabpanel" aria-labelledby="tab-budget" hidden>
+    <h2 style="margin-top:0">재원별 예산현액 요약</h2>
+    <p class="toolbar-note">예산현액 = 이월 + 당초 + 변경 합계. 잔액 미관리 재원과 예산을 입력하지 않은 재원은 표시하지 않습니다.</p>
+    <div class="table-wrap"><table class="grid" id="budget-summary"></table></div>
+    <h2>변경 내역</h2>
     <div class="toolbar">
-      <label>재원 <select data-filter="재원" data-kind="budget"><option value="">전체</option></select></label>
-      <span class="toolbar-note">변경회차: <b>이월</b>(이월금) · <b>당초</b>(당초액) · 숫자(변경 회차). 예산현액 = 이월 + 당초 + 변경 합계</span>
+      <label>재원 <select data-filter="재원" data-kind="budget"><option value="">선택</option></select></label>
+      <span class="toolbar-note">변경회차: <b>이월</b>(이월금) · <b>당초</b>(당초액) · 숫자(변경 회차)</span>
       <button type="button" class="btn btn-primary" data-add="budget">예산 행 추가</button>
     </div>
     <div class="table-wrap"><table class="grid" id="budget-table"></table></div>
-    <h2>재원별 예산현액 요약</h2>
-    <div class="table-wrap"><table class="grid" id="budget-summary"></table></div>
   </section>
 
   <!-- 적립금 -->
@@ -594,9 +597,21 @@
         <label class="wide" for="s-org">기관명 (결의서·발주서 머리글) <small>(비우면 분당서울대학교병원 의료인공지능센터)</small><input id="s-org" name="LEDGER_ORG" type="text" autocomplete="off" maxlength="80"></label>
       </div>
     </fieldset>
+    <fieldset class="wide s-group" id="s-users" style="margin:0 0 14px" hidden>
+      <legend>로그인 허용 계정 (마스터 전용)</legend>
+      <p class="toolbar-note" style="margin:4px 0 8px">여기에 적은 구글 계정만 로그인할 수 있습니다. 마스터 계정은 <code>app/.env</code>의 <code>LEDGER_ALLOWED_EMAILS</code>에 있어 여기서 지울 수 없습니다. 권한: 관리자 = 열람·결재, 담당자 = 장부 입력·신청 처리, 연구원 = 본인 신청 (서버 검사는 다음 단계). 이름을 비우면 그 사람이 처음 로그인할 때 직접 적습니다. 추가·삭제는 바로 적용됩니다(아래 저장 버튼과 무관).</p>
+      <div id="users-list" class="memo-list" aria-live="polite"></div>
+      <div class="users-add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+        <label for="users-email" style="flex:1 1 220px;margin:0;display:flex;flex-direction:column;gap:2px">추가할 계정 <small>(구글 이메일)</small><input id="users-email" type="email" autocomplete="off" inputmode="email" placeholder="name@example.com"></label>
+        <label for="users-role" style="flex:0 1 130px;margin:0;display:flex;flex-direction:column;gap:2px">권한 <small>(필수)</small><select id="users-role" required><option value="">선택</option><option value="staff">담당자</option><option value="manager">관리자</option><option value="researcher">연구원</option></select></label>
+        <label for="users-name" style="flex:0 1 150px;margin:0;display:flex;flex-direction:column;gap:2px">이름 <small>(선택)</small><input id="users-name" type="text" autocomplete="off" maxlength="20" placeholder="홍길동"></label>
+        <button type="button" class="btn btn-sm" id="users-add">추가</button>
+      </div>
+      <p class="toolbar-note" id="users-msg" aria-live="polite" style="margin:6px 0 0"></p>
+    </fieldset>
     <fieldset class="wide s-group" id="s-memo" style="margin:0 0 14px">
       <legend>메모 (AI 도우미가 참고하는 장부 밖 지식)</legend>
-      <p class="toolbar-note" style="margin:4px 0 8px">재원·거래처별 특이사항과 일반 규정(예: 어떤 결제에 어떤 증빙이 필요한가)을 적어 두면 AI 도우미가 답할 때 참고합니다. 장부의 '메모' 시트에 저장되며, AI 가 대화 중 제안한 메모도 승인해야 저장됩니다.</p>
+      <p class="toolbar-note" style="margin:4px 0 8px">재원·거래처별 특이사항, 비세목(예산목·세목·세세목) 규칙, 일반 규정(예: 어떤 결제에 어떤 증빙이 필요한가)을 적어 두면 AI 도우미가 답할 때와 폼의 추천·검증에서 참고합니다. 비세목 메모는 입력 행의 예산목·세목·세세목 중 하나와 대상이 같을 때 적용됩니다. 장부의 '메모' 시트에 저장되며, AI 가 대화 중 제안한 메모도 승인해야 저장됩니다.</p>
       <div id="memo-list" class="memo-list"></div>
       <div style="margin-top:8px"><button type="button" class="btn btn-sm" id="memo-add">메모 추가</button></div>
     </fieldset>

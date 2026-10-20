@@ -115,8 +115,8 @@ function formFields(kind) {
     { k: "연결거래번호", type: "ro" },
   ];
   if (kind === "memo") return [
-    { k: "종류", type: "select", opts: DATA.meta.memo_kinds || ["재원", "거래처", "일반"], req: true, hint: "재원·거래처별 특이사항, 일반 규정" },
-    { k: "대상", type: "datalist", list: "대상", hint: "재원코드 또는 거래처명 · 일반은 비움" },
+    { k: "종류", type: "select", opts: DATA.meta.memo_kinds || ["재원", "거래처", "비세목", "일반"], req: true, hint: "재원·거래처·비세목(예산목·세목)별 규칙, 일반 규정" },
+    { k: "대상", type: "datalist", list: "대상", hint: "재원코드 · 거래처명 · 예산목/세목/세세목 이름 (일반은 비움)" },
     { k: "작성일", type: "date", hint: "비우면 오늘" },
     { k: "내용", type: "text", cls: "wide", req: true, hint: "AI 도우미가 답할 때 그대로 참고" },
     { k: "비고", type: "text", cls: "wide" },
@@ -131,7 +131,7 @@ function formFields(kind) {
   ];
   if (kind === "funds") return [
     { k: "재원코드", type: "text", req: true, hint: "'-' 없이, 예: AI01" },
-    { k: "종류", type: "select", opts: DATA.meta.fund_types || ["국책", "원내", "위탁", "교육", "공금", "기타"], req: true, hint: "공금은 예산목 없이 잔액만 관리" },
+    { k: "종류", type: "select", opts: DATA.meta.fund_types || ["국책", "교육", "원내", "위탁", "연구지원", "공금", "기타"], req: true, hint: "공금은 예산목 없이 잔액만 관리" },
     { k: "과제명", type: "text", cls: "mid" },
     { k: "잔액미관리", type: "check", cls: "wide", label: "잔액 미관리 — 재원 출처로만 쓰고 예산·잔액을 관리하지 않음 (예산변동 불가, 대시보드·가용잔액·결의서 재원 현황 제외)" },
     { k: "시작일", type: "date" }, { k: "종료일", type: "date" }, { k: "비고", type: "text", cls: "wide" },
@@ -213,7 +213,7 @@ function fillSelects() {
 
   const vendors = [...new Set(DATA.deposit.map(r => r["거래처"]).filter(Boolean))].sort();
   $$("select[data-filter='거래처']").forEach(sel => setOptions(sel, ["", ...vendors], ["전체", ...vendors]));
-  $$("select[data-filter='재원']").forEach(sel => setOptions(sel, ["", ...funds], ["전체", ...funds]));
+  $$("select[data-filter='재원']").forEach(sel => setOptions(sel, ["", ...funds], [sel.dataset.kind === "budget" ? "선택" : "전체", ...funds]));  // 예산 변경 내역은 재원을 골라야 보임
   $$("select[data-filter='year']").forEach(sel => setOptions(sel, ["", ...ys], ["전체", ...ys]));
   $$("select[data-filter='month'], #dash-month").forEach(sel => setOptions(sel, ["", ...Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))], ["전체", ...Array.from({ length: 12 }, (_, i) => (i + 1) + "월")]));
   $$("select[data-filter='예산목']").forEach(sel => setOptions(sel, ["", ...DATA.meta.budget_items], ["전체", ...DATA.meta.budget_items]));
@@ -275,6 +275,7 @@ function renderAll() {
 const SORT = {};  // kind -> {k, dir}
 // 목록별 선택 열·행 표시 훅 (신청 화면: request.js 가 채움). {head(), cell(r), rowCls(r), after()}
 const SEL_HOOK = {};
+SEL_HOOK.budget = { head: () => "", cell: () => "", rowCls: () => "", empty: () => FILTERS.budget["재원"] ? "이 재원의 예산 변경 내역이 없습니다." : "재원을 선택하면 변경 내역이 보입니다." };
 // 행이 많으면 처음 LIST_LIMIT 건만 그리고 '더 보기'로 나머지 (합계·CSV 는 항상 전체 기준). 필터가 바뀌면 다시 접힘
 const LIST_LIMIT = 400, LIST_MORE = {};
 const norm = s => String(s ?? "").toLowerCase().replace(/,/g, "");
@@ -283,6 +284,7 @@ function filtered(kind) {
   const f = FILTERS[kind] || {};
   const q = norm((f.q || "").trim());
   return DATA[kind].filter(r => {
+    if (kind === "budget" && !f["재원"]) return false;  // 예산 변경 내역은 재원을 골라야 보임
     if (f["재원"] && r["재원"] !== f["재원"]) return false;
     if (f["예산목"] && r["예산목"] !== f["예산목"]) return false;
     if (f["상태"] && r["상태"] !== f["상태"]) return false;
@@ -402,7 +404,8 @@ function renderList(kind) {
 
 function renderBudgetSummary() {
   const items = DATA.meta.budget_items;
-  const funds = fundOptions();
+  const hasBudget = new Set(DATA.budget.map(r => r["재원"]));
+  const funds = fundOptions().filter(f => hasBudget.has(f) && !isUntrackedFund(f));  // 잔액 미관리·예산 미입력 재원은 숨김
   const sum = {};
   funds.forEach(f => sum[f] = Object.fromEntries(items.map(i => [i, 0])));
   DATA.budget.forEach(r => { if (sum[r["재원"]]) items.forEach(i => sum[r["재원"]][i] += r[i] || 0); });
@@ -568,7 +571,7 @@ function renderDashboard() {
   });
   DASH_COLS = ["재원", "예산목", ...cols];
   $("#dash-table").closest(".table-wrap").classList.toggle("empty", !body);
-  $("#dash-table").innerHTML = th + `<tbody>${body || `<tr><td class="empty" colspan="${cols.length + 2}">${DATA.funds.length ? "예산 또는 집행 데이터가 없습니다." : "등록된 재원이 없습니다. [재원] 탭에서 과제를 먼저 등록하고 [예산변동]에 예산을 입력하세요."}</td></tr>`}</tbody>`;
+  $("#dash-table").innerHTML = th + `<tbody>${body || `<tr><td class="empty" colspan="${cols.length + 2}">${DATA.funds.length ? "예산 또는 집행 데이터가 없습니다." : "등록된 재원이 없습니다. [재원] 탭에서 과제를 먼저 등록하고 [예산]에 예산을 입력하세요."}</td></tr>`}</tbody>`;
 
   // 월별 차트 (누적선 + 예산현액 기준선)
   renderChart(execs, funds, year, tot.b);
@@ -1206,7 +1209,8 @@ $("#dash-fund").addEventListener("change", renderDashboard);
 $("#dash-year").addEventListener("change", renderDashboard);
 $("#btn-reload").addEventListener("click", load);
 // 로그인 사용자 표시 · 로그아웃 (auth.py)
-api("GET", "/api/me").then(u => { if (u && u.email) { $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
+let ME = {};  // /api/me: {email, name, is_master}
+api("GET", "/api/me").then(u => { if (u && u.email) { ME = u; $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
 $("#btn-logout").addEventListener("click", async () => { try { await api("POST", "/auth/logout"); } catch { } location.href = "/login"; });
 document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
@@ -1536,6 +1540,8 @@ async function openSettings() {
     if (typeof requestSettingsOpen === "function") requestSettingsOpen();
     refreshDriveStatus();
     memoRender();
+    $("#s-users").hidden = !ME.is_master;
+    if (ME.is_master) usersRender();
     $("#dlg-settings").showModal();
   } catch (e) { showAlert("설정을 불러오지 못했습니다: " + e.message, "error"); }
 }
@@ -1576,10 +1582,49 @@ $("#s-clear-key").addEventListener("click", async () => {
 });
 
 
+// ---------- 로그인 허용 계정 (설정 패널 · 마스터만 · /api/users) ----------
+const ROLE_LABELS = { master: "마스터", manager: "관리자", staff: "담당자", researcher: "연구원" };  // docs/권한_설계_2026-10-20.md
+function usersMsg(text, warn) { const m = $("#users-msg"); if (!m) return; m.textContent = text || ""; m.classList.toggle("warn", !!warn); }
+async function usersRender() {
+  const box = $("#users-list"); if (!box) return;
+  try {
+    const r = await api("GET", "/api/users");
+    const rows = r.users || [];
+    box.innerHTML = `<table><thead><tr><th>이메일</th><th>권한</th><th>이름</th><th>추가일</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(u => `<tr data-email="${esc(u.email)}"><td>${esc(u.email)}</td><td>${esc(ROLE_LABELS[u.role] || u.role || "")}</td><td>${u.name ? esc(u.name) : '<span class="muted" title="아직 로그인하지 않음">—</span>'}</td><td>${u.master ? '<span class="muted">(.env)</span>' : esc((u.added_at || "").slice(0, 10))}</td><td class="actions">${u.master || u.email === ME.email ? "" : `<button type="button" class="btn btn-sm btn-ghost" data-user-del="${esc(u.email)}" aria-label="${esc(u.email)} 삭제">삭제</button>`}</td></tr>`).join("")}</tbody></table>`;
+    const add = $("#users-add"), inp = $("#users-email");
+    add.disabled = inp.disabled = $("#users-role").disabled = $("#users-name").disabled = !r.db;
+    usersMsg(r.db ? "" : "xlsx 저장소에서는 app/.env 의 LEDGER_ALLOWED_EMAILS 만 씁니다.", !r.db);
+  } catch (e) { box.innerHTML = `<div class="empty">목록을 불러오지 못했습니다: ${esc(e.message)}</div>`; }
+}
+async function usersAdd() {
+  const inp = $("#users-email"), role = $("#users-role"), nm = $("#users-name"), email = inp.value.trim();
+  if (!email) { usersMsg("이메일을 입력하세요.", true); inp.focus(); return; }
+  if (!role.value) { usersMsg("권한을 고르세요.", true); role.focus(); return; }
+  try {
+    const r = await api("POST", "/api/users", { email, role: role.value, name: nm.value.trim() });
+    if (r.added) { inp.value = ""; nm.value = ""; role.value = ""; }
+    await usersRender();
+    if (r.added) usersMsg(`${r.email} 을(를) 추가했습니다. 이 계정으로 구글 로그인하면 바로 들어올 수 있습니다.`); else usersMsg(r.message, true);
+    inp.focus();
+  } catch (e) { usersMsg(e.message, true); inp.focus(); }
+}
+$("#users-add")?.addEventListener("click", usersAdd);
+["#users-email", "#users-name"].forEach(sel => $(sel)?.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); usersAdd(); } }));  // Enter 가 설정 저장(submit)으로 가지 않게
+$("#users-list")?.addEventListener("click", async e => {
+  const b = e.target.closest("[data-user-del]"); if (!b) return;
+  const email = b.dataset.userDel;
+  const ok = await confirmDlg({ title: "허용 계정 삭제", body: `${email}
+
+삭제하면 이 계정은 다음 요청부터 로그인할 수 없습니다. 이 계정이 작성한 행과 이름은 그대로 남습니다.`, verb: "삭제", danger: true });
+  if (!ok) return;
+  try { await api("DELETE", `/api/users/${encodeURIComponent(email)}`); await usersRender(); usersMsg(`${email} 을(를) 허용 목록에서 지웠습니다.`); }
+  catch (err) { usersMsg(err.message, true); }
+});
+
 // ---------- 메모 (설정 패널 · AI 도우미가 read_memo 로 읽는 장부 밖 지식) ----------
 function memoRender() {
   const box = $("#memo-list"); if (!box) return;
-  $("#dl-대상").innerHTML = [...new Set([...DATA.funds.map(f => f["재원코드"]), ...DATA.vendor.map(v => v["거래처명"]), ...DATA.exec.map(r => r["거래처"])].filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join("");
+  $("#dl-대상").innerHTML = [...new Set([...DATA.funds.map(f => f["재원코드"]), ...DATA.vendor.map(v => v["거래처명"]), ...DATA.exec.map(r => r["거래처"]), ...DATA.meta.budget_items, ...DATA.exec.flatMap(r => [r["세목"], r["세세목"]])].filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join("");
   const rows = [...(DATA.memo || [])].sort((a, b) => (a["종류"] || "").localeCompare(b["종류"] || "") || (a["대상"] || "").localeCompare(b["대상"] || "") || a._row - b._row);
   box.innerHTML = rows.length ? `<table><thead><tr><th>종류</th><th>대상</th><th>내용</th><th>작성일</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r["종류"])}</td><td>${esc(r["대상"] || "-")}</td><td class="wrap">${esc(r["내용"])}${r["비고"] ? `<div class="muted">${esc(r["비고"])}</div>` : ""}</td><td>${esc(r["작성일"] || "")}</td><td class="actions"><button type="button" class="btn btn-sm" data-memo-edit="${r._row}">수정</button> <button type="button" class="btn btn-sm btn-ghost" data-memo-del="${r._row}">삭제</button></td></tr>`).join("")}</tbody></table>`
     : '<p class="empty">메모가 없습니다. [메모 추가]로 재원·거래처 특이사항이나 규정을 적어 두세요.</p>';

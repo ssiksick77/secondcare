@@ -139,7 +139,32 @@ up = store.update("memo", m2["_row"], {**{k: v for k, v in m2.items() if not k.s
 ck("memo: 수정", up["내용"].endswith("(100만원 이상)"))
 store.delete("memo", m1["_row"])
 ck("memo: 삭제 후 read_memo (xlsx 는 행 번호가 당겨짐)", [r["내용"] for r in tools.read_memo()] == [up["내용"]])
-ck("memo: 메타 memo_kinds", store.read_all()["meta"]["memo_kinds"] == ["재원", "거래처", "일반"])
+ck("memo: 메타 memo_kinds", store.read_all()["meta"]["memo_kinds"] == ["재원", "거래처", "비세목", "일반"])
+# 비세목 메모: 대상이 행의 예산목·세목·세세목 중 하나와 같으면 활성화
+try:
+    store.create("memo", {"종류": "비세목", "내용": "x"}); ck("memo: 비세목은 대상 필수", False)
+except ValueError as e:
+    ck("memo: 비세목은 대상 필수", "예산목·세목·세세목" in str(e), str(e))
+mi = store.create("memo", {"종류": "비세목", "대상": "연구활동비", "내용": "연구활동비는 50만원 초과 시 견적서 2부"})
+ms = store.create("memo", {"종류": "비세목", "대상": "회의비", "내용": "회의비는 참석자 명단"})
+mg = store.create("memo", {"종류": "일반", "내용": "모든 집행은 영수증 원본"})
+mv = store.create("memo", {"종류": "거래처", "대상": vend, "내용": "이 거래처는 세금계산서 월말 일괄"})
+allm = store.read_all()["memo"]
+got = lambda rec: sorted(m["내용"] for m in tools.memos_for(rec, allm))
+ck("memos_for: 예산목 일치 + 일반", got({"재원": "ZZ", "예산목": "연구활동비", "세목": "", "거래처": ""}) == ["모든 집행은 영수증 원본", "연구활동비는 50만원 초과 시 견적서 2부"])
+ck("memos_for: 세목 일치 (대소문자·공백 무시)", got({"예산목": "연구시설.장비비", "세목": " 회의비 "}) == ["모든 집행은 영수증 원본", "회의비는 참석자 명단"])
+ck("memos_for: 세세목 일치", "회의비는 참석자 명단" in got({"예산목": "x", "세목": "y", "세세목": "회의비"}))
+ck("memos_for: 거래처·재원 메모", got({"재원": f0, "거래처": vend, "예산목": "없음"}) == sorted(["모든 집행은 영수증 원본", "이 거래처는 세금계산서 월말 일괄", "장비 구매 전 사전승인 필요 (100만원 이상)"]))
+ck("memos_for: 일치 없으면 일반만", got({"예산목": "없는것"}) == ["모든 집행은 영수증 원본"])
+import ai
+sg2 = json.loads(ai.suggest_prompt({"재원": f0, "거래처": vend, "예산목": "연구활동비", "금액": 10000}, "exec")[1])
+ck("suggest_prompt: 관련메모 포함 (재원·거래처·비세목·일반)", {m["종류"] for m in sg2["관련메모"]} == {"재원", "거래처", "비세목", "일반"} and all(set(m) == {"종류", "대상", "내용"} for m in sg2["관련메모"]), sg2["관련메모"])
+for r_ in (mi, ms, mg, mv):
+    pass  # xlsx 는 삭제 시 행이 당겨지므로 내용으로 지운다
+for content in ("연구활동비는 50만원 초과 시 견적서 2부", "회의비는 참석자 명단", "모든 집행은 영수증 원본", "이 거래처는 세금계산서 월말 일괄"):
+    row = next(m["_row"] for m in store.read_all()["memo"] if m["내용"] == content)
+    store.delete("memo", row)
+ck("memo: 비세목 검사 뒤 정리", [m["내용"] for m in tools.read_memo()] == [up["내용"]])
 
 # --- 채팅 에이전트 (ai.py): 요약 프롬프트 + 도구 루프, 가짜 Anthropic 클라이언트 ---
 import ai, types
@@ -181,7 +206,7 @@ ck("run_tool: 알 수 없는 인자는 무시", ai.run_tool("list_funds", {"nope
 # --- 추천(/api/ai/suggest) 프롬프트: 장부 전체가 아니라 같은 거래처 이력·같은 금액·해당 재원 예산만 ---
 sg_sys, sg_user = ai.suggest_prompt({"재원": f0, "거래처": vend, "금액": 10000, "적요": "검사"}, "exec")
 sg = json.loads(sg_user)
-ck("suggest_prompt: 장부 전체 없음", "<ledger>" not in sg_sys and set(sg) == {"입력중인행", "종류", "같은거래처_최근이력", "같은금액_최근이력", "해당재원_예산현황"}, list(sg))
+ck("suggest_prompt: 장부 전체 없음", "<ledger>" not in sg_sys and set(sg) == {"입력중인행", "종류", "같은거래처_최근이력", "같은금액_최근이력", "해당재원_예산현황", "관련메모"}, list(sg))
 ck("suggest_prompt: 같은 거래처 이력만 (30건 이하)", all(r["거래처"] == vend for r in sg["같은거래처_최근이력"]) and len(sg["같은거래처_최근이력"]) <= 30)
 ck("suggest_prompt: 해당 재원 예산만", all(t["재원"] == f0 for t in sg["해당재원_예산현황"]) and sg["해당재원_예산현황"])
 

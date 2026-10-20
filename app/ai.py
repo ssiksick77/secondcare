@@ -251,7 +251,7 @@ AGENT_SYSTEM = """당신은 Second Care(분당서울대학교병원 의료인공
 도구 사용 규칙:
 - 잔액, "얼마 쓸 수 있나" → budget_balance(재원코드, 예산목). 재원코드는 <summary> 의 재원 목록에서 고르고, 사용자가 과제명으로 말하면 코드로 바꿔 부르세요.
 - 품목·장비·거래처 이름으로 "전에 얼마에 샀나", "언제 어느 재원으로 샀나" → search_ledger. 한 건의 상세·진행 상태·증빙·연결 품의 → get_exec(거래번호).
-- 집행 규정, 어떤 증빙이 필요한가, 재원·거래처별 특이사항 → 먼저 read_memo. 메모에 없으면 일반 원칙은 일반 원칙임을 밝히고 담당자 확인을 권하세요.
+- 집행 규정, 어떤 증빙이 필요한가, 재원·거래처별 특이사항, 예산목·세목별 규칙(종류 '비세목') → 먼저 read_memo. 메모에 없으면 일반 원칙은 일반 원칙임을 밝히고 담당자 확인을 권하세요.
 - 환율 → fx_rate. 유럽중앙은행 기준이라 은행 고시 환율과 다를 수 있음을 함께 알리세요.
 - 재원×예산목 집계 표 → get_dashboard. 목록 → list_exec / list_req / list_budget / list_deposit. 태그·거래처 목록 → list_tags / list_vendors.
 - 한 번에 필요한 도구를 여러 개 불러도 됩니다. 결과가 길면 limit 를 줄이거나 조건을 더 주세요.
@@ -396,6 +396,7 @@ def suggest_prompt(rec: dict, kind: str) -> tuple[str, str]:
     budget_rows = [t for t in dash["table"] if t["재원"] == rec.get("재원")]
     system = (
         "회계 입력 보조원입니다. 입력 중인 행을 보고 예산목·세목·태그를 추천하고 이상 징후를 경고하세요.\n"
+        "관련메모는 담당자가 적어 둔 규칙(재원·거래처·비세목·일반)이며 이 행에 해당하는 것만 골라 넣었습니다. 메모와 어긋나는 입력은 경고에 포함하세요.\n"
         f"예산목 목록: {store.BUDGET_ITEMS}\n"
         f"기존 세목 목록: {sorted({r['세목'] for r in data['exec'] if r.get('세목')})[:200]}\n"
         f"태그 목록(센터 내부 계정, 1개만 선택): {[(t['태그명'], t['분류'], t['설명']) for t in data['tags']][:200]}\n"
@@ -404,6 +405,7 @@ def suggest_prompt(rec: dict, kind: str) -> tuple[str, str]:
     user = json.dumps({
         "입력중인행": rec, "종류": "집행" if kind == "exec" else "품의",
         "같은거래처_최근이력": history, "같은금액_최근이력": similar, "해당재원_예산현황": budget_rows,
+        "관련메모": [{k: m.get(k) for k in ("종류", "대상", "내용")} for m in tools.memos_for(rec, data.get("memo", []))],
     }, ensure_ascii=False, default=str)
     return system, user
 

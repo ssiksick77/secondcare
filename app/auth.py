@@ -1,7 +1,8 @@
 """구글 로그인 (OpenID Connect) + 서명 쿠키 세션.
 
 - 모든 화면·API 는 로그인 필수 (main.py 미들웨어). 화면은 /login 으로, /api/* 는 401.
-- 허용 이메일: LEDGER_ALLOWED_EMAILS (쉼표 구분, app/.env). 비어 있으면 아무도 로그인할 수 없다.
+- 허용 이메일: 마스터 = LEDGER_ALLOWED_EMAILS (쉼표 구분, app/.env) + SQLite users 표의 allowed 행 (마스터가 설정 화면에서 관리).
+  .env 가 비어 있으면 마스터가 없어 아무도 관리할 수 없다.
 - 세션 쿠키: HMAC 서명 JSON, 30일. 서명 키 LEDGER_SESSION_SECRET 은 없으면 첫 실행 때 만들어 .env 에 저장.
 - OAuth 클라이언트: LEDGER_OAUTH_CLIENT (기본 google_client_secret.json, 드라이브와 같은 파일도 됨).
   리다이렉트 URI: LEDGER_OAUTH_REDIRECT (기본 http://127.0.0.1:<포트>/auth/callback). 다른 PC 접속 때는 이 값만 바꾼다.
@@ -37,11 +38,22 @@ def bypass_email() -> str:
 
 
 def allowed_emails() -> list[str]:
+    """마스터 계정: .env 의 LEDGER_ALLOWED_EMAILS. 항상 허용되고, 허용 목록을 관리할 수 있다."""
     return [e.lower() for e in settings._split(settings.get("LEDGER_ALLOWED_EMAILS"))]
 
 
-def is_allowed(email: str) -> bool:
+def is_master(email: str) -> bool:
     return bool(email) and email.lower() in allowed_emails()
+
+
+def is_allowed(email: str) -> bool:
+    """마스터이거나, SQLite users 표에서 허용된 계정 (설정 화면에서 관리, 2026-10-20)."""
+    if not email:
+        return False
+    if is_master(email):
+        return True
+    import store  # 지연: auth 는 settings 만 의존하는 가벼운 모듈로 둔다
+    return email.lower() in store.allowed_set()
 
 
 def redirect_uri() -> str:

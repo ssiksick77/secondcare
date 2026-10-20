@@ -68,7 +68,7 @@ BUDGET_ROUNDS = ["이월", "당초"]  # 그 외에는 1,2,3... 숫자 회차
 FUND_COLS = ["재원코드", "과제명", "시작일", "종료일", "비고", "인건비예산", "종류", "잔액미관리"]
 FUND_UNTRACKED = "잔액미관리"  # "Y" 면 재원 출처로만 쓰고 예산·잔액을 관리하지 않음 (예산변동 불가, 집계·경고·결의서 재원 현황 제외)
 # 재원 종류 (2026-10-16 사용자 결정). 공금은 예산목별 예산 없이 '입금'(예산변동 열)으로 잔액만 관리. 빈 값은 국책으로 읽는다
-FUND_TYPES = ["국책", "원내", "위탁", "교육", "공금", "기타"]
+FUND_TYPES = ["국책", "교육", "원내", "위탁", "연구지원", "공금", "기타"]  # 순서 = 재원 목록 기본 정렬 (2026-10-20 사용자). 연구지원: 교수 연구지원비 (옛 외부 지급처에서 재원으로 승격)
 FUND_TYPE_DEFAULT = "국책"
 FUND_TYPE_POOL = "공금"
 # 인건비 (인건비_설계_2026-10-13.md)
@@ -102,8 +102,9 @@ DEP_STATUS = ["대기", "발주", "결제", "수령"]  # 날짜에서 계산. �
 TAG_COLS = ["태그명", "분류", "설명"]
 EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
 FIXLOG_COLS = ["거래번호", "일시", "구분", "사유"]  # 구분: 표시 / 해제. 일시: YYYY-MM-DD HH:MM
-MEMO_COLS = ["종류", "대상", "내용", "작성일", "비고"]  # 종류: 재원(대상=재원코드) / 거래처(대상=거래처명) / 일반(대상 비움). AI 는 read_memo 로 읽는다
-MEMO_KINDS = ["재원", "거래처", "일반"]
+MEMO_COLS = ["종류", "대상", "내용", "작성일", "비고"]  # 종류: 재원(대상=재원코드) / 거래처(대상=거래처명) / 비세목(대상=예산목·세목·세세목 이름) / 일반(대상 비움). AI 는 read_memo 로 읽는다
+MEMO_KINDS = ["재원", "거래처", "비세목", "일반"]
+MEMO_TARGET_LABEL = {"재원": "재원코드", "거래처": "거래처명", "비세목": "예산목·세목·세세목 이름"}
 # 증빙번호 = {거래번호}-{n}: 거래번호별 일련번호, 지운 번호는 다시 쓰지 않음 (메타 시트 증빙번호최고-{거래번호}). 이전 장부는 맨 끝 열에 붙이고 시트 순서대로 부여
 # 파일 열(EVID_FILE_COLS)이 모두 비어 있는 행 = '실물만 (파일 없음)' 증빙 항목. 나중에 파일을 첨부하면 같은 행·같은 증빙번호에 채워짐
 EVID_FILE_COLS = ["파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일"]
@@ -651,18 +652,91 @@ def user_name(email: str) -> str | None:
     return author_names().get((email or "").lower()) if USE_DB else None
 
 
-def set_user_name(email: str, name: str) -> str:
-    """최초 로그인 이름 저장. 1~20자, 앞뒤 공백 제거."""
+def norm_name(name) -> str:
+    """표시 이름: 공백 정리, 20자 이하. 빈 값은 '' (호출한 쪽이 필수 여부를 정한다)."""
     name = re.sub(r"\s+", " ", str(name or "")).strip()
-    if not name:
-        raise ValueError("이름을 입력하세요.")
     if len(name) > 20:
         raise ValueError("이름은 20자 이하로 입력하세요.")
+    return name
+
+
+def set_user_name(email: str, name: str) -> str:
+    """최초 로그인 이름 저장. 1~20자, 앞뒤 공백 제거."""
+    name = norm_name(name)
+    if not name:
+        raise ValueError("이름을 입력하세요.")
     if not USE_DB:
         raise ValueError("xlsx 저장소에서는 이름을 저장하지 않습니다.")
     with _lock, db.session() as con:
         db.set_user_name(con, email, name)
     return name
+
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def norm_email(email) -> str:
+    """허용 목록용 이메일 정규화: 앞뒤 공백 제거, 소문자. 형식이 아니면 ValueError."""
+    e = str(email or "").strip().lower()
+    if not e:
+        raise ValueError("이메일을 입력하세요.")
+    if not EMAIL_RE.match(e):
+        raise ValueError(f"이메일 형식이 아닙니다: {e}")
+    return e
+
+
+def allowed_set() -> set[str]:
+    """users 표에서 로그인 허용된 이메일. xlsx 모드는 빈 집합 (.env 목록만 쓴다)."""
+    if not USE_DB:
+        return set()
+    with db.session() as con:
+        return db.allowed_emails(con)
+
+
+def allowed_users() -> list[dict]:
+    if not USE_DB:
+        return []
+    with db.session() as con:
+        return db.allowed_users(con)
+
+
+ROLE_LABELS = {"master": "마스터", "manager": "관리자", "staff": "담당자", "researcher": "연구원"}
+
+
+def user_role(email: str) -> str | None:
+    """users 표의 역할 (manager/staff/researcher). xlsx 모드나 미등록은 None."""
+    if not USE_DB:
+        return None
+    with db.session() as con:
+        return db.user_role(con, email)
+
+
+def allow_email(email, by: str | None, role, name="") -> tuple[str, bool]:
+    """허용 목록에 추가. 역할 필수(manager/staff/researcher), 이름 선택. (정규화한 이메일, 새로 추가됐는지)."""
+    e = norm_email(email)
+    role = str(role or "").strip().lower()
+    if role not in db.ROLES:
+        raise ValueError("권한을 고르세요: 관리자 · 담당자 · 연구원")
+    name = norm_name(name)
+    if not USE_DB:
+        raise ValueError("xlsx 저장소에서는 허용 계정을 저장하지 않습니다. app/.env 의 LEDGER_ALLOWED_EMAILS 를 고치세요.")
+    with _lock, db.session() as con:
+        return e, db.allow_user(con, e, by, role, name)
+
+
+def disallow_email(email, masters: set[str], me: str | None) -> str:
+    """허용 목록에서 제거. 마스터(.env)·본인은 거부. 행과 이름은 남긴다."""
+    e = norm_email(email)
+    if e in masters:
+        raise ValueError("마스터 계정(app/.env)은 여기서 삭제할 수 없습니다.")
+    if me and e == me.lower():
+        raise ValueError("본인 계정은 삭제할 수 없습니다.")
+    if not USE_DB:
+        raise ValueError("xlsx 저장소에서는 허용 계정을 저장하지 않습니다.")
+    with _lock, db.session() as con:
+        if not db.disallow_user(con, e):
+            raise ValueError(f"허용 목록에 없는 계정입니다: {e}")
+    return e
 
 
 def last_write_id() -> str | None:
@@ -895,6 +969,8 @@ def _derive(data: dict, meta: dict) -> dict:
     for r in data["funds"]:  # 종류: 빈 값은 국책
         r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
         r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
+    # 기본 정렬: 종류 순서(FUND_TYPES) → 장부 순서 (2026-10-20 사용자: 국책-교육-원내-위탁-연구지원-기타)
+    data["funds"].sort(key=lambda r: (FUND_TYPES.index(r["종류"]) if r["종류"] in FUND_TYPES else len(FUND_TYPES), r["_row"]))
     for r in data["people"]:
         r["숨김"] = "Y" if _yes(r.get("숨김")) else ""
     for r in data["deposit"]:  # 적립금 상태는 날짜에서 계산 (사용 행만)
@@ -1613,7 +1689,7 @@ def _validate_months(rec: dict, cols):
 
 
 def _validate_memo(rec: dict):
-    """메모: 종류는 MEMO_KINDS 중 하나, 내용 필수, 재원·거래처 메모는 대상 필수, 일반 메모는 대상 비움, 작성일 비면 오늘."""
+    """메모: 종류는 MEMO_KINDS 중 하나, 내용 필수, 재원·거래처·비세목 메모는 대상 필수, 일반 메모는 대상 비움, 작성일 비면 오늘."""
     kind = str(rec.get("종류") or "").strip()
     if kind not in MEMO_KINDS:
         raise ValueError(f"종류는 {', '.join(MEMO_KINDS)} 중 하나여야 합니다.")
@@ -1625,7 +1701,7 @@ def _validate_memo(rec: dict):
     if kind == "일반":
         rec["대상"] = ""
     elif not rec["대상"]:
-        raise ValueError(f"{kind} 메모는 대상({'재원코드' if kind == '재원' else '거래처명'})이 필요합니다.")
+        raise ValueError(f"{kind} 메모는 대상({MEMO_TARGET_LABEL[kind]})이 필요합니다.")
     if not rec.get("작성일"):
         rec["작성일"] = dt.date.today().isoformat()
 

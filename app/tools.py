@@ -41,7 +41,7 @@ def _page(rows: list, limit: int, offset: int) -> dict:
 
 # ---------- 조회 ----------
 def list_funds() -> list[dict]:
-    """재원(과제) 목록을 반환한다: 재원코드, 과제명, 시작일, 종료일, 비고, 인건비예산, 종류(국책/원내/위탁/교육/공금/기타), 잔액미관리(Y 면 재원 출처로만 쓰고 예산·잔액을 관리하지 않음). 공금 재원은 예산목별 예산 없이 예산변동 '입금' 합계 − 집행으로 잔액만 관리한다."""
+    """재원(과제) 목록을 반환한다: 재원코드, 과제명, 시작일, 종료일, 비고, 인건비예산, 종류(국책/교육/원내/위탁/연구지원/공금/기타), 잔액미관리(Y 면 재원 출처로만 쓰고 예산·잔액을 관리하지 않음). 공금 재원은 예산목별 예산 없이 예산변동 '입금' 합계 − 집행으로 잔액만 관리한다."""
     return store.read_all()["funds"]
 
 
@@ -205,14 +205,31 @@ def budget_balance(fund: str, item: str = "") -> dict:
 
 def read_memo(kind: str = "", target: str = "") -> list[dict]:
     """담당자가 적어 둔 메모(장부 밖 지식)를 읽는다: 재원별 특이사항(종류 '재원', 대상=재원코드), 거래처별 특이사항(종류 '거래처', 대상=거래처명),
-    일반 규정·관행(종류 '일반', 대상 없음: 예 "어떤 결제에 어떤 증빙이 필요한가"). 집행 규정·증빙 종류·재원 조건을 묻는 질문에는 먼저 이 도구로 메모를 확인할 것.
-    kind 를 비우면 전부, target 은 대상 부분일치. 각 행: 종류, 대상, 내용, 작성일, 비고, _row."""
+    비세목 메모(종류 '비세목', 대상=예산목·세목·세세목 이름: 그 비목·세목으로 집행할 때 지킬 규칙), 일반 규정·관행(종류 '일반', 대상 없음: 예 "어떤 결제에 어떤 증빙이 필요한가").
+    집행 규정·증빙 종류·재원 조건·비목별 규칙을 묻는 질문에는 먼저 이 도구로 메모를 확인할 것. kind 를 비우면 전부, target 은 대상 부분일치. 각 행: 종류, 대상, 내용, 작성일, 비고, _row."""
     rows = store.read_all().get("memo", [])
     if kind:
         rows = [r for r in rows if r.get("종류") == kind]
     if target:
         rows = [r for r in rows if target in str(r.get("대상") or "")]
     return rows
+
+
+def _norm(v) -> str:
+    return " ".join(str(v or "").split()).lower()
+
+
+def memos_for(rec: dict, memos: list[dict] | None = None) -> list[dict]:
+    """입력 중인 행에 '활성화'되는 메모: 재원 메모(대상=행의 재원), 거래처 메모(대상=행의 거래처), 비세목 메모(대상이 행의 예산목·세목·세세목 중 하나와 같음), 일반 메모 전부."""
+    memos = store.read_all().get("memo", []) if memos is None else memos
+    fund, vendor = _norm(rec.get("재원")), _norm(rec.get("거래처"))
+    items = {_norm(rec.get(c)) for c in ("예산목", "세목", "세세목")} - {""}
+    out = []
+    for m in memos:
+        k, t = m.get("종류"), _norm(m.get("대상"))
+        if (k == "일반") or (k == "재원" and fund and t == fund) or (k == "거래처" and vendor and t == vendor) or (k == "비세목" and t in items):
+            out.append(m)
+    return out
 
 
 FX_URL = "https://api.frankfurter.app/{date}?from={cur}&to=KRW"

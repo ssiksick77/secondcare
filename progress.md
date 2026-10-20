@@ -4,21 +4,23 @@ Updated: 2026-10-20
 
 ## Goal
 
-AI chat history lives only in the browser: a refresh loses it, several users cannot be told apart, and one conversation cannot be split by topic. Store chats on the server per login user, in several rooms, with a 7-day auto-delete unless the user keeps a room.
+Budget tab cleanup: the tab is named 예산, the 예산현액 summary sits above the change list and the add button, the change list stays empty until a fund is selected, and the summary hides 잔액미관리 funds and funds with no budget rows. Checked in the browser on the QA ledger and by `scripts/check.sh`.
 
 ## Done
 
-- 137e869 AI chat rooms, first version: `app/chat_store.py` (`app/chats.sqlite`, rooms per login email, 7-day purge unless kept, history limit 40), routes `/api/chats…` (old `/api/ai/chat` removed), `ai.chat_in_room` (stores question and answer with calls/proposals only on success), panel room bar (select, 새 대화, 이름, 보관, 삭제), past proposal cards status-only, notice text, persona 행정보조 김연구 / button 김연구 호출하기, `LEDGER_AI_FAKE=1` canned answer for UI tests. Checks: calc 32, API 110, db 55, ai 158, api-db 120, UI 84, ui-db 86.
-- 7475b7c chat answers rendered as markdown (shared `.md` styles).
-- AI helper overhaul first version (9dd63f1..d5f0afe, merged eb02756) and real-model check of 6 sample questions (all correct). Details in git log.
-
-## Done before this task (main, merged 2026-10-20)
-
-- 9da4d04 First-login name: `users` table (`db.USERS_DDL`, `user_names`, `set_user_name`), `store.author_names` / `user_name` / `set_user_name` (1-20 chars), `meta.authors`; middleware sends a nameless account to `/welcome` (API 403) except `/api/me` and `POST /api/me/name`; `welcome.html` prefilled with the Google profile name; header shows the name; voucher 담당 cell = `authorSigner(r)` from `_author`. Bypass accounts have no profile name and are never sent to `/welcome`. Tests: fixed `LEDGER_SESSION_SECRET` and `LEDGER_ALLOWED_EMAILS` in `tests/_env.py` (`session_cookie()` forges a login cookie; `call`/`get_raw` take a cookie), API +4/+14, UI +3 (ui-db). checks: pass (calc 32, API 110, db 53, api-db 120, UI 64, ui-db 66).
-- 950dca2 / 41642cb Google login first version with allow-list and PKCE fix (verified by the user 2026-10-20).
+- 1eacbbc Tab label 예산변동 → 예산 (index.html; dashboard hint and README wording; sheet name and ids unchanged). Panel order: 재원별 예산현액 요약, then 변경 내역 heading, fund filter (blank option 선택), 예산 행 추가, list. `filtered("budget")` returns no rows without a fund; `SEL_HOOK.budget.empty` shows "재원을 선택하면 변경 내역이 보입니다." `renderBudgetSummary` keeps only funds with budget rows and not 잔액미관리. Verified in the browser pane on the QA copy (QA10 hidden, list fills on QA01).
+- 8e43f4c merged main (favicon, no browser auto-open) into this branch.
 
 ## Done before this task (kept for reference)
 
+- 137e869 AI chat rooms, first version: `app/chat_store.py` (`app/chats.sqlite`, rooms per login email, 7-day purge unless kept, history limit 40), routes `/api/chats…` (old `/api/ai/chat` removed), `ai.chat_in_room` (stores question and answer with calls/proposals only on success), panel room bar (select, 새 대화, 이름, 보관, 삭제), past proposal cards status-only, notice text, persona 행정보조 김연구 / button 김연구 호출하기, `LEDGER_AI_FAKE=1` canned answer for UI tests. Checks: calc 32, API 110, db 55, ai 158, api-db 120, UI 84, ui-db 86.
+- Memo kind 비세목 (예산목·세목·세세목 target, active when the row matches any of the three; `tools.memos_for`; suggest prompt sends 관련메모). ai 166.
+- 7475b7c chat answers rendered as markdown (shared `.md` styles).
+- AI helper overhaul first version (9dd63f1..d5f0afe, merged eb02756) and real-model check of 6 sample questions (all correct). Details in git log.
+- AI helper overhaul, first version (this branch, 2026-10-20): 9dd63f1 `app/tools.py` shared read tools (MCP wraps them, `tool_schema`, `call`); d8ba018 `budget_balance`, `search_ledger` (집행·신청·품의), `get_exec` with 증빙·연결품의·적립금연결, `fx_rate` (frankfurter.app, live check once); c245e15 memo store (sheet/table `메모`, validation, settings panel CRUD, `read_memo`); a20d1c9 chat as a tool-calling agent (`AGENT_SYSTEM`, `summary_context`, `agent_tools`, `run_tool`, 10 rounds, 40k char cap, `propose_memo` card, "조회" line); d5f0afe AI 추천·검증 keeps a filled 예산목. Test group `ai` (tests/test_ai.py, 122 checks, stubbed client, no API calls). Merged main (Second Care rename, Google login, first-login name) on 2026-10-20.
+- Finding: receipt extract and suggest never sent the whole ledger (the first survey said so); only chat and report did. Report and the OpenAI chat path still do (later).
+- 9da4d04 First-login name: `users` table (`db.USERS_DDL`, `user_names`, `set_user_name`), `store.author_names` / `user_name` / `set_user_name` (1-20 chars), `meta.authors`; middleware sends a nameless account to `/welcome` (API 403) except `/api/me` and `POST /api/me/name`; `welcome.html` prefilled with the Google profile name; header shows the name; voucher 담당 cell = `authorSigner(r)` from `_author`. Bypass accounts have no profile name and are never sent to `/welcome`. Tests: fixed `LEDGER_SESSION_SECRET` and `LEDGER_ALLOWED_EMAILS` in `tests/_env.py` (`session_cookie()` forges a login cookie; `call`/`get_raw` take a cookie), API +4/+14, UI +3 (ui-db). checks: pass (calc 32, API 110, db 53, api-db 120, UI 64, ui-db 66).
+- 950dca2 / 41642cb Google login first version with allow-list and PKCE fix (verified by the user 2026-10-20).
 - 8a738a4 feat: print signer names on voucher approval box (`VOUCHER_SIGNER_NAMES` in app.js, `.vc-sign-n` styles). 담당 cell stays empty until login gives an email-to-name map.
 - 2026-10-20 SQLite migration complete and live (a91649d merge, d202ab6 export, 7ee9405/f389f7f write paths, ef7ffc0 schema/import). Details in git log.
 
@@ -38,10 +40,23 @@ AI chat history lives only in the browser: a refresh loses it, several users can
 
 ## In progress
 
-None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE on the QA copy (room bar, title from first question, table rendering, notice). Not yet tried with the real model in rooms (the room layer only changes storage and history; the model path is the one verified earlier).
+None.
+
+## Next action
+
+Fast-forward main to this branch (done at wrap-up if the check passed), hard-refresh the app on port 8791, and look at the 예산 tab with the live ledger. Then pick with the user: server role checks (design doc §4.2, §8 step 3), the role/name edit UI, or multi-PC access.
+
+## Earlier note
+
+Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE on the QA copy (room bar, title from first question, table rendering, notice). Not yet tried with the real model in rooms (the room layer only changes storage and history; the model path is the one verified earlier).
 
 ## Open issues
 
+- checks: pass on the final tree (calc 32, API 120, db 55, ai 122, api-db 149, UI 79, ui-db 89; about 6 minutes). Run with a timeout above 360 s.
+- Server role checks are not implemented: `role` is stored and shown only. Design doc §4 and §8 step 3 describe the checks. `extra.admin` from the request screen is still trusted.
+- No UI to change an account's role or name after adding; delete and add again. Masters are `.env` only.
+- krds-improve / impeccable were not run on the new fieldset; it follows the existing memo fieldset pattern (label, aria-live, button names).
+- The design doc §5.3 (no-login local mode) and §6 (`users.json`) are superseded; the note at the top of the doc says so.
 - Live ledger is SQLite since 2026-10-20 14:58. `의료인공지능센터_지출장부_2026.xlsx` is frozen at that moment: do not edit it by hand, it is no longer read. For an Excel view run `python app/export_xlsx.py <sqlite> <copy.xlsx>`. Backups are `app/backup/*.sqlite`. `_row` in the API is the SQLite id.
 - Worktree branches claude/sqlite-migration-difficulty-9c1e10, claude/resolution-signature-names-196bd0 and claude/google-login-implementation-33c005 are merged and can be deleted.
 - Static files have no version query, so a code change can show stale CSS until a hard refresh (ideas.md [later][fix] 2026-10-20).
@@ -49,7 +64,7 @@ None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_
 - `mcp_server.py` was not run against SQLite; it only uses store functions, so it should work, but check it in session 3.
 - Manual QA launcher for the browser pane (local, untracked `.claude/launch.json` → scratchpad run_manual.py): QA copy in tests/.tmp/manual, LEDGER_AI_FAKE=1, LEDGER_AUTH_BYPASS=qa@example.com, port 8795.
 - Rename note for the AI tools: the brainstorm named `search_exec`; the tool is `search_ledger` (it spans 집행·신청·품의). `.claude/launch.json` (browser-pane launcher `qa-manual`) is local and untracked.
-- The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run.
+- The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run. In worktree budget-tab-ui-cleanup-0e65ee an untracked `.claude/launch.json` (`qa`, port 8891, LEDGER_AUTH_BYPASS=preview@example.com, writes to the copied QA ledger) serves the browser pane.
 - The `api` group fails about once in six full `check.sh` runs and passes on rerun. Captured on 2026-10-20: test '구분 변경 → 재결재' got HTTP 423 '장부 파일에 쓸 수 없습니다' (store.py PermissionError on os.replace of the xlsx copy): a Windows file-lock race (indexer/antivirus), not a code bug. If it repeats often, retry the save once in `store._save` or run the api group on SQLite only.
 - checks: pass on the merged tree 2026-10-20 (smoke; test: calc 32, API 110, db 55, ai 122, api-db 120, UI 74, ui-db 76, about 7 minutes — run with a timeout above 420 s). No lint or typecheck. Two sessions running check.sh at the same time collide on tests/.tmp/ (one run fails); run checks from one session at a time.
 - The app running on port 8791 must be restarted to read the new REQUEST_SUPPLIERS in app/.env.
@@ -64,9 +79,12 @@ None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_
 
 ## Decisions
 
+- 2026-10-20 (user) Allowed-account management: store in the SQLite `users` table (option 2 of 3), only master accounts (`.env` `LEDGER_ALLOWED_EMAILS`) may manage; on add set a role (required) and a name (optional) per `docs/권한_설계_2026-10-20.md`. My calls: fieldset inside the settings dialog (not a separate page); delete keeps the row and name; allow check runs in the middleware on every request so removal needs no restart; xlsx mode uses `.env` only; a master-given name skips the first-login prompt; re-adding an allowed account changes nothing; no title field; pre-existing allowed rows default to `staff`.
+- 2026-10-20 (user) Allowed-email management: store the allow-list in the SQLite `users` table (approach 2 of 3; `.env` emails stay as bootstrap masters that cannot be removed), and only master accounts (now: the `.env` emails) may manage it. Rejected: `.env`-only text field (no names, no room for roles); a separate `/users` page (too big now). My calls: removing keeps the users row and name (author names on ledger rows stay readable) and only clears allowed; the middleware checks the allow-list on every request so removal needs no restart; master is derived from `.env` only, no role column yet; xlsx mode uses the `.env` list only.
 - 2026-10-20 (user) First-login name entry instead of an email-to-name map in .env: ask once, no change UI yet; the imported author (snubh.ai.center.01@gmail.com) is asked like everyone else. My calls: `users` table in SQLite, prefill from the Google profile, xlsx mode skips the prompt, voucher 담당 cell reads the row author.
 - 2026-10-20 (user) 결의서 결재란 이름: 매니저 오인선, 선임연구원 이진영, 센터장 류지원 with small '직무대행' above the name, bold italic; 담당 cell stays empty until login gives an email-to-name map (per-transaction author, not a fixed setting). My calls: name 11pt, tag 6.5pt with -0.2mm tracking inside the name width.
 - 2026-10-16 (user) 여비 계산기: 기본 정보 외 필수 없음; 출장 기간과 학회 기간 별도 입력; 학회 전후 각 1일만 인정, 초과 출장일은 공제일수로 일비·식비에서 자동 제외(숙박은 그대로, my choice since the user named 일비/식비 only).
+- 2026-10-20 (user) 재원 종류 연구지원 신설, 지급처명에 '연구지원'이 든 지급처를 정식 재원으로 이동, 코드의 앞 '연구' 삭제, 기존 거래 코드명 수정; 기본 정렬 국책-교육-원내-위탁-연구지원-기타 (공금 위치는 말하지 않아 기타 앞에 둠). My calls: 잔액미관리=Y, 과제명=옛 지급처명.
 - 2026-10-16 (user) 재원 종류: list 국책/원내/위탁/교육/공금/기타; 공금 deposits go through 예산변동 (no per-예산목 split), 예산목 stays required on 집행/품의/신청, existing funds default to 국책 and the user edits them later.
 - 2026-10-16 (user) 지출결의서 결재란: 담당 / 매니저 / 선임연구원 / 센터장 4칸, 위 직책·아래 서명. Row height 6.5mm and blank name cells were my choice (user did not answer).
 - 2026-10-16 (user) request types: 장비 = 전자제품, 소모품 = 알파·드림디포 purchases, 학회, everything else = 기타. D2-D6 of the 기타 review were taken as proposed because the user gave no answer.
@@ -97,8 +115,3 @@ None. Chat rooms first version done; checked in the browser pane with LEDGER_AI_
 - 2026-10-20 (user) AI helper overhaul: hybrid C = small summary in the system prompt + read tools (not full ledger, not summary only); one tool module for MCP and the in-app agent; memo store by target kind (재원·거래처·일반), user edits, AI proposes and the user approves; fx_rate tool in the first version; OpenAI tool calling, receipt OCR (OCI candidate), report, travel calculator, rule-document answers all later. Accountant-role version first; the researcher version is a separate agent with its own smaller tool set (restriction by tool availability, not by prompt). My calls: memo UI in the settings panel; frankfurter.app for rates; tool loop cap stays 6; chat shows one line per tool call under the answer.
 
 - 2026-10-20 (user) AI chat rooms: server storage (not browser), separate file `app/chats.sqlite` (not the ledger DB: no backup/undo/export mixing), rooms per login email, 7-day auto-delete unless kept, model gets the last 40 messages, past proposal cards act only within their turn, xlsx mode not considered (owner falls back to `local`), notice that misuse may be forwarded to the master account (notice only; detection later). My calls: purge on startup and on list, by last message; title = first question (30 chars), renamable; room list at the top of the panel; delete is permanent.
-
-## Next action
-
-Merge claude/ai-assistant-overhaul-c6df4b into main (137e869). Then pick the next AI step: OpenAI path tool calling (session card), receipt OCR, report, researcher agent; or misuse detection + master forwarding (notice only so far).
-
