@@ -651,13 +651,19 @@ def user_name(email: str) -> str | None:
     return author_names().get((email or "").lower()) if USE_DB else None
 
 
-def set_user_name(email: str, name: str) -> str:
-    """최초 로그인 이름 저장. 1~20자, 앞뒤 공백 제거."""
+def norm_name(name) -> str:
+    """표시 이름: 공백 정리, 20자 이하. 빈 값은 '' (호출한 쪽이 필수 여부를 정한다)."""
     name = re.sub(r"\s+", " ", str(name or "")).strip()
-    if not name:
-        raise ValueError("이름을 입력하세요.")
     if len(name) > 20:
         raise ValueError("이름은 20자 이하로 입력하세요.")
+    return name
+
+
+def set_user_name(email: str, name: str) -> str:
+    """최초 로그인 이름 저장. 1~20자, 앞뒤 공백 제거."""
+    name = norm_name(name)
+    if not name:
+        raise ValueError("이름을 입력하세요.")
     if not USE_DB:
         raise ValueError("xlsx 저장소에서는 이름을 저장하지 않습니다.")
     with _lock, db.session() as con:
@@ -693,13 +699,28 @@ def allowed_users() -> list[dict]:
         return db.allowed_users(con)
 
 
-def allow_email(email, by: str | None) -> tuple[str, bool]:
-    """허용 목록에 추가. (정규화한 이메일, 새로 추가됐는지)."""
+ROLE_LABELS = {"master": "마스터", "manager": "관리자", "staff": "담당자", "researcher": "연구원"}
+
+
+def user_role(email: str) -> str | None:
+    """users 표의 역할 (manager/staff/researcher). xlsx 모드나 미등록은 None."""
+    if not USE_DB:
+        return None
+    with db.session() as con:
+        return db.user_role(con, email)
+
+
+def allow_email(email, by: str | None, role, name="") -> tuple[str, bool]:
+    """허용 목록에 추가. 역할 필수(manager/staff/researcher), 이름 선택. (정규화한 이메일, 새로 추가됐는지)."""
     e = norm_email(email)
+    role = str(role or "").strip().lower()
+    if role not in db.ROLES:
+        raise ValueError("권한을 고르세요: 관리자 · 담당자 · 연구원")
+    name = norm_name(name)
     if not USE_DB:
         raise ValueError("xlsx 저장소에서는 허용 계정을 저장하지 않습니다. app/.env 의 LEDGER_ALLOWED_EMAILS 를 고치세요.")
     with _lock, db.session() as con:
-        return e, db.allow_user(con, e, by)
+        return e, db.allow_user(con, e, by, role, name)
 
 
 def disallow_email(email, masters: set[str], me: str | None) -> str:

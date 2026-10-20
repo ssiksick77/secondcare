@@ -312,13 +312,18 @@ def main() -> int:
            pg.is_visible("#s-users") and sv.TEST_EMAIL in pg.inner_text("#users-list") and "마스터" in pg.inner_text("#users-list")
            and not pg.query_selector(f"#users-list [data-user-del='{sv.TEST_EMAIL}']"), pg.inner_text("#users-list"))
         if sv.mode == "db":
-            pg.fill("#users-email", "New.Person@Example.com"); pg.press("#users-email", "Enter"); pg.wait_for_timeout(800)
-            ck("허용 계정: Enter 로 추가, 소문자, 이름 '—', 설정 패널 그대로",
+            pg.fill("#users-email", "New.Person@Example.com"); pg.press("#users-email", "Enter"); pg.wait_for_timeout(600)
+            ck("허용 계정: 권한 없이 추가하면 안내", "권한" in pg.inner_text("#users-msg") and "new.person" not in pg.inner_text("#users-list"), pg.inner_text("#users-msg"))
+            pg.select_option("#users-role", "researcher"); pg.press("#users-email", "Enter"); pg.wait_for_timeout(800)
+            ck("허용 계정: Enter 로 추가, 소문자, 권한 열, 이름 '—', 설정 패널 그대로",
                pg.evaluate("document.querySelector('#dlg-settings').open") and "new.person@example.com" in pg.inner_text("#users-list")
-               and "—" in pg.inner_text("#users-list") and "추가했습니다" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
-            pg.fill("#users-email", "new.person@example.com"); pg.click("#users-add"); pg.wait_for_timeout(600)
+               and "연구원" in pg.inner_text("#users-list") and "—" in pg.inner_text("#users-list") and "추가했습니다" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            ck("허용 계정: 추가 뒤 입력칸 비움", pg.evaluate("$('#users-email').value + $('#users-role').value + $('#users-name').value") == "")
+            pg.fill("#users-email", "named.person@example.com"); pg.select_option("#users-role", "manager"); pg.fill("#users-name", "김관리"); pg.click("#users-add"); pg.wait_for_timeout(800)
+            ck("허용 계정: 이름 포함 추가 → 이름 표시", "김관리" in pg.inner_text("#users-list") and "관리자" in pg.inner_text("#users-list"), pg.inner_text("#users-list"))
+            pg.fill("#users-email", "new.person@example.com"); pg.select_option("#users-role", "staff"); pg.click("#users-add"); pg.wait_for_timeout(600)
             ck("허용 계정: 중복은 안내만", "이미" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
-            pg.fill("#users-email", "no-at"); pg.click("#users-add"); pg.wait_for_timeout(600)
+            pg.fill("#users-email", "no-at"); pg.select_option("#users-role", "staff"); pg.click("#users-add"); pg.wait_for_timeout(600)
             ck("허용 계정: 형식 오류 안내", "형식" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
             pg.evaluate("$('#dlg-settings').close()"); pg.reload(); pg.wait_for_timeout(1000)
             pg.click("#btn-settings"); pg.wait_for_timeout(800)
@@ -326,6 +331,9 @@ def main() -> int:
             pg.click("#users-list [data-user-del='new.person@example.com']"); pg.wait_for_timeout(400)
             pg.click("#dlg-confirm button:has-text('삭제')"); pg.wait_for_timeout(800)
             ck("허용 계정: 삭제 뒤 목록에서 빠짐", "new.person@example.com" not in pg.inner_text("#users-list") and "지웠습니다" in pg.inner_text("#users-msg"), pg.inner_text("#users-msg"))
+            pg.click("#users-list [data-user-del='named.person@example.com']"); pg.wait_for_timeout(400)
+            pg.click("#dlg-confirm button:has-text('삭제')"); pg.wait_for_timeout(800)
+            ck("허용 계정: 이름 포함 계정 삭제", "named.person@example.com" not in pg.inner_text("#users-list"))
         else:
             ck("허용 계정: xlsx 는 추가 비활성 + .env 안내", pg.evaluate("document.querySelector('#users-add').disabled") and ".env" in pg.inner_text("#users-msg"))
         pg.evaluate("$('#dlg-settings').close(); ME.is_master = false; openSettings()"); pg.wait_for_timeout(800)

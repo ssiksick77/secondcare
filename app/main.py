@@ -91,8 +91,9 @@ async def _require_login(request: Request, call_next):
         return RedirectResponse("/login", status_code=302)
     if user:
         stored = store.user_name(user["email"]) if store.USE_DB else None
+        master = auth.is_master(user["email"])
         user = {**user, "needs_name": store.USE_DB and not stored and not auth.bypass_email(), **({"name": stored} if stored else {}),
-                "is_master": auth.is_master(user["email"])}
+                "is_master": master, "role": "master" if master else (store.user_role(user["email"]) or "staff")}
         if user["needs_name"] and path not in NAME_FREE_PATHS and not path.startswith(PUBLIC_PREFIXES):
             if path.startswith("/api/"):
                 return JSONResponse({"detail": "이름을 먼저 입력하세요."}, status_code=403)
@@ -132,7 +133,7 @@ def users_list(request: Request):
     """허용 계정 목록: 마스터(.env, 삭제 불가) + users 표의 허용 행. 이름은 로그인한 뒤에만 있다."""
     _require_master(request)
     names = store.author_names()
-    masters = [{"email": e, "name": names.get(e, ""), "master": True, "added_at": None, "added_by": None} for e in auth.allowed_emails()]
+    masters = [{"email": e, "name": names.get(e, ""), "role": "master", "master": True, "added_at": None, "added_by": None} for e in auth.allowed_emails()]
     seen = {m["email"] for m in masters}
     rows = [{**u, "master": False} for u in store.allowed_users() if u["email"] not in seen]
     return {"users": masters + rows, "db": store.USE_DB}
@@ -141,7 +142,8 @@ def users_list(request: Request):
 @app.post("/api/users")
 def users_add(request: Request, body: dict):
     me = _require_master(request)
-    email, added = store.allow_email((body or {}).get("email"), me["email"])
+    body = body or {}
+    email, added = store.allow_email(body.get("email"), me["email"], body.get("role"), body.get("name", ""))
     if auth.is_master(email):
         return {"email": email, "added": False, "message": "마스터 계정은 이미 허용되어 있습니다."}
     return {"email": email, "added": added, "message": "" if added else "이미 허용된 계정입니다."}
