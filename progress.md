@@ -37,8 +37,8 @@ The AI helper sends the whole ledger on every call. It gets slow and costly as t
 
 ## In progress
 
-AI helper overhaul, first version: code done. Left: (a) manual check with the real model on the QA ledger copy (sample questions 1 재원·예산목 잔액, 3 품목 이전 가격, 4 장비 구매 시점·재원, 6 거래 진행 상태, and 2 어떤 증빙 via a memo) — needs user approval (API cost); (b) merge this branch into main.
-Later steps (ideas.md): OpenAI path tool calling (session card proposed), receipt OCR, report, travel calculator, rule documents, approval writes, researcher agent.
+None. AI helper overhaul first version is complete and merged into main (eb02756). Real-model check on the QA copy (2026-10-20, claude-sonnet-5-5, 6 questions, 103k input tokens of which 92k cached, 1.7k output): all six answers matched the ledger (잔액 1,000,500원; 회의비 증빙 from a 일반 memo; 신청품목03 단가 10,000·30,000원; 신청품목05 2026-07-04 QA05 with 품의·집행 chain; USD rate with the ECB caveat; 2026-QA01-003 보완 stage). Each answer used exactly one tool call. First call took 24 s (cache creation), the rest 5-6 s. Output saved in tests/.tmp/live_check.txt (local).
+
 ## Open issues
 
 - Live ledger is SQLite since 2026-10-20 14:58. `의료인공지능센터_지출장부_2026.xlsx` is frozen at that moment: do not edit it by hand, it is no longer read. For an Excel view run `python app/export_xlsx.py <sqlite> <copy.xlsx>`. Backups are `app/backup/*.sqlite`. `_row` in the API is the SQLite id.
@@ -96,5 +96,5 @@ Later steps (ideas.md): OpenAI path tool calling (session card proposed), receip
 
 ## Next action
 
-Ask the user to approve the real-model check (app/.env key, QA copy server `tests/.tmp/manual`, see .claude/launch.json qa-manual); then merge claude/ai-assistant-overhaul-c6df4b into main. Next task: OpenAI path tool calling (ideas.md).
+Pick the next AI step with the user: OpenAI path tool calling (session card proposed 2026-10-20), receipt OCR, report without the full ledger, researcher agent. Or another task from ideas.md.
 
