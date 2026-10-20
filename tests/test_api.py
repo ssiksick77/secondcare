@@ -99,6 +99,11 @@ def main() -> int:
         s, r = sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "신청일자": "2026-01-01", "입금": 500000})
         ck("공금 입금 저장", s == 200 and r.get("입금") == 500000, (s, r))
         bud_row = r.get("_row")
+        s, r = sv.call("POST", "/api/budget", {"재원": "QA01", "변경회차": "9", "신청일자": "2026-06-01", "연구활동비": 30000})
+        ck("예산변동 숫자 회차: 발생이자 외 합 ≠ 0 → 400", s == 400 and "이동만" in str(r), (s, r))
+        s, r = sv.call("POST", "/api/budget", {"재원": "QA01", "변경회차": "9", "신청일자": "2026-06-01", "연구활동비": 30000, "연구재료비": -30000, "발생이자": 1234})
+        ck("예산변동 숫자 회차: 이동(합 0) + 발생이자 → 저장", s == 200, (s, r))
+        if s == 200: sv.call("DELETE", f"/api/budget/{r.get('_row')}")
         rec = sv.rec("budget", bud_row); rec["신청일자"] = ""
         s, r = sv.call("PUT", f"/api/budget/{bud_row}", {"rec": rec})
         ck("예산변동 수정: 신청일자 비우기 → 400", s == 400, (s, r))

@@ -137,7 +137,7 @@ def main() -> int:
             pg.click("#dlg-confirm button:has-text('버리')"); pg.wait_for_timeout(200)
         pg.evaluate("switchTab('dash'); renderDashboard()"); pg.wait_for_timeout(300)
         cards = pg.inner_text("#dash-cards"); table = pg.inner_text("#dash-table")
-        ck("대시보드: 공금 카드·줄", "GG01 잔액 (공금)" in cards and "잔액 (공금)" in table and "380,000" in cards)
+        ck("대시보드: 공금 카드·줄", "공금 잔액" in cards and "GG01 (공금)" in table and "380,000" in cards)
         if pool_row:
             pg.evaluate(f"openVoucher({pool_row})"); pg.wait_for_timeout(1000)
             vt = pg.inner_text("#voucher-sheet")
@@ -163,7 +163,7 @@ def main() -> int:
         # ---- 예산목 잔액: 예산변동 신청일자를 집행과 날짜 순으로 섞어 누적 ----
         sv.call("POST", "/api/funds", {"재원코드": "RB01", "과제명": "잔액 검사"})
         sv.call("POST", "/api/budget", {"재원": "RB01", "변경회차": "당초", "신청일자": "2026-01-01", "연구활동비": 100000})
-        sv.call("POST", "/api/budget", {"재원": "RB01", "변경회차": "1", "신청일자": "2026-04-01", "연구활동비": 50000})
+        sv.call("POST", "/api/budget", {"재원": "RB01", "변경회차": "1", "신청일자": "2026-04-01", "연구활동비": 50000, "연구재료비": -50000})  # 숫자 회차는 예산목 사이 이동만 (합 0)
         rb = []
         for d, amt in (("2026-03-10", 30000), ("2026-04-01", 20000), ("2026-05-01", 10000)):
             s, r = sv.call("POST", "/api/exec", {"재원": "RB01", "예산목": "연구활동비", "원인발생일": d, "거래처": "검사", "금액": amt, "적요": "잔액 검사 " + d, "지출완료일": d})
@@ -179,8 +179,8 @@ def main() -> int:
         ck("예산변동 폼: 신청일자 필수", pg.evaluate("document.getElementById('f-신청일자').required"))
         pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
         # ---- 거래처 탭 ----
-        pg.evaluate("switchTab('vendor')"); pg.wait_for_timeout(300)
-        ck("거래처 탭: 표에 코드 열", "코드" in pg.inner_text("#vendor-table thead"))
+        pg.evaluate("switchTab('deposit')"); pg.wait_for_timeout(300)
+        ck("적립 탭 거래처 관리: 표에 코드 열", "코드" in pg.inner_text("#vendor-table thead"))
         pg.evaluate("openForm('vendor')"); pg.wait_for_timeout(300)
         pg.fill("#f-거래처명", "화면검사상사"); pg.fill("#f-코드", "화검"); pg.keyboard.press("Control+Enter"); ck("거래처 추가 저장", wait_closed(pg))
         pg.wait_for_timeout(600)
