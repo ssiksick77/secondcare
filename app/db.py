@@ -155,3 +155,102 @@ def log_change(con: sqlite3.Connection, kind: str, row_id: int | None, action: s
 def file_mtime(path: Path | None = None) -> str:
     p = path or DB_PATH
     return dt.datetime.fromtimestamp(p.stat().st_mtime).isoformat(timespec="seconds") if p.exists() else ""
+
+
+# ---------- 워크북 어댑터 (store 의 쓰기 경로가 openpyxl 워크북 대신 쓴다, 2회차 2026-10-20) ----------
+class Sheet:
+    """시트 하나 = 테이블 하나. 행 번호 자리에 id 를 쓴다."""
+
+    def __init__(self, con: sqlite3.Connection, kind: str, title: str, cols: list[str], author: str | None):
+        self.con, self.kind, self.title, self.cols, self.author = con, kind, title, cols, author
+
+    @property
+    def max_row(self) -> int:
+        r = self.con.execute(f"SELECT MAX(id) FROM {_q(self.kind)}").fetchone()[0]
+        return int(r or 0)
+
+    def rows(self) -> list[dict]:
+        return read_rows(self.con, self.kind)
+
+    def exists(self, row_id: int) -> bool:
+        return self.con.execute(f"SELECT 1 FROM {_q(self.kind)} WHERE id = ?", (row_id,)).fetchone() is not None
+
+    def new_row(self) -> int:
+        cur = self.con.execute(f"INSERT INTO {_q(self.kind)} ({AUTHOR_COL}) VALUES (?)", (self.author,))
+        return cur.lastrowid
+
+    def write(self, row_id: int, values: dict):
+        """values: {열: DB 값}. 없는 열은 건드리지 않는다. 행이 없으면 ValueError."""
+        if not values:
+            return
+        sets = ", ".join(f"{_q(c)} = ?" for c in values)
+        cur = self.con.execute(f"UPDATE {_q(self.kind)} SET {sets}, {AUTHOR_COL} = COALESCE(?, {AUTHOR_COL}) WHERE id = ?",
+                               [*values.values(), self.author, row_id])
+        if cur.rowcount != 1:
+            raise ValueError(f"{self.title} 행 {row_id} 이 없습니다.")
+
+    def delete(self, row_id: int):
+        self.con.execute(f"DELETE FROM {_q(self.kind)} WHERE id = ?", (row_id,))
+
+    def has_value(self, row_id: int, col: str) -> bool:
+        if col not in self.cols:
+            return False
+        r = self.con.execute(f"SELECT {_q(col)} IS NOT NULL FROM {_q(self.kind)} WHERE id = ?", (row_id,)).fetchone()
+        return bool(r and r[0])
+
+    def replace_value(self, col: str, old, new) -> int:
+        cur = self.con.execute(f"UPDATE {_q(self.kind)} SET {_q(col)} = ? WHERE {_q(col)} = ?", (new, old))
+        return cur.rowcount
+
+
+class Workbook:
+    """store 의 쓰기 함수가 받는 wb 자리. wb[시트이름] -> Sheet, wb.sheetnames."""
+
+    def __init__(self, con: sqlite3.Connection, author: str | None = None):
+        self.con, self.author = con, author
+        self._by_title = {sheet: (kind, cols) for kind, (sheet, cols) in tables().items()}
+        self._sheets: dict[str, Sheet] = {}
+
+    @property
+    def sheetnames(self) -> list[str]:
+        return list(self._by_title)
+
+    def __contains__(self, title: str) -> bool:
+        return title in self._by_title
+
+    def __getitem__(self, title: str) -> Sheet:
+        if title not in self._sheets:
+            kind, cols = self._by_title[title]
+            self._sheets[title] = Sheet(self.con, kind, title, cols, self.author)
+        return self._sheets[title]
+
+
+def backup_to(path: Path, src_path: Path | None = None):
+    """커밋된 상태를 path 로 복사 (WAL 포함). 쓰기 중인 연결과 별개의 연결로 읽는다."""
+    src = sqlite3.connect(str(src_path or DB_PATH))
+    dst = sqlite3.connect(str(path))
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
+def restore_from(path: Path, dst_path: Path | None = None):
+    """백업 파일의 내용으로 DB 를 통째로 덮는다 (온라인 복원)."""
+    src = sqlite3.connect(str(path))
+    dst = sqlite3.connect(str(dst_path or DB_PATH))
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
+def write_seq(path: Path | None = None) -> int:
+    con = sqlite3.connect(str(path or DB_PATH))
+    try:
+        r = con.execute("SELECT value FROM meta WHERE key = 'write_seq'").fetchone()
+        return int(r[0]) if r and r[0] is not None else 0
+    finally:
+        con.close()

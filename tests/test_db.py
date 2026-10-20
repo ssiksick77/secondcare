@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _env import APP, QA_XLSX, TMP, Check  # noqa: E402
+from _env import APP, QA_XLSX, TMP, Check, settle_xlsx  # noqa: E402
 
 AUTHOR = "snubh.ai.center.01@gmail.com"
 DUMP = ("import json, os, sys, store\n"
@@ -37,6 +37,7 @@ def main() -> int:
     xlsx = os.path.join(d, "ledger.xlsx")
     sqlite = os.path.join(d, "ledger.sqlite")
     shutil.copyfile(QA_XLSX, xlsx)
+    settle_xlsx(xlsx)  # 가져오기는 보정을 반복 적용하므로 xlsx 쪽도 같은 상태에서 비교
 
     pr = subprocess.run([sys.executable, "-I", "import_xlsx.py", xlsx, sqlite], cwd=APP, capture_output=True, text=True, encoding="utf-8")
     ck("가져오기 스크립트 종료 코드 0", pr.returncode == 0, pr.stderr[-500:])
@@ -60,6 +61,24 @@ def main() -> int:
     lb = [r.get("_locked_by") for r in b["deposit"]]
     ck("deposit: 주문 잠금(_locked_by) 같음", la == lb, (la, lb))
     ck("meta.file 은 SQLite 경로", b["meta"]["file"].endswith("ledger.sqlite") and b["meta"]["formula_count"] == 0, b["meta"].get("file"))
+
+    # ---- 쓰기 → 백업 파일 생성, 되돌리기 → 행 사라짐, 그 뒤 다른 변경이 있으면 거부 ----
+    undo = ("import os, store, db\n"
+            "n0 = len(store.read_all()['exec']); s0 = store.data_stamp()\n"
+            "r = store.create('exec', {'재원': 'QA01', '예산목': '연구활동비', '원인발생일': '2026-03-05', '거래처': '검사', '금액': 7000, '적요': '되돌리기 검사'})\n"
+            "assert os.path.exists(store.LAST_WRITE['backup']), store.LAST_WRITE\n"
+            "assert store.data_stamp() != s0 and len(store.read_all()['exec']) == n0 + 1\n"
+            "wid = store.last_write_id(); store.undo_last(wid)\n"
+            "assert len(store.read_all()['exec']) == n0 and store.data_stamp() == s0, store.data_stamp()\n"
+            "store.create('exec', {'재원': 'QA01', '예산목': '연구활동비', '원인발생일': '2026-03-06', '거래처': '검사', '금액': 1, '적요': 'a'})\n"
+            "wid = store.last_write_id()\n"
+            "store.update('tags', store.read_all()['tags'][0]['_row'], {**{k: v for k, v in store.read_all()['tags'][0].items() if not k.startswith('_')}, '설명': 'x'})\n"
+            "try:\n    store.undo_last(wid); raise SystemExit('stale undo accepted')\n"
+            "except ValueError:\n    pass\n"
+            "print('ok')\n")
+    pr = subprocess.run([sys.executable, "-c", undo], cwd=APP, env=dict(os.environ, LEDGER_XLSX=xlsx, LEDGER_DB=sqlite, PYTHONIOENCODING="utf-8"),
+                        capture_output=True, text=True, encoding="utf-8")
+    ck("쓰기 → 백업 생성, 되돌리기 동작, 오래된 되돌리기 거부", pr.returncode == 0 and pr.stdout.strip().endswith("ok"), pr.stderr[-600:])
     return ck.done("db")
 
 

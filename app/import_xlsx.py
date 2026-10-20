@@ -31,7 +31,9 @@ DEFAULT_AUTHOR = "snubh.ai.center.01@gmail.com"  # 안윤아
 def load_sheets(xlsx: Path) -> tuple[dict[str, list[dict]], dict, list[str]]:
     """{kind: rows}, {meta key: value}, formulas. 행은 store._rows 결과 (_row = 시트 행 번호)."""
     wb = openpyxl.load_workbook(xlsx)
-    store._ensure_structure(wb)
+    for _ in range(5):  # 빠진 열은 번호 부여보다 뒤에 붙으므로(xlsx 는 다음 쓰기 때 완성) 변경이 없을 때까지 반복
+        if not store._ensure_structure(wb):
+            break
     formulas: list[str] = []
     data = {}
     for kind, (sheet, cols) in db.tables().items():
