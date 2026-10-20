@@ -8,8 +8,6 @@ import json
 import logging
 import os
 import re
-import threading
-import webbrowser
 from collections import defaultdict
 from pathlib import Path
 
@@ -929,14 +927,10 @@ if __name__ == "__main__":
     else:
         login_state = f"구글 로그인, 허용 {len(auth.allowed_emails())}명, 리다이렉트 {auth.redirect_uri()}"
     print(f"장부 파일: {store.DATA_PATH}\nAI: {ai_state}\n로그인: {login_state}\n브라우저: http://{HOST}:{PORT}  (종료: Ctrl+C)")
-    if not os.environ.get("LEDGER_NO_BROWSER"):  # 테스트(tests/)·자동 실행에서는 브라우저를 열지 않음
-        threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
     import socket
     with socket.socket() as _s:
         if _s.connect_ex((HOST, PORT)) == 0:
-            print(f"[안내] 이미 실행 중입니다 (포트 {PORT}). 브라우저 탭을 확인하세요. 이 창은 닫아도 됩니다.")
-            if not os.environ.get("LEDGER_NO_BROWSER"):
-                webbrowser.open(f"http://{HOST}:{PORT}")
+            print(f"[안내] 이미 실행 중입니다: http://{HOST}:{PORT} (이 창은 닫아도 됩니다)")
             raise SystemExit(0)
     print("※ 이 콘솔 창을 닫으면 앱이 종료됩니다.")
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")
