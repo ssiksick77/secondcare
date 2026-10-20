@@ -4,16 +4,15 @@ Updated: 2026-10-20
 
 ## Goal
 
-Move the ledger store from the xlsx file to SQLite so several users can work on one ledger, before the store code grows further. Screens and API behave the same; the existing tests pass; an xlsx export keeps the Excel view.
+Add Google login so every write records who made it and the app is ready for access from other PCs later. One PC now: all screens and the API need a login; an allow-list of emails in `app/.env` decides who may log in; SQLite rows and the change log store the login email as author.
 
 ## Done
 
-- a91649d Switch (2026-10-20, user decision): branch merged into main; MCP tools checked against a SQLite QA copy (dashboard, list, add, update, get, delete); app stopped; xlsx backed up to `app/backup/manual_before_sqlite_20261020_145708.xlsx`; live ledger imported to `의료인공지능센터_지출장부_2026.sqlite` (exec 173 / 255,025,994, labor 171, request 69, no formula cells); `LEDGER_DB` added to `app/.env`; app restarted with run.bat and serves the SQLite ledger.
-- d202ab6 Session 3: `app/export_xlsx.py` writes a read-only xlsx copy (old sheet order, 예산변동 header row 8 with summary rows 1-7 via `_refresh_budget_summary`, hidden 메타 sheet, values through `_write_row`). `test_db` exports, re-imports and compares `read_all` from SQLite, the re-import and the xlsx (53 checks). README section "SQLite 저장소", CLAUDE.md commands, `*.sqlite*` gitignored.
-- 7ee9405 / f389f7f Session 2: every write path runs on SQLite when `LEDGER_DB` is set. `db.Workbook` / `db.Sheet` stand in for the openpyxl workbook; `_rows`, `_write_row`, `_next_row`, `_delete_row`, `_has_value`, `_meta_get/_meta_set`, `_rename_tag`, `_load` dispatch on the type; `_ensure_structure` and `_refresh_budget_summary` are skipped for SQLite. `_write_session` = one `BEGIN IMMEDIATE` transaction, `_save` backs up the committed state (`app/backup/*.sqlite`) and commits, `undo_last` restores from that backup, `meta.write_seq` replaces the file hash and feeds `/api/meta` (`store.data_stamp`). Each create/update/delete/replace writes one `changelog` row (author empty). `import_xlsx` repeats the structure fix-up until stable. Tests: `api-db` and `ui-db` run the API and UI tests on a SQLite copy (`LEDGER_TEST_MODE=db` in `tests/_env.py`), `test_db` checks backup, undo and changelog; `test_api` child output is read as UTF-8 (cp949 flake fixed).
-- ef7ffc0 Session 1: `app/db.py` (schema: one table per sheet, `id` + `author` columns, `meta`, `changelog`), `app/import_xlsx.py` (xlsx -> SQLite, fills author, refuses to overwrite without `--force`), `store.read_all` split into `_raw_xlsx` / `_raw_db` / `_derive` and reads SQLite when `LEDGER_DB` is set, `tests/test_db.py` (45 checks: counts, 금액 totals, every column equal between xlsx and SQLite on the QA ledger), `db` group in `tests/run.py`.
+- 950dca2 Google login first version: `app/auth.py` (signed cookie session 30 days, allow-list, OAuth flow with `google_auth_oauthlib.Flow`, ID token check), `main.py` middleware (pages -> `/login`, `/api/*` -> 401, author ContextVar per request), routes `/login`, `/auth/login`, `/auth/callback`, `/auth/logout`, `/api/me`; `store.set_author` / `current_author` (ContextVar replaces the global), MCP server writes author `mcp`; `login.html` + `.login-*` CSS; header shows email + 로그아웃; `app.js` sends the browser to `/login` on 401. Tests: `tests/_env.py` sets `LEDGER_AUTH_BYPASS=test@example.com` (`Server(..., auth_bypass=False)` for a locked server, `get_raw` follows no redirect); API +11/+12 checks, UI +8 checks. README 2-1, `.env.example`, `.gitignore` (`app/google_oauth_client.json`). checks: pass (calc 32, API 106, db 53, api-db 107, UI 64, ui-db 64).
 
-## Done before the migration (xlsx era, kept for reference)
+## Done before this task (kept for reference)
+
+- 2026-10-20 SQLite migration complete and live (a91649d merge, d202ab6 export, 7ee9405/f389f7f write paths, ef7ffc0 schema/import). Details in git log.
 
 - 5926413 fix: startup sheet check leaked a read_only workbook handle; every save since 10-18 13:32 failed at os.replace (backups piled up, ledger mtime frozen). Regression test in tests/test_api.py. User re-entered the lost entries.
 - 85f8c23 예산목 잔액 (집행 표·결의서 재원 현황) counts only budget rows with 신청일자 ≤ 원인발생일; 신청일자 required; blank → Jan 1 of ledger year on fix-up.
@@ -31,16 +30,12 @@ Move the ledger store from the xlsx file to SQLite so several users can work on 
 
 ## In progress
 
-SQLite migration, first version (brainstormed 2026-10-20). Done conditions:
-- Store on SQLite: calc 32, API 95, UI 56 tests pass; screen and API behaviour unchanged. (done: api-db 95, ui-db 56 pass)
-- Every record has a stable id: API and frontend address records by id, not by row number. (done in substance: `_row` carries the SQLite id; the field name stays `_row`, see Decisions)
-- One-shot import script xlsx -> SQLite: on the QA ledger, every sheet's row count and amount totals equal the source. (done ef7ffc0)
-- Export SQLite -> xlsx: the exported file opens in Excel with the same sheets and columns as the current ledger. (done d202ab6; opened only by openpyxl, not by Excel)
-- Backup and undo on SQLite: a backup file exists before each write; undo works. (done f389f7f)
-- Runs on Linux: `python main.py` starts without the .bat files. (verified by code reading only: the .bat files are wrappers, the lock uses fcntl on posix; no Linux machine here)
-- Change log has an author column (email); the import fills existing rows with 안윤아 (snubh.ai.center.01@gmail.com). (done; writes log with an empty author until login)
+Google login first version is coded and checked (see Done). Not verified: a real Google login in the browser (needs the user's OAuth client and allow-list in `app/.env`; tests use the bypass). The done condition "KRDS score check passes" could not run: `scripts/check.sh` has no KRDS score step; the login page structure is checked by `tests/test_ui.py` instead (lang, landmarks, h1, skip link, alert role).
 
-Session order: (1) schema + import + read_all — done, (2) write paths — done, (3) export, docs — done, (4) switch — done. Left: PRODUCT.md wording ("엑셀 파일이 원본"); re-register the MCP server in Claude Desktop if it does not pick up `LEDGER_DB` from app/.env.
+User steps before first use (README 2-1):
+1. Put the allowed emails in `app/.env`: `LEDGER_ALLOWED_EMAILS=...`.
+2. Keep `app/google_client_secret.json` (desktop client works for 127.0.0.1) or make a web-application client and set `LEDGER_OAUTH_CLIENT`.
+3. Restart the app and log in once. `LEDGER_SESSION_SECRET` is written to `.env` on the first login.
 
 ## Open issues
 
@@ -89,9 +84,9 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 - 2026-10-20 SQLite schema (my calls): one table per sheet with the Korean headers as column names; empty cells NULL, numeric columns REAL, other columns untyped so 변경회차 keeps int vs text; dates as 'YYYY-MM-DD' text; `_row` carries the SQLite id so screens work unchanged until the frontend is renamed; `author` stores the email only (name mapping comes with login).
 - 2026-10-20 (user) SQLite migration, multi-user. Target: 3 (several accountants + researchers filing requests), external access, centre Linux server later, tunnel from a centre PC first. Login = Google, allow-list of emails managed by the accountant, first accountant in app/.env. Roles, login, external access, deployment are all later; the migration only adds stable ids and an author column. Existing rows get author 안윤아 (snubh.ai.center.01@gmail.com). SQLite before PostgreSQL (2026-10-19 decision kept).
 - 2026-10-20 (user) 한 문서(사전결재안 등)를 여러 거래의 증빙으로: 증빙 행 [복사] → 거래번호 여러 개 → 그 거래 폴더로 drive.copy(그 거래 기준 이름), 독립 증빙 항목(비고 '복사: 원본'). 연결(공유 파일)·드라이브 바로가기 방식은 사용자가 거절. POST /api/evidence/{번호}/copy.
+- 2026-10-20 (user) Google login: full lock (every screen and API), allow-list in `.env` only (management UI later), web-application OAuth client with `LEDGER_OAUTH_REDIRECT` as a setting so a later host name is a config change. My calls: xlsx mode locks the same but records no author; MCP server is unaffected (no HTTP) and uses author `mcp`; cookie 30 days; tests bypass auth with a fixed email and never call Google.
 
 ## Next action
 
-Pick the next task with the user. Candidates from the brainstorm "later" list (ideas.md 2026-10-20): Google login with an allow-list, then roles, then server deployment. Small leftovers: PRODUCT.md wording, delete the merged worktree branch.
+Merge this branch (claude/google-login-implementation-33c005) into main after the user logs in once with a real Google account and confirms the header shows the email. Then pick from ideas.md: allow-list management UI, role check, multi-PC access (host name, HTTPS, Secure cookie).
 
-Previous candidates: Candidates: one-shot rename of existing evidence files to the new rule (needs Drive connected), LEDGER_HOST + server role check, 학회·기타 review leftovers.

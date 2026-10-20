@@ -24,3 +24,5 @@ Who reads what:
 - [later][idea] 2026-10-20: 구글 OAuth 테스트 모드 100명 한도 확인, 프로덕션 전환 시 드라이브 범위 심사 — 로그인 작업 때
 - [later][idea] 2026-10-20: 드라이브 토큰을 공용 계정 하나로 할지 사용자별로 할지 — 다중 사용자 뒤
 - [done 2026-10-20][fix] tests/test_api.py 의 subprocess.run(text=True) 4곳이 자식 stderr 를 cp949 로 읽어 한글이 있으면 UnicodeDecodeError 로 검사가 중단됨 (간헐) — encoding='utf-8' 지정 필요. SQLite 이전 1회차 중 발견
+- [later][idea] 2026-10-20: 허용 이메일 관리 UI(설정 화면에서 추가·삭제) — 로그인 첫 버전은 .env 만; 브레인스토밍에서 미룸
+- [later][idea] 2026-10-20: 다중 PC 접속: 호스트명, HTTPS, Secure 쿠키, 콘솔에 리다이렉트 URI 추가 — 로그인 첫 버전 뒤
