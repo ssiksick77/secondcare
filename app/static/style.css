@@ -711,6 +711,9 @@ dialog.dlg-voucher { width: min(880px, 96vw); max-width: none; }
 .voucher .vc-sign .vc-sign-t { height: var(--vc-row); width: 22mm; font-weight: 600; color: #333; background: var(--vc-label-bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; white-space: nowrap; }
 .voucher .vc-sign .vc-sign-k { width: 7mm; padding: 0; writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 0.5mm; }
 .voucher .vc-sign tbody td { height: 14mm; }
+/* 서명 칸에 미리 인쇄한 이름(볼드+이탤릭 11pt)과 그 위 작은 직무 표시('직무대행' 6.5pt, 자간 -0.2mm: 4글자가 이름 3글자 폭 안쪽) (2026-10-20) */
+.voucher .vc-sign .vc-sign-n { font-size: 11pt; font-weight: 700; font-style: italic; line-height: 1.2; }
+.voucher .vc-sign .vc-sign-n small { display: block; font-size: 6.5pt; font-weight: 400; font-style: normal; color: #333; letter-spacing: -0.2mm; line-height: 1.1; margin-bottom: 0.5mm; }
 .voucher .vc-kv .vc-no { font-weight: 700; }
 .voucher .vc-kv th, .voucher .vc-g thead th { background: var(--vc-label-bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .voucher h3 { margin: 1.7mm 0 0.5mm; font-size: 21px; font-weight: 700; line-height: 1; color: #000; display: flex; align-items: baseline; justify-content: space-between; break-after: avoid; }
