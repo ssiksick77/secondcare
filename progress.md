@@ -4,10 +4,11 @@ Updated: 2026-10-20
 
 ## Goal
 
-Let the master accountant add and remove login-allowed accounts in the settings dialog, with a role (required) and a name (optional), without editing `app/.env` or restarting. Checked by: an account added in the dialog can log in with that role; a removed one gets 401 on the next request; non-master accounts cannot see or call the management API.
+Fund kind 연구지원: payees whose name contains '연구지원' become proper funds of that kind, their codes drop the leading '연구', existing transaction codes are renamed, and the fund list sorts 국책-교육-원내-위탁-연구지원-공금-기타.
 
 ## Done
 
+- a39201b merged into main (conflict only in progress.md); the app on port 8791 was restarted with the merged code and shows 연구지원 in the 재원 종류 list.
 - 4e1c5a1 fund kind 연구지원 (FUND_TYPES order 국책-교육-원내-위탁-연구지원-공금-기타 = fund list default sort in `store.load`; app.js fallback, tools docstring, README). Live ledger migrated 2026-10-20 17:43 by a scratch script (not in repo): payees whose 지급처명 contains '연구지원' (연구김지현, 연구김용수, 연구센소리, MATRIX, 연구류지원) became funds of kind 연구지원 with 잔액미관리=Y (my call: they have no budget rows) and 과제명 = old 지급처명; codes drop the leading 연구 (김지현, 김용수, 센소리, 류지원; MATRIX unchanged); 거래번호 and 재원 in 집행내역 (18 rows), 지급처 and 연결거래번호 in 인건비지급 (27 rows) renamed; no evidence, 품의, 예산변동 or memo referenced them. Payee 서울대산학 stays a payee. Backup app/backup/manual_before_research_support_20261020_174301.sqlite (and a duplicate …_174240 from the rehearsal). Checks pass.
 - 2104461 / 6c3b01e Allow-list in the SQLite `users` table (`allowed`, `added_at`, `added_by`); `auth.is_allowed` = `.env` masters OR allowed rows; `auth.is_master`; `GET/POST/DELETE /api/users` (master only, 403 otherwise); settings fieldset "로그인 허용 계정" (`#s-users`, hidden for non-masters): table email · role · name ("—" until first login) · added date · [삭제], add row, masters shown without a delete button; lowercase, format check, duplicate = notice only, self and master delete refused; deleted accounts keep their row and name (voucher 담당 cell). xlsx mode: list shows `.env` only, add disabled.
 - 4d171e0 Role (manager / staff / researcher per `docs/권한_설계_2026-10-20.md`) required on add, name optional (20 chars); a name set by the master skips the first-login name prompt; `/api/me` carries `role` (`master` for `.env` accounts); rows allowed before the role column exist are backfilled as `staff`.
@@ -46,6 +47,14 @@ Let the master accountant add and remove login-allowed accounts in the settings 
 ## In progress
 
 None. The allowed-account screen with roles is complete; the user has not yet tried it with real accounts.
+
+## Next action
+
+Hard-refresh the 재원 tab (Ctrl+F5) and review the five 연구지원 funds (잔액미관리=Y, 과제명 = old 지급처명); edit 과제명 or 잔액미관리 there if wanted. Delete the duplicate backup app/backup/manual_before_research_support_20261020_174240.sqlite by hand. Then pick with the user: server role checks (design doc §4.2, §8 step 3: one FastAPI dependency, 403 by role, drop `extra.admin`), or the role/name edit UI, or multi-PC access (LEDGER_HOST, HTTPS redirect URI).
+
+## Earlier note
+
+Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE on the QA copy (room bar, title from first question, table rendering, notice). Not yet tried with the real model in rooms (the room layer only changes storage and history; the model path is the one verified earlier).
 
 ## Open issues
 
@@ -112,8 +121,3 @@ None. The allowed-account screen with roles is complete; the user has not yet tr
 - 2026-10-20 (user) AI helper overhaul: hybrid C = small summary in the system prompt + read tools (not full ledger, not summary only); one tool module for MCP and the in-app agent; memo store by target kind (재원·거래처·일반), user edits, AI proposes and the user approves; fx_rate tool in the first version; OpenAI tool calling, receipt OCR (OCI candidate), report, travel calculator, rule-document answers all later. Accountant-role version first; the researcher version is a separate agent with its own smaller tool set (restriction by tool availability, not by prompt). My calls: memo UI in the settings panel; frankfurter.app for rates; tool loop cap stays 6; chat shows one line per tool call under the answer.
 
 - 2026-10-20 (user) AI chat rooms: server storage (not browser), separate file `app/chats.sqlite` (not the ledger DB: no backup/undo/export mixing), rooms per login email, 7-day auto-delete unless kept, model gets the last 40 messages, past proposal cards act only within their turn, xlsx mode not considered (owner falls back to `local`), notice that misuse may be forwarded to the master account (notice only; detection later). My calls: purge on startup and on list, by last message; title = first question (30 chars), renamable; room list at the top of the panel; delete is permanent.
-
-## Next action
-
-Pick with the user: server role checks (design doc §4.2, §8 step 3: one FastAPI dependency, 403 by role, drop `extra.admin`), or the role/name edit UI, or multi-PC access (LEDGER_HOST, HTTPS redirect URI).
-
