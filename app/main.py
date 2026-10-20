@@ -606,7 +606,7 @@ def evidence_entry(number: str, body: dict):
 @app.post("/api/evidence/{number}")
 async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind: str = Form(""),
                           date: str = Form(""), note: str = Form(""), row: str = Form(""),
-                          evno: str = Form("", alias="증빙번호")):
+                          evno: str = Form("", alias="증빙번호"), replace: str = Form("")):
     """여러 파일을 드라이브에 올리고 증빙 시트에 기록. 집행(거래번호)은 증빙관리/YYYY/재원코드/거래번호,
     적립금(적립번호)은 증빙관리/YYYY/적립금/거래처명/적립번호 (사용자 결정 2026-10-19).
     row(증빙 시트 행) 또는 증빙번호를 주면 그 '실물만' 항목에 파일 1개를 첨부한다 (증빙번호·증빙종류·비고 유지, 이미 파일이 있으면 409)."""
@@ -625,8 +625,11 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
                        if (not row.strip() or e["_row"] == int(row)) and (not evno.strip() or e["증빙번호"] == evno.strip())), None)
         if target is None:
             raise HTTPException(404, "첨부할 증빙 항목을 찾을 수 없습니다. 새로고침 후 다시 시도하세요.")
-        if target["has_file"]:
-            raise HTTPException(409, f"증빙 {target['증빙번호']} 에는 이미 파일이 있습니다. 새 파일은 [업로드]로 따로 올리세요.")
+        do_replace = store._yes(replace)
+        if target["has_file"] and not do_replace:
+            raise HTTPException(409, f"증빙 {target['증빙번호']} 에는 이미 파일이 있습니다. 새 파일은 [업로드]로 따로 올리거나 [교체]를 쓰세요.")
+        if do_replace and not target["has_file"]:
+            do_replace = False  # 파일이 없으면 그냥 첨부
         if len(files) != 1:
             raise HTTPException(400, "증빙 항목 하나에는 파일 1개만 첨부할 수 있습니다.")
         kind = target["증빙종류"] or kind
@@ -647,6 +650,8 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
         blobs.append((f, data))
     folder = drive.ensure_folder([year, "적립금", drive.safe_part(rec["거래처"]), number] if is_dep else [year, rec["재원"], number])
     existing = store.evidence_names(number)
+    if target is not None and do_replace:  # 교체: 같은 이름을 다시 쓸 수 있게 (확장자가 다르면 새 이름)
+        existing = [x for x in existing if x != target["파일명"]]
     items, uploaded = [], []
     try:
         for f, data in blobs:
@@ -657,9 +662,9 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
             uploaded.append(up["id"])
             items.append({"거래번호": number, "증빙종류": kind.strip(), "파일명": name, "원본파일명": f.filename or "",
                           "드라이브파일ID": up["id"], "크기": up["size"], "업로드일": dt.date.today().isoformat(), "비고": note})
-        if target is not None:  # 실물만 항목에 첨부: 파일 열만 채움 (증빙번호·종류·비고 유지)
+        if target is not None:  # 실물만 항목에 첨부(또는 교체): 파일 열만 채움 (증빙번호·종류·비고 유지)
             saved = [store.evidence_attach(target["_row"], {c: items[0][c] for c in store.EVID_FILE_COLS},
-                                           {"거래번호": number, "증빙번호": target["증빙번호"]}, folder["url"])]
+                                           {"거래번호": number, "증빙번호": target["증빙번호"]}, folder["url"], replace=bool(target is not None and do_replace))]
         else:
             saved = store.evidence_add(items, folder["url"])
     except Exception:
@@ -669,10 +674,15 @@ async def evidence_upload(number: str, files: list[UploadFile] = File(...), kind
             except Exception:
                 pass
         raise
+    if target is not None and do_replace and target.get("드라이브파일ID") and target["드라이브파일ID"] != saved[0]["드라이브파일ID"]:
+        try:  # 장부가 새 파일을 가리킨 뒤 옛 파일은 휴지통으로 (실패해도 교체는 완료)
+            drive.trash(target["드라이브파일ID"])
+        except Exception:
+            pass
     for it in saved:
         it["url"] = drive.file_url(it["드라이브파일ID"])
         it["has_file"] = True
-    return {"items": saved, "folder": folder, "attached": target is not None}
+    return {"items": saved, "folder": folder, "attached": target is not None, "replaced": bool(target is not None and do_replace)}
 
 
 @app.delete("/api/evidence/{row}")

@@ -1926,7 +1926,9 @@ function evidRowHtml(e) {
   const meta = [e["원본파일명"] && e["원본파일명"] !== n ? e["원본파일명"] : "", e["크기"] ? Math.max(1, Math.round(e["크기"] / 1024)).toLocaleString() + " KB" : "", e["업로드일"] ? mmdd(e["업로드일"]) : ""].filter(Boolean).join(" · ");
   const file = has ? `${e.missing ? `<span class="evid-nofile" title="드라이브에서 지워졌거나 휴지통에 있습니다. 장부 기록만 남아 있으니 [삭제]로 정리하거나 드라이브에서 복구하세요">${esc(n)} · 드라이브에 없음</span>` : e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener" title="새 창에서 열기">${esc(n)}</a>` : esc(n)}${meta ? `<div class="toolbar-note">${esc(meta)}</div>` : ""}` : `<span class="evid-nofile">파일 없음</span>`;
   const conn = !!XD.drive?.connected;
-  const attach = has ? "" : `<button type="button" class="btn btn-sm" data-evattach="${e._row}"${conn ? "" : " disabled"} title="${conn ? "이 항목에 파일 1개를 올려 붙입니다" : "구글 드라이브를 연결하면 첨부할 수 있습니다"}">파일 첨부</button>`;
+  const attach = has
+    ? `<button type="button" class="btn btn-sm" data-evattach="${e._row}" data-replace="1"${conn ? "" : " disabled"} title="${conn ? "파일을 새 파일로 바꿉니다 (증빙번호·종류·비고 유지, 옛 파일은 드라이브 휴지통)" : "구글 드라이브를 연결하면 교체할 수 있습니다"}">교체</button>`
+    : `<button type="button" class="btn btn-sm" data-evattach="${e._row}"${conn ? "" : " disabled"} title="${conn ? "이 항목에 파일 1개를 올려 붙입니다" : "구글 드라이브를 연결하면 첨부할 수 있습니다"}">파일 첨부</button>`;
   const label = has ? n : `${e["증빙번호"]} ${e["증빙종류"]}`;
   return `<tr${has ? "" : ' class="evid-row-nofile"'}><td class="xd-th-cell">${thumb}</td><td class="evid-id"><span class="evid-kind">${esc(e["증빙종류"])}</span><span class="evid-no">${esc(e["증빙번호"])}</span></td><td class="evid-name">${file}</td><td class="evid-note">${esc(e["비고"])}</td><td class="evid-acts"><button type="button" class="btn btn-sm" data-evmount="${e._row}" title="이 증빙의 첨부 양식 인쇄">양식</button>${attach}<button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(label)}" data-file="${has ? 1 : ""}" title="${has ? "장부에서 삭제하고 드라이브 휴지통으로 이동" : "장부에서 이 항목을 삭제"}">삭제</button></td></tr>`;
 }
@@ -1987,19 +1989,20 @@ function bindEvidForm(c) {
   });
   // [파일 첨부]: 실물만 항목에 파일 1개를 붙임 (같은 증빙번호·종류·비고, 드라이브 이름·폴더 규칙은 업로드와 같음)
   const ai = $("#evid-attach-input");
-  $$("#xd-body [data-evattach]").forEach(b => b.addEventListener("click", () => { if (!ai) return; XD.attachRow = Number(b.dataset.evattach); ai.value = ""; ai.click(); }));
+  $$("#xd-body [data-evattach]").forEach(b => b.addEventListener("click", () => { if (!ai) return; XD.attachRow = Number(b.dataset.evattach); XD.attachReplace = !!b.dataset.replace; ai.value = ""; ai.click(); }));
   ai?.addEventListener("change", async () => {
     const f = ai.files[0], row = XD.attachRow, e = (XD.evid || []).find(x => x._row === row); if (!f || !e) return;
-    const b = $(`#xd-body [data-evattach="${row}"]`); if (b) { b.disabled = true; b.textContent = "첨부 중…"; }
-    const fd = new FormData(); fd.append("files", f); fd.append("row", String(row)); fd.append("증빙번호", e["증빙번호"]);
+    const replace = !!XD.attachReplace;
+    const b = $(`#xd-body [data-evattach="${row}"]`); if (b) { b.disabled = true; b.textContent = replace ? "교체 중…" : "첨부 중…"; }
+    const fd = new FormData(); fd.append("files", f); fd.append("row", String(row)); fd.append("증빙번호", e["증빙번호"]); if (replace) fd.append("replace", "1");
     const d = $("#evid-form")?.date.value; if (d) fd.append("date", d);
     try {
       const res = await fetch(`/api/evidence/${encodeURIComponent(c.number)}`, { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
-      showAlert(`증빙 ${e["증빙번호"]} 에 파일을 첨부했습니다`, "ok");
+      showAlert(replace ? `증빙 ${e["증빙번호"]} 의 파일을 교체했습니다 (옛 파일은 드라이브 휴지통)` : `증빙 ${e["증빙번호"]} 에 파일을 첨부했습니다`, "ok");
       await load(); await c.rerender();
       $(`#xd-body [data-evmount="${row}"]`)?.focus();
-    } catch (err) { showAlert("첨부 실패: " + err.message, "error"); if (b?.isConnected) { b.disabled = false; b.textContent = "파일 첨부"; b.focus(); } }
+    } catch (err) { showAlert((replace ? "교체" : "첨부") + " 실패: " + err.message, "error"); if (b?.isConnected) { b.disabled = false; b.textContent = replace ? "교체" : "파일 첨부"; b.focus(); } }
   });
   $("#evid-copy")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText($(".evid-list code").textContent); showAlert("증빙목록을 복사했습니다.", "ok"); } catch { } });
   $$("#xd-body [data-evmount]").forEach(b => b.addEventListener("click", () => {

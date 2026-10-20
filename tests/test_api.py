@@ -232,6 +232,17 @@ def main() -> int:
         s2, ev = sv.call("GET", f"/api/evidence/{quote(rn_no)}")
         ck("금액 수정 → 파일명 변경 + 드라이브(모의) 파일도 이동", s == 200 and r.get("_renamed") == 1 and ev["items"][0]["파일명"] == "QA01_영수증_4500_260308.png"
            and os.path.exists(os.path.join(sv.dir, "mock", "증빙관리", "2026", "QA01", rn_no, "QA01_영수증_4500_260308.png")), (s, r.get("_renamed"), ev.get("items")))
+        # ---- 증빙 교체: 같은 증빙번호, 새 파일, 옛 파일은 휴지통 ----
+        ev_row, old_id = ev["items"][0]["_row"], ev["items"][0]["드라이브파일ID"]
+        dup = requests.post(f"{sv.base}/api/evidence/{quote(rn_no)}", data={"row": str(ev_row)}, files={"files": ("b.png", b"\x89PNG y", "image/png")})
+        ck("파일 있는 항목에 첨부 → 409", dup.status_code == 409, dup.status_code)
+        rp = requests.post(f"{sv.base}/api/evidence/{quote(rn_no)}", data={"row": str(ev_row), "replace": "1"}, files={"files": ("b.png", b"\x89PNG new", "image/png")}).json()
+        s2, ev2 = sv.call("GET", f"/api/evidence/{quote(rn_no)}")
+        it = ev2["items"][0]
+        mock_path = os.path.join(sv.dir, "mock", "증빙관리", "2026", "QA01", rn_no, it["파일명"])
+        ck("교체: 증빙번호 유지·새 파일·목록 1건", rp.get("replaced") is True and len(ev2["items"]) == 1 and it["증빙번호"] == ev["items"][0]["증빙번호"] and it["파일명"] == "QA01_영수증_4500_260308.png"
+           and (it["드라이브파일ID"] != old_id or open(mock_path, "rb").read() == b"\x89PNG new"), (rp, ev2.get("items")))  # 모의 드라이브는 같은 경로 = 같은 id
+        ck("교체: 옛 파일은 모의 휴지통으로 (같은 경로면 덮어씀)", old_id == it["드라이브파일ID"] or os.path.exists(os.path.join(sv.dir, "mock", "_trash", "QA01_영수증_4500_260308.png")), old_id)
         rec = sv.rec("exec", rn_row); rec["비고"] = "메모만"
         s, r = sv.call("PUT", f"/api/exec/{rn_row}", {"rec": rec})
         ck("이름과 무관한 수정은 파일명 그대로", s == 200 and not r.get("_renamed"), (s, r.get("_renamed")))

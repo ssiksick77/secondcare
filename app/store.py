@@ -2543,16 +2543,17 @@ def evidence_entry(number: str, kind: str, note: str = "") -> dict:
         return _evid_out(it)
 
 
-def evidence_attach(row: int, fields: dict, expect: dict | None = None, folder_url: str | None = None) -> dict:
-    """실물만 항목(row)에 파일 열(EVID_FILE_COLS)만 채운다. 증빙번호·증빙종류·비고는 그대로. 이미 파일이 있으면 거부."""
+def evidence_attach(row: int, fields: dict, expect: dict | None = None, folder_url: str | None = None, replace: bool = False) -> dict:
+    """실물만 항목(row)에 파일 열(EVID_FILE_COLS)만 채운다. 증빙번호·증빙종류·비고는 그대로. 이미 파일이 있으면 거부.
+    replace=True 면 이미 파일이 있는 항목의 파일 열을 새 파일로 바꾼다 (교체, 2026-10-20). 옛 드라이브 파일 정리는 호출자가."""
     with _write_session() as wb:
         ws = wb[SHEET_EVID]
         rec = next((x for x in _rows(ws, EVID_COLS) if x["_row"] == row), None)
         if rec is None:
             raise NotFound("증빙 행을 찾을 수 없습니다.")
         _check_expect("evidence", rec, expect)
-        if evid_has_file(rec):
-            raise EvidHasFile(f"증빙 {rec.get('증빙번호') or ''} 에는 이미 파일이 있습니다. 새 파일은 [업로드]로 따로 올리세요.")
+        if evid_has_file(rec) and not replace:
+            raise EvidHasFile(f"증빙 {rec.get('증빙번호') or ''} 에는 이미 파일이 있습니다. 새 파일은 [업로드]로 따로 올리거나 [교체]를 쓰세요.")
         for c in EVID_FILE_COLS:
             if c in fields:
                 rec[c] = fields[c]
