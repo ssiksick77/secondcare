@@ -1924,7 +1924,7 @@ function evidRowHtml(e) {
   const has = evHasFile(e), n = e["파일명"] || "", id = e["드라이브파일ID"];
   const thumb = !has ? "" : XD_IMG.test(n) && id ? `<img class="xd-thumb" loading="lazy" alt="" src="/api/evidence/thumb/${encodeURIComponent(id)}" data-ext="${esc(fileExt(n))}">` : `<span class="xd-chip" aria-hidden="true">${esc(fileExt(n))}</span>`;
   const meta = [e["원본파일명"] && e["원본파일명"] !== n ? e["원본파일명"] : "", e["크기"] ? Math.max(1, Math.round(e["크기"] / 1024)).toLocaleString() + " KB" : "", e["업로드일"] ? mmdd(e["업로드일"]) : ""].filter(Boolean).join(" · ");
-  const file = has ? `${e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener" title="새 창에서 열기">${esc(n)}</a>` : esc(n)}${meta ? `<div class="toolbar-note">${esc(meta)}</div>` : ""}` : `<span class="evid-nofile">파일 없음</span>`;
+  const file = has ? `${e.missing ? `<span class="evid-nofile" title="드라이브에서 지워졌거나 휴지통에 있습니다. 장부 기록만 남아 있으니 [삭제]로 정리하거나 드라이브에서 복구하세요">${esc(n)} · 드라이브에 없음</span>` : e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener" title="새 창에서 열기">${esc(n)}</a>` : esc(n)}${meta ? `<div class="toolbar-note">${esc(meta)}</div>` : ""}` : `<span class="evid-nofile">파일 없음</span>`;
   const conn = !!XD.drive?.connected;
   const attach = has ? "" : `<button type="button" class="btn btn-sm" data-evattach="${e._row}"${conn ? "" : " disabled"} title="${conn ? "이 항목에 파일 1개를 올려 붙입니다" : "구글 드라이브를 연결하면 첨부할 수 있습니다"}">파일 첨부</button>`;
   const label = has ? n : `${e["증빙번호"]} ${e["증빙종류"]}`;

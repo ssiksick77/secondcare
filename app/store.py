@@ -2598,6 +2598,36 @@ def evidence_add(items: list[dict], folder_url: str | None = None) -> list[dict]
         return out
 
 
+def evidence_sync(number: str, lookup) -> list[dict]:
+    """증빙 목록을 드라이브 현재 상태에 맞춘다 (2026-10-19 사용자 결정: 원래 이름은 남기지 않음).
+    lookup(드라이브파일ID) → {name, trashed} | None. 이름이 바뀐 파일은 증빙 시트 파일명을 고쳐 저장하고,
+    없거나 휴지통인 파일은 missing=True 로 표시만 한다(장부는 그대로). 드라이브 오류는 그 파일만 건너뛴다."""
+    items = evidence_for(number)
+    changed = []
+    for it in items:
+        fid = str(it.get("드라이브파일ID") or "").strip()
+        if not fid:
+            continue
+        try:
+            meta = lookup(fid)
+        except Exception:
+            continue
+        if meta is None or meta.get("trashed"):
+            it["missing"] = True
+            continue
+        name = str(meta.get("name") or "").strip()
+        if name and name != str(it.get("파일명") or ""):
+            it["파일명"] = name
+            changed.append(it)
+    if changed:
+        with _write_session() as wb:
+            ws = wb[SHEET_EVID]
+            for it in changed:
+                _write_row(ws, EVID_COLS, it["_row"], {"파일명": it["파일명"]})
+            _save(wb)
+    return items
+
+
 def evidence_delete(row: int, expect: dict | None = None) -> dict:
     """증빙 행 삭제 후 집행내역 요약 갱신. 삭제된 행(드라이브파일ID 포함) 반환."""
     with _write_session() as wb:

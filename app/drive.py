@@ -245,6 +245,24 @@ def trash(file_id: str):
     _guard(lambda: _svc().files().update(fileId=file_id, body={"trashed": True}).execute())
 
 
+def file_meta(file_id: str) -> dict | None:
+    """드라이브의 현재 파일 정보 {name, trashed}. 없으면(삭제·권한 없음) None. 모의 모드는 파일 존재 여부로 판단."""
+    if not file_id:
+        return None
+    if file_id.startswith("mock:"):
+        p = MOCK_DIR / file_id[5:]
+        return {"name": p.name, "trashed": False} if p.exists() else None
+    def run():
+        try:
+            f = _svc().files().get(fileId=file_id, fields="name, trashed").execute()
+        except Exception as e:
+            if "404" in str(e) or "notFound" in str(e):
+                return None
+            raise
+        return {"name": f.get("name") or "", "trashed": bool(f.get("trashed"))}
+    return _guard(run)
+
+
 def file_url(file_id: str) -> str:
     if file_id.startswith("mock:"):
         return (MOCK_DIR / file_id[5:]).resolve().as_uri()

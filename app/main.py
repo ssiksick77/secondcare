@@ -540,7 +540,9 @@ def evidence_thumb(file_id: str):
 
 @app.get("/api/evidence/{number}")
 def evidence_list(number: str):
-    items = store.evidence_for(number)
+    """증빙 목록. 드라이브가 연결돼 있으면 파일의 현재 이름을 반영하고(바뀌면 장부도 수정) 없는 파일은 missing 으로 표시."""
+    st = drive.status()
+    items = store.evidence_sync(number, drive.file_meta) if (st.get("connected") or st.get("mock")) else store.evidence_for(number)
     for it in items:
         it["url"] = drive.file_url(it["드라이브파일ID"]) if it.get("드라이브파일ID") else ""
     return {"items": items, "drive": drive.status()}
