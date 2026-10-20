@@ -2427,3 +2427,41 @@ $("#dlg-mount").addEventListener("close", () => {
 });
 window.addEventListener("beforeprint", () => { if (!document.body.classList.contains("printing-mount")) preparePrintMount(); });
 window.addEventListener("afterprint", () => { if (!document.body.classList.contains("printing-mount")) return; document.body.classList.remove("printing-mount"); $("#print-mount").innerHTML = ""; });
+
+// ---------- 사이드 패널 (오른쪽 기둥): 기본 자리표시 · 상세 드로어 · AI 드로어가 이 안에서 바뀐다 ----------
+// 접힘 상태는 localStorage(ledger-side). 첫 방문은 1500px 미만이면 접힘. 드로어가 열리면 자동으로 펼치고, 닫히면 원래 상태로 돌아간다.
+const SIDE = { auto: false };
+function sideOpen() { return !document.body.classList.contains("side-collapsed"); }
+function setSide(open, persist = true) {
+  document.body.classList.toggle("side-collapsed", !open);
+  document.body.classList.toggle("side-open", open);
+  $("#side-expand").hidden = open;
+  $("#side-expand").setAttribute("aria-expanded", String(open));
+  if (persist) { SIDE.auto = false; try { localStorage.setItem("ledger-side", open ? "1" : "0"); } catch { } }
+}
+function sideView() { return (!$("#exec-drawer").hidden || !$("#req-drawer").hidden) ? "detail" : !$("#ai-drawer").hidden ? "ai" : "home"; }
+function syncSide() {
+  const v = sideView();
+  $("#side-home").hidden = v !== "home";
+  $$("#side-rail [data-side]").forEach(b => b.classList.toggle("on", b.dataset.side === v));
+  $("#side-ai").hidden = $("#btn-ai").hidden;
+  if (v !== "home" && !sideOpen()) { setSide(true, false); SIDE.auto = true; }   // 행 클릭·AI 호출이 접힌 패널을 연다
+  else if (v === "home" && SIDE.auto) { SIDE.auto = false; setSide(false, false); }   // 자동으로 열린 패널은 닫힐 때 접힘으로 복귀
+}
+function sideCloseAll() { closeExecDrawer(); if (typeof closeReqDrawer === "function") closeReqDrawer(); if (!$("#ai-drawer").hidden) toggleDrawer(false); }
+(() => {
+  const mo = new MutationObserver(syncSide);
+  ["#exec-drawer", "#req-drawer", "#ai-drawer", "#btn-ai"].forEach(id => mo.observe($(id), { attributes: true, attributeFilter: ["hidden"] }));
+  $("#side-collapse").addEventListener("click", () => { setSide(false); $("#side-expand").focus(); });
+  $("#side-expand").addEventListener("click", () => { setSide(true); $("#side-collapse").focus(); });
+  $$("#side-rail [data-side]").forEach(b => b.addEventListener("click", () => {
+    const v = b.dataset.side;
+    if (v === "home") sideCloseAll();
+    else if (v === "ai") { if ($("#ai-drawer").hidden) toggleDrawer(true); }
+    // detail: 열린 상세가 있으면 그대로, 없으면 기본 패널의 안내만 보인다
+    setSide(true);
+  }));
+  let saved = null; try { saved = localStorage.getItem("ledger-side"); } catch { }
+  setSide(saved != null ? saved === "1" : window.innerWidth >= 1500, false);
+  syncSide();
+})();

@@ -9,6 +9,8 @@
 </head>
 <body>
 <a class="skip" href="#main">본문 바로가기</a>
+<div class="shell">
+<div class="col">
 
 <header class="top">
   <h1><span class="app-name">Second Care</span><small class="app-full">의료인공지능센터 연구비 관리 시스템</small></h1>
@@ -332,27 +334,21 @@
 <footer class="foot">
   <span id="foot-path"></span>
 </footer>
+</div>
 
-<!-- 입력 폼 대화상자 -->
-<dialog id="dlg" aria-labelledby="dlg-title">
-  <form id="dlg-form" method="dialog" novalidate>
-    <h2 id="dlg-title"></h2>
-    <div id="dlg-ai" class="dlg-ai" hidden>
-      <button type="button" class="btn btn-sm" id="dlg-receipt-btn">영수증에서 채우기</button><input type="file" id="dlg-receipt" accept="image/*,application/pdf" hidden aria-hidden="true">
-      <button type="button" class="btn btn-sm" id="dlg-suggest">AI 추천·검증</button>
-      <span id="dlg-ai-msg" class="dlg-ai-msg" aria-live="polite"></span>
-    </div>
-    <div id="dlg-fields" class="fields"></div>
-    <p id="dlg-error" class="field-error" role="alert" hidden></p>
-    <div class="dlg-actions">
-      <span class="toolbar-note" id="dlg-keys">Enter: 다음 칸 · Ctrl+Enter: 저장</span>
-      <button type="button" class="btn btn-ghost" id="dlg-cancel">취소</button>
-      <button type="button" class="btn" id="dlg-save-more" title="저장하고 같은 종류의 다음 건을 바로 입력 (재원·예산목·날짜 유지)">저장 후 계속</button>
-      <button type="submit" class="btn btn-primary" id="dlg-save">저장</button>
-    </div>
-  </form>
-</dialog>
-
+<!-- 사이드 패널: 전체 높이 오른쪽 기둥. 기본 자리표시 + 상세·AI 드로어가 이 안에서 바뀐다 -->
+<aside id="side" class="side" aria-label="사이드 패널">
+  <div class="side-rail" id="side-rail">
+    <button type="button" class="side-rail-btn" id="side-expand" aria-controls="side-body" aria-expanded="true" title="사이드 패널 펼치기"><span>펼치기</span></button>
+    <button type="button" class="side-rail-btn" data-side="home" title="기본 패널"><span>기본</span></button>
+    <button type="button" class="side-rail-btn" data-side="detail" title="선택한 건의 상세 (행을 클릭하면 열립니다)"><span>상세</span></button>
+    <button type="button" class="side-rail-btn" data-side="ai" id="side-ai" title="행정보조 김연구 (AI 도우미)" hidden><span>AI</span></button>
+  </div>
+  <div class="side-body" id="side-body">
+    <section id="side-home" class="side-home" aria-labelledby="side-home-title">
+      <div class="drawer-head"><strong id="side-home-title">사이드 패널</strong><span class="drawer-model"></span><button type="button" class="btn btn-sm btn-ghost" id="side-collapse" aria-controls="side-body" title="사이드 패널 접기">접기 ›</button></div>
+      <div class="drawer-body"><p class="toolbar-note side-ph">용도 미정. 집행·품의·적립금 행을 클릭하면 상세가, [김연구 호출하기]를 누르면 AI 도우미가 여기에 열립니다.</p></div>
+    </section>
 <aside id="exec-drawer" class="drawer" role="dialog" aria-labelledby="xd-title" aria-modal="false" tabindex="-1" hidden>
   <div class="drawer-head xd-head">
     <div class="xd-headtxt">
@@ -431,6 +427,29 @@
     <button type="submit" class="btn btn-primary" id="ai-send">전송</button>
   </form>
 </aside>
+  </div>
+</aside>
+</div><!-- /.shell -->
+
+<!-- 입력 폼 대화상자 -->
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <form id="dlg-form" method="dialog" novalidate>
+    <h2 id="dlg-title"></h2>
+    <div id="dlg-ai" class="dlg-ai" hidden>
+      <button type="button" class="btn btn-sm" id="dlg-receipt-btn">영수증에서 채우기</button><input type="file" id="dlg-receipt" accept="image/*,application/pdf" hidden aria-hidden="true">
+      <button type="button" class="btn btn-sm" id="dlg-suggest">AI 추천·검증</button>
+      <span id="dlg-ai-msg" class="dlg-ai-msg" aria-live="polite"></span>
+    </div>
+    <div id="dlg-fields" class="fields"></div>
+    <p id="dlg-error" class="field-error" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <span class="toolbar-note" id="dlg-keys">Enter: 다음 칸 · Ctrl+Enter: 저장</span>
+      <button type="button" class="btn btn-ghost" id="dlg-cancel">취소</button>
+      <button type="button" class="btn" id="dlg-save-more" title="저장하고 같은 종류의 다음 건을 바로 입력 (재원·예산목·날짜 유지)">저장 후 계속</button>
+      <button type="submit" class="btn btn-primary" id="dlg-save">저장</button>
+    </div>
+  </form>
+</dialog>
 
 <!-- 집행내역 편집 모드 (팝업 격자) -->
 <dialog id="dlg-edit" class="dlg-edit" aria-labelledby="edit-title">
