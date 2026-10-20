@@ -102,6 +102,18 @@ def main() -> int:
                                                "적립금", "거래처", "태그", "증빙", "보완이력", "메모", "신청", "주문", "신청첨부", "메타"], wb.sheetnames)
     ck("메타 시트 숨김, 예산변동 8행 머리글·7행 합계", wb["메타"].sheet_state == "hidden" and wb["예산변동"].cell(8, 1).value == "재원" and wb["예산변동"].cell(7, 5).value is not None)
     wb.close()
+
+    # 나중에 생긴 열(인원 숨김, 2026-10-20): 열이 없는 옛 DB 에 create_schema 가 덧붙인다
+    import sqlite3
+    old = os.path.join(d, "old_schema.sqlite")
+    shutil.copyfile(sqlite, old)
+    con = sqlite3.connect(old)
+    con.execute('ALTER TABLE people DROP COLUMN "숨김"')
+    con.commit(); con.close()
+    pr = subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, '.'); import db; c = db.connect(); db.create_schema(c); "
+                         "print(int('\uc228\uae40' in [r[1] for r in c.execute('PRAGMA table_info(people)')]))"],
+                        cwd=APP, env=dict(os.environ, LEDGER_DB=old), capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ck("옛 DB: create_schema 가 빠진 열(숨김) 추가", pr.returncode == 0 and pr.stdout.strip() == "1", (pr.stdout, pr.stderr))
     return ck.done("db")
 
 

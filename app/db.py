@@ -66,10 +66,14 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 
 
 def create_schema(con: sqlite3.Connection):
-    """테이블이 없으면 만든다. 있는 테이블은 건드리지 않는다."""
+    """테이블이 없으면 만든다. 있는 테이블에는 빠진 열만 덧붙인다."""
     for kind, (_sheet, cols) in tables().items():
         body = ", ".join(f"{_q(c)}{_col_type(c)}" for c in cols)
         con.execute(f"CREATE TABLE IF NOT EXISTS {_q(kind)} (id INTEGER PRIMARY KEY AUTOINCREMENT, {body}, {AUTHOR_COL} TEXT)")
+        have = {r[1] for r in con.execute(f"PRAGMA table_info({_q(kind)})")}
+        for c in cols:  # 나중에 생긴 열 (예: 인원 숨김, 2026-10-20)은 있는 테이블에 덧붙인다
+            if c not in have:
+                con.execute(f"ALTER TABLE {_q(kind)} ADD COLUMN {_q(c)}{_col_type(c)}")
     con.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value)")
     con.execute("CREATE TABLE IF NOT EXISTS changelog (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, "
                 f"{AUTHOR_COL} TEXT, kind TEXT NOT NULL, row_id INTEGER, action TEXT NOT NULL, detail TEXT)")

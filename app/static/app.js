@@ -293,6 +293,8 @@ function filtered(kind) {
     if (f["신청인"] && r["신청인"] !== f["신청인"]) return false;
     if (f["관련과제"] && r["관련과제"] !== f["관련과제"]) return false;
     if (f["구매처"] && r["구매처"] !== f["구매처"]) return false;
+    if (kind === "people" && r["숨김"] === "Y" && !f.showHidden) return false;  // 숨긴 인원은 '숨긴 인원 보기'일 때만
+    if (kind === "salary" && !f["이름"]) return false;  // 기준급여는 인원 목록에서 이름을 고른 뒤에만
     const d = r["원인발생일"] || r["일자"] || r["지급월"] || r["신청일"] || "";
     if (f.year && d.slice(0, 4) !== f.year) return false;
     if (f.month && d.slice(5, 7) !== f.month) return false;
@@ -372,6 +374,7 @@ function renderList(kind) {
   function rowHtml(r, tds) {
     const extra = kind === "req" && r["상태"] === "대기"
       ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}">집행전환</button>`
+      : kind === "people" ? `<button type="button" class="btn btn-sm" data-labor="hide" data-row="${r._row}" aria-label="${esc(r["이름"])} ${r["숨김"] === "Y" ? "다시 보이기" : "숨기기"}">${r["숨김"] === "Y" ? "보이기" : "숨기기"}</button>`
       : kind === "labor" ? (r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
     const editBtn = kind === "labor" && r["상태"] === "확정" ? "" : `<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button>`;
     return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === XD.kind && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}${kind === "exec" && r["상태"] === "취소" ? " row-cancel" : ""}${SEL_HOOK[kind]?.rowCls(r) || ""}">${SEL_HOOK[kind]?.cell(r) || ""}${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${noAct ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;

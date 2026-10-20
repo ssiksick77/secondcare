@@ -96,23 +96,31 @@
       <button type="button" class="btn" data-csv="labor" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
     </div>
-    <p class="toolbar-note" style="margin:0 0 8px">확정하면 집행내역에 건별 1행(재원 = 지급처, 예산목 = 인원의 내부/외부 구분)이 생기고 지급 건은 잠깁니다. 수정은 확정 취소 후, 취소·삭제 시 연결 집행도 함께 지워집니다.</p>
+    <p class="toolbar-note" style="margin:0 0 8px">확정하면 집행내역에 건별 1행(재원 = 지급처, 예산목 = 인원의 구분: 내부 → 내부인건비, 외부·기타 → 외부인건비)이 생기고 지급 건은 잠깁니다. 수정은 확정 취소 후, 취소·삭제 시 연결 집행도 함께 지워집니다.</p>
     <div class="table-wrap"><table class="grid" id="labor-table"></table></div>
   </section>
 
   <!-- 인건비: 인원 -->
   <section id="lpanel-people" role="tabpanel" aria-labelledby="ltab-people" hidden>
-    <div class="toolbar">
-      <span class="toolbar-note">내부/외부 구분은 확정 시 집행내역 예산목(내부인건비·외부인건비)을 정합니다. 입사·퇴사 기간 밖 귀속월에는 지급 건을 만들 수 없습니다.</span>
-      <button type="button" class="btn btn-primary" data-add="people">인원 추가</button>
+    <div class="people-split">
+      <div class="people-col">
+        <h2 style="margin-top:0">인원</h2>
+        <div class="toolbar">
+          <span class="toolbar-note">구분은 확정 시 집행내역 예산목을 정합니다 (내부 = 내부인건비, 외부·기타 = 외부인건비). 입사·퇴사 기간 밖 귀속월에는 지급 건을 만들 수 없습니다. 이름을 누르면 오른쪽에 기준급여 내역이 보입니다.</span>
+          <label class="chk"><input type="checkbox" data-filter="showHidden" data-kind="people"> 숨긴 인원 보기</label>
+          <button type="button" class="btn btn-primary" data-add="people">인원 추가</button>
+        </div>
+        <div class="table-wrap"><table class="grid" id="people-table"></table></div>
+      </div>
+      <div class="people-col">
+        <h2 style="margin-top:0">기준급여 변동 내역<span id="salary-who"></span></h2>
+        <div class="toolbar">
+          <span class="toolbar-note">월지급액과 적용 기간. 계획표의 소요 비교와 선급·미지급 발생액 계산에 쓰입니다. 같은 사람의 기간은 겹칠 수 없습니다.</span>
+          <button type="button" class="btn btn-primary" data-add="salary">기준급여 추가</button>
+        </div>
+        <div class="table-wrap" aria-live="polite"><table class="grid compact" id="salary-table"></table></div>
+      </div>
     </div>
-    <div class="table-wrap"><table class="grid" id="people-table"></table></div>
-    <h2>기준급여 (월액 · 적용 기간)</h2>
-    <div class="toolbar">
-      <span class="toolbar-note">계획표의 소요 비교와 선급·미지급 발생액 계산에 쓰입니다. 같은 사람의 기간은 겹칠 수 없습니다.</span>
-      <button type="button" class="btn btn-primary" data-add="salary">기준급여 추가</button>
-    </div>
-    <div class="table-wrap"><table class="grid compact" id="salary-table"></table></div>
     <h2>선급 · 미지급 현황</h2>
     <p class="toolbar-note defs" id="labor-prepaid-note"></p>
     <div class="table-wrap"><table class="grid compact" id="labor-prepaid"></table></div>

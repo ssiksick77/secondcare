@@ -72,14 +72,14 @@ FUND_TYPES = ["국책", "원내", "위탁", "교육", "공금", "기타"]
 FUND_TYPE_DEFAULT = "국책"
 FUND_TYPE_POOL = "공금"
 # 인건비 (인건비_설계_2026-10-13.md)
-PEOPLE_COLS = ["이름", "인건비구분", "입사일", "퇴사일", "이월선급", "비고"]
+PEOPLE_COLS = ["이름", "인건비구분", "입사일", "퇴사일", "이월선급", "비고", "숨김"]  # 화면 머리글은 '구분'. 숨김 = "Y" 면 인원 목록·이름 선택 목록에서 뺌 (2026-10-20)
 SALARY_COLS = ["이름", "시작월", "종료월", "월액", "비고"]
 PAYEE_COLS = ["지급처코드", "지급처명", "인건비예산", "비고"]
 LABOR_COLS = ["지급월", "귀속월", "이름", "지급처", "금액", "상태", "지급일", "연결거래번호", "비고"]
 LADJ_COLS = ["월", "이름", "금액", "사유"]
-LABOR_KINDS = ["내부", "외부"]
+LABOR_KINDS = ["내부", "외부", "기타"]
 LABOR_STATUS = ["예정", "확정"]
-LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(공통)"}
+LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(공통)", "기타": "외부인건비(공통)"}  # 기타는 외부인건비로 (2026-10-20 사용자 결정)
 MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
 EXEC_COLS = ["거래번호", "관리번호", "연결품의번호", "원인발생일", "지급청구일", "지출완료일", "결의일", "재원", "예산목", "세목", "결제수단",
              "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록"]
@@ -476,7 +476,7 @@ def _ensure_structure(wb) -> bool:
     if _ensure_request_numbers(wb):
         changed = True
 
-    for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30)),
+    for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30, 8)),
                                (SHEET_SALARY, SALARY_COLS, (14, 10, 10, 14, 30)),
                                (SHEET_PAYEE, PAYEE_COLS, (14, 30, 16, 30)),
                                (SHEET_LABOR, LABOR_COLS, (10, 10, 14, 16, 14, 8, 12, 18, 30)),
@@ -496,7 +496,7 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10),
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10), (SHEET_PEOPLE, "숨김", 8),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
                                    (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12)):
         ws = wb[sheet]
@@ -895,6 +895,8 @@ def _derive(data: dict, meta: dict) -> dict:
     for r in data["funds"]:  # 종류: 빈 값은 국책
         r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
         r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
+    for r in data["people"]:
+        r["숨김"] = "Y" if _yes(r.get("숨김")) else ""
     for r in data["deposit"]:  # 적립금 상태는 날짜에서 계산 (사용 행만)
         r["상태"] = dep_status(r)
     for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
@@ -1740,7 +1742,8 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
             raise ValueError("이름은 필수입니다.")
         rec["인건비구분"] = rec.get("인건비구분") or "내부"
         if rec["인건비구분"] not in LABOR_KINDS:
-            raise ValueError("인건비구분은 내부/외부 중 하나여야 합니다.")
+            raise ValueError("구분은 내부/외부/기타 중 하나여야 합니다.")
+        rec["숨김"] = "Y" if _yes(rec.get("숨김")) else ""  # 화면 체크(true/false)·API Y/N 모두 받음
         if rec.get("입사일") and rec.get("퇴사일") and _to_date(rec["퇴사일"]) < _to_date(rec["입사일"]):
             raise ValueError("퇴사일은 입사일 이후여야 합니다.")
     elif kind == "salary":

@@ -172,7 +172,7 @@ function fillRequestSelects() {
   const sups = [...new Set([...reqSuppliers().map(x => x.name), ...uniq("구매처")])];
   $$("select[data-filter='구매처'][data-kind=request]").forEach(sel => { setOptions(sel, ["", ...sups], ["전체", ...sups]); FILTERS.request["구매처"] = sel.value; });
   const dl = (id, html) => { let el = $("#" + id); if (!el) { el = document.createElement("datalist"); el.id = id; document.body.appendChild(el); } el.innerHTML = html; };
-  const people = [...new Set([...names, ...(DATA.people || []).map(p => p["이름"])])].sort((a, b) => a.localeCompare(b, "ko"));
+  const people = [...new Set([...names, ...(DATA.people || []).filter(p => p["숨김"] !== "Y").map(p => p["이름"])])].sort((a, b) => a.localeCompare(b, "ko"));
   dl("dl-신청인", people.map(v => `<option value="${esc(v)}">`).join(""));
   const funds = DATA.funds.map(f => [f["재원코드"], f["과제명"] || ""]);
   const extra = tasks.filter(t => !funds.some(([c]) => c === t)).map(t => [t, ""]);
