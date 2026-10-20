@@ -4,14 +4,12 @@ Updated: 2026-10-20
 
 ## Goal
 
-Move the ledger store from the xlsx file to SQLite so several users can work on one ledger, before the store code grows further. Screens and API behave the same; the existing tests pass; an xlsx export keeps the Excel view.
+Print the approver names on the 지출결의서 결재란 so the accountant does not write them by hand. Done when the voucher shows 매니저 오인선, 선임연구원 이진영, 센터장 류지원 (small 직무대행 above the name) in bold italic, the check passes, and the user confirms the screen.
 
 ## Done
 
-- a91649d Switch (2026-10-20, user decision): branch merged into main; MCP tools checked against a SQLite QA copy (dashboard, list, add, update, get, delete); app stopped; xlsx backed up to `app/backup/manual_before_sqlite_20261020_145708.xlsx`; live ledger imported to `의료인공지능센터_지출장부_2026.sqlite` (exec 173 / 255,025,994, labor 171, request 69, no formula cells); `LEDGER_DB` added to `app/.env`; app restarted with run.bat and serves the SQLite ledger.
-- d202ab6 Session 3: `app/export_xlsx.py` writes a read-only xlsx copy (old sheet order, 예산변동 header row 8 with summary rows 1-7 via `_refresh_budget_summary`, hidden 메타 sheet, values through `_write_row`). `test_db` exports, re-imports and compares `read_all` from SQLite, the re-import and the xlsx (53 checks). README section "SQLite 저장소", CLAUDE.md commands, `*.sqlite*` gitignored.
-- 7ee9405 / f389f7f Session 2: every write path runs on SQLite when `LEDGER_DB` is set. `db.Workbook` / `db.Sheet` stand in for the openpyxl workbook; `_rows`, `_write_row`, `_next_row`, `_delete_row`, `_has_value`, `_meta_get/_meta_set`, `_rename_tag`, `_load` dispatch on the type; `_ensure_structure` and `_refresh_budget_summary` are skipped for SQLite. `_write_session` = one `BEGIN IMMEDIATE` transaction, `_save` backs up the committed state (`app/backup/*.sqlite`) and commits, `undo_last` restores from that backup, `meta.write_seq` replaces the file hash and feeds `/api/meta` (`store.data_stamp`). Each create/update/delete/replace writes one `changelog` row (author empty). `import_xlsx` repeats the structure fix-up until stable. Tests: `api-db` and `ui-db` run the API and UI tests on a SQLite copy (`LEDGER_TEST_MODE=db` in `tests/_env.py`), `test_db` checks backup, undo and changelog; `test_api` child output is read as UTF-8 (cp949 flake fixed).
-- ef7ffc0 Session 1: `app/db.py` (schema: one table per sheet, `id` + `author` columns, `meta`, `changelog`), `app/import_xlsx.py` (xlsx -> SQLite, fills author, refuses to overwrite without `--force`), `store.read_all` split into `_raw_xlsx` / `_raw_db` / `_derive` and reads SQLite when `LEDGER_DB` is set, `tests/test_db.py` (45 checks: counts, 금액 totals, every column equal between xlsx and SQLite on the QA ledger), `db` group in `tests/run.py`.
+- 8a738a4 feat: print signer names on voucher approval box. `VOUCHER_SIGNER_NAMES` in app.js, `.vc-sign-n` styles in style.css (11pt bold italic, tag 6.5pt with -0.2mm tracking so 직무대행 stays inside the name width). Merged into main. User confirmed the screen after a hard refresh (the first view showed cached CSS).
+- SQLite migration finished and switched on 2026-10-20 (a91649d, 75e4201); see `git log` and the Decisions below for details.
 
 ## Done before the migration (xlsx era, kept for reference)
 
@@ -31,7 +29,10 @@ Move the ledger store from the xlsx file to SQLite so several users can work on 
 
 ## In progress
 
-SQLite migration, first version (brainstormed 2026-10-20). Done conditions:
+None.
+
+## SQLite migration done conditions (closed 2026-10-20, kept for reference)
+Done conditions:
 - Store on SQLite: calc 32, API 95, UI 56 tests pass; screen and API behaviour unchanged. (done: api-db 95, ui-db 56 pass)
 - Every record has a stable id: API and frontend address records by id, not by row number. (done in substance: `_row` carries the SQLite id; the field name stays `_row`, see Decisions)
 - One-shot import script xlsx -> SQLite: on the QA ledger, every sheet's row count and amount totals equal the source. (done ef7ffc0)
@@ -45,7 +46,8 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 ## Open issues
 
 - Live ledger is SQLite since 2026-10-20 14:58. `의료인공지능센터_지출장부_2026.xlsx` is frozen at that moment: do not edit it by hand, it is no longer read. For an Excel view run `python app/export_xlsx.py <sqlite> <copy.xlsx>`. Backups are `app/backup/*.sqlite`. `_row` in the API is the SQLite id.
-- Worktree branch claude/sqlite-migration-difficulty-9c1e10 is merged and can be deleted.
+- Worktree branches claude/sqlite-migration-difficulty-9c1e10 and claude/resolution-signature-names-196bd0 are merged and can be deleted.
+- Static files have no version query, so a code change can show stale CSS until a hard refresh (ideas.md [later][fix] 2026-10-20).
 - SQLite mode skips `_ensure_structure`, so a ledger imported from an older xlsx must be fixed up by the import (it loops the fix-up); the budget sheet summary rows 1-7 are not kept in SQLite (export must rebuild them).
 - `mcp_server.py` was not run against SQLite; it only uses store functions, so it should work, but check it in session 3.
 - The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run.
@@ -62,6 +64,8 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 - The `ledger` MCP registration in Claude Desktop may still point at the old path. Re-register with the command in `app/README.md` if it fails.
 
 ## Decisions
+
+- 2026-10-20 (user) 결의서 결재란 이름: 매니저 오인선, 선임연구원 이진영, 센터장 류지원 with small '직무대행' above the name, bold italic; 담당 cell stays empty until login gives an email-to-name map (per-transaction author, not a fixed setting). My calls: name 11pt, tag 6.5pt with -0.2mm tracking inside the name width.
 
 - 2026-10-16 (user) 여비 계산기: 기본 정보 외 필수 없음; 출장 기간과 학회 기간 별도 입력; 학회 전후 각 1일만 인정, 초과 출장일은 공제일수로 일비·식비에서 자동 제외(숙박은 그대로, my choice since the user named 일비/식비 only).
 - 2026-10-16 (user) 재원 종류: list 국책/원내/위탁/교육/공금/기타; 공금 deposits go through 예산변동 (no per-예산목 split), 예산목 stays required on 집행/품의/신청, existing funds default to 국책 and the user edits them later.
@@ -92,6 +96,6 @@ Session order: (1) schema + import + read_all — done, (2) write paths — done
 
 ## Next action
 
-Pick the next task with the user. Candidates from the brainstorm "later" list (ideas.md 2026-10-20): Google login with an allow-list, then roles, then server deployment. Small leftovers: PRODUCT.md wording, delete the merged worktree branch.
+Pick the next task with the user. The 결재란 '담당' cell (per-transaction author name) waits for the login work (ideas.md 2026-10-20). Candidates from the brainstorm "later" list (ideas.md 2026-10-20): Google login with an allow-list, then roles, then server deployment. Small leftovers: PRODUCT.md wording, delete the merged worktree branch.
 
 Previous candidates: Candidates: one-shot rename of existing evidence files to the new rule (needs Drive connected), LEDGER_HOST + server role check, 학회·기타 review leftovers.

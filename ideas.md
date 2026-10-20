@@ -24,3 +24,5 @@ Who reads what:
 - [later][idea] 2026-10-20: 구글 OAuth 테스트 모드 100명 한도 확인, 프로덕션 전환 시 드라이브 범위 심사 — 로그인 작업 때
 - [later][idea] 2026-10-20: 드라이브 토큰을 공용 계정 하나로 할지 사용자별로 할지 — 다중 사용자 뒤
 - [done 2026-10-20][fix] tests/test_api.py 의 subprocess.run(text=True) 4곳이 자식 stderr 를 cp949 로 읽어 한글이 있으면 UnicodeDecodeError 로 검사가 중단됨 (간헐) — encoding='utf-8' 지정 필요. SQLite 이전 1회차 중 발견
+- [later][fix] 2026-10-20: /static/style.css·app.js 에 버전 쿼리(?v=) 없음 — 코드를 바꿔도 브라우저가 옛 CSS를 씀(결재란 이름 스타일이 안 보인 원인). index.html 링크에 파일 mtime 등을 붙일 것
+- [later][idea] 2026-10-20: 결의서 결재란 '담당' 칸에 거래별 작성자 이름 자동 기입(다른 이름과 같은 볼드+이탤릭) — SQLite author 열(이메일)은 있으나 이름 표가 없음. 로그인 작업에서 이메일→이름 매핑이 생기면 할 것. 로그인 전 새 행은 author 비어 있음
