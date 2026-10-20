@@ -91,6 +91,7 @@ get_exec = _read_tool(tools.get_exec)
 budget_balance = _read_tool(tools.budget_balance)
 search_ledger = _read_tool(tools.search_ledger)
 fx_rate = _read_tool(tools.fx_rate)
+read_memo = _read_tool(tools.read_memo)
 
 
 # ---------- 입력 ----------

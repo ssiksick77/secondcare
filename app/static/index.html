@@ -575,6 +575,12 @@
         <label class="wide" for="s-org">기관명 (결의서·발주서 머리글) <small>(비우면 분당서울대학교병원 의료인공지능센터)</small><input id="s-org" name="LEDGER_ORG" type="text" autocomplete="off" maxlength="80"></label>
       </div>
     </fieldset>
+    <fieldset class="wide s-group" id="s-memo" style="margin:0 0 14px">
+      <legend>메모 (AI 도우미가 참고하는 장부 밖 지식)</legend>
+      <p class="toolbar-note" style="margin:4px 0 8px">재원·거래처별 특이사항과 일반 규정(예: 어떤 결제에 어떤 증빙이 필요한가)을 적어 두면 AI 도우미가 답할 때 참고합니다. 장부의 '메모' 시트에 저장되며, AI 가 대화 중 제안한 메모도 승인해야 저장됩니다.</p>
+      <div id="memo-list" class="memo-list"></div>
+      <div style="margin-top:8px"><button type="button" class="btn btn-sm" id="memo-add">메모 추가</button></div>
+    </fieldset>
     <p class="toolbar-note" style="margin:0 0 8px"><b>AI 도우미 (선택 · 유료)</b> — 장부 데이터가 선택한 AI 서버로 전송되며 사용량에 따라 과금됩니다. 저장하면 <code>app/.env</code>에 기록되고 즉시 적용됩니다. 키는 이 PC에만 저장됩니다.</p>
     <div class="fields">
       <label class="wide" for="s-provider">AI 제공자
@@ -636,6 +642,7 @@
 <datalist id="dl-태그"></datalist>
 <datalist id="dl-세목"></datalist>
 <datalist id="dl-세세목"></datalist>
+<datalist id="dl-대상"></datalist>
 
 <script src="/static/app.js"></script>
 <script src="/static/labor.js"></script>

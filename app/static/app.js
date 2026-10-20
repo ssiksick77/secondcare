@@ -10,7 +10,7 @@ const localISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 const today = () => localISO(new Date());  // 로컬(한국) 날짜. toISOString 은 UTC 라 오전 9시 전에 어제가 됨
 const mmdd = d => (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) ? d.slice(5, 7) + "/" + d.slice(8, 10) : d;
 // 행 식별값 (서버가 다른 창/MCP 에서 행이 밀렸는지 검사)
-const IDENT = { funds: ["재원코드"], exec: ["거래번호"], req: ["품의번호"], tags: ["태그명"], vendor: ["거래처명", "코드"], budget: ["재원", "변경회차", "신청일자"], deposit: ["일자", "거래처", "구분", "금액"] };
+const IDENT = { funds: ["재원코드"], exec: ["거래번호"], req: ["품의번호"], tags: ["태그명"], vendor: ["거래처명", "코드"], budget: ["재원", "변경회차", "신청일자"], deposit: ["일자", "거래처", "구분", "금액"], memo: ["종류", "대상", "내용"] };
 const F = k => document.getElementById("f-" + k);
 // 단계 ↔ 날짜: 발생=원인발생일, 청구=지급청구일, (보완=수동 표시), 승인=지출완료일, 결의=결의일
 const STATUS_LABEL = { 발생: "발생", 청구: "청구", 보완: "보완", 완료: "승인", 결의: "완료", 취소: "취소" };
@@ -110,6 +110,13 @@ function formFields(kind) {
     tagField({ k: "_태그", label: "집행 태그", dep: "적립", hint: "집행내역에 붙일 내부 계정" }),
     { k: "연결거래번호", type: "ro" },
   ];
+  if (kind === "memo") return [
+    { k: "종류", type: "select", opts: DATA.meta.memo_kinds || ["재원", "거래처", "일반"], req: true, hint: "재원·거래처별 특이사항, 일반 규정" },
+    { k: "대상", type: "datalist", list: "대상", hint: "재원코드 또는 거래처명 · 일반은 비움" },
+    { k: "작성일", type: "date", hint: "비우면 오늘" },
+    { k: "내용", type: "text", cls: "wide", req: true, hint: "AI 도우미가 답할 때 그대로 참고" },
+    { k: "비고", type: "text", cls: "wide" },
+  ];
   if (kind === "tags") return [
     { k: "태그명", type: "text", req: true, hint: "쉼표 금지" }, { k: "분류", type: "datalist", list: "분류", hint: "상위 계정" },
     { k: "설명", type: "text", cls: "wide" },
@@ -175,6 +182,7 @@ async function load() {
     fillSelects();
     fillDatalists();
     renderAll();
+    if ($("#dlg-settings")?.open) memoRender();  // 설정 패널이 열린 채 메모를 저장·삭제하면 목록 갱신
   } catch (e) {
     showAlert("불러오기 실패: " + e.message, "error");
   }
@@ -670,7 +678,7 @@ function rememberLast(kind, rec) {
 function openForm(kind, row, preset, opts = {}) {
   const rec = row != null ? DATA[kind].find(r => r._row === row) : null;
   const fields = formFields(kind).filter(f => !(f.onlyNew && rec));
-  const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", vendor: "거래처", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}), ...(typeof REQUEST_TITLES !== "undefined" ? REQUEST_TITLES : {}) };
+  const titles = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", vendor: "거래처", memo: "메모", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}), ...(typeof REQUEST_TITLES !== "undefined" ? REQUEST_TITLES : {}) };
   $("#dlg-title").textContent = opts.title || (titles[kind] + (rec ? " 수정" + (IDENT_LABEL(kind, rec) ? " · " + IDENT_LABEL(kind, rec) : "") : " 추가"));
   $("#dlg-error").hidden = true; $("#dlg-error").classList.remove("info");
   $("#dlg-save-more").hidden = !!rec || !!opts.convertRow || !!opts.convertRequests || !["exec", "req", "deposit", "budget", "tags", "labor", "salary", "people", "request"].includes(kind);
@@ -947,7 +955,7 @@ async function setDateToday(row, col, btn) {
 }
 
 // ---------- 삭제 ----------
-const DEL_KIND = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", vendor: "거래처", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
+const DEL_KIND = { exec: "집행", req: "품의", budget: "예산 변동", funds: "재원", deposit: "적립금", tags: "태그", vendor: "거래처", memo: "메모", ...(typeof LABOR_TITLES !== "undefined" ? LABOR_TITLES : {}) };
 function IDENT_LABEL(kind, r) { return r?.["거래번호"] || r?.["품의번호"] || r?.["신청번호"] || r?.["재원코드"] || r?.["태그명"] || (typeof laborIdent === "function" ? laborIdent(kind, r) : ""); }
 async function del(kind, row) {
   const r = DATA[kind].find(x => x._row === row);
@@ -964,7 +972,7 @@ async function del(kind, row) {
   if (kind === "labor" && r?.["연결거래번호"]) { const ev = DATA.evidence.filter(e => e["거래번호"] === r["연결거래번호"]).length; if (ev) { showAlert(`집행 ${r["연결거래번호"]} 에 증빙 ${ev}개가 있어 삭제할 수 없습니다. 증빙을 먼저 지우세요.`, "warn"); return; } }
   const laborLbl = typeof laborLabel === "function" ? laborLabel(kind, r) : null;
   const label = laborLbl ? laborLbl + (kind === "labor" && r["연결거래번호"] ? `\n연결 집행 ${r["연결거래번호"]} 도 함께 삭제됩니다.` : "") : no ? [no, r["거래처"] || r["과제명"] || r["분류"], r["금액"] != null && kind !== "funds" && kind !== "tags" ? fmt(r["금액"]) + "원" : "", r["원인발생일"] ? mmdd(r["원인발생일"]) : "", (r["적요"] || r["설명"] || "").slice(0, 30)].filter(Boolean).join(" · ")
-    : (kind === "deposit" ? `${r?.["일자"]} ${r?.["거래처"]} ${r?.["구분"]} ${fmt(r?.["금액"])}원` : `${r?.["재원"]} ${r?.["변경회차"]}회차`);
+    : kind === "memo" ? `${r?.["종류"]}${r?.["대상"] ? " · " + r["대상"] : ""} · ${(r?.["내용"] || "").slice(0, 40)}` : (kind === "deposit" ? `${r?.["일자"]} ${r?.["거래처"]} ${r?.["구분"]} ${fmt(r?.["금액"])}원` : `${r?.["재원"]} ${r?.["변경회차"]}회차`);
   if (!await confirmDlg({ title: `${DEL_KIND[kind] || "항목"} 삭제`, body: `${label}\n\n삭제 직후 알림의 [되돌리기]로 복구할 수 있습니다. 그 뒤에는 app/backup 폴더의 백업 파일로만 복원됩니다.`, verb: "삭제", danger: true })) return;
   try { await api("DELETE", `/api/${kind}/${row}`, { expect: expectOf(kind, r) }); showAlert(`${no || label} 삭제했습니다.`, "ok", { undo: true }); await load(); }
   catch (e) { showAlert(e.message, "error"); }
@@ -1455,6 +1463,7 @@ async function openSettings() {
     syncProviderGroups(); setMsg("");
     if (typeof requestSettingsOpen === "function") requestSettingsOpen();
     refreshDriveStatus();
+    memoRender();
     $("#dlg-settings").showModal();
   } catch (e) { showAlert("설정을 불러오지 못했습니다: " + e.message, "error"); }
 }
@@ -1494,6 +1503,21 @@ $("#s-clear-key").addEventListener("click", async () => {
   catch (err) { setMsg("삭제 실패: " + err.message, true); }
 });
 
+
+// ---------- 메모 (설정 패널 · AI 도우미가 read_memo 로 읽는 장부 밖 지식) ----------
+function memoRender() {
+  const box = $("#memo-list"); if (!box) return;
+  $("#dl-대상").innerHTML = [...new Set([...DATA.funds.map(f => f["재원코드"]), ...DATA.vendor.map(v => v["거래처명"]), ...DATA.exec.map(r => r["거래처"])].filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join("");
+  const rows = [...(DATA.memo || [])].sort((a, b) => (a["종류"] || "").localeCompare(b["종류"] || "") || (a["대상"] || "").localeCompare(b["대상"] || "") || a._row - b._row);
+  box.innerHTML = rows.length ? `<table><thead><tr><th>종류</th><th>대상</th><th>내용</th><th>작성일</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r["종류"])}</td><td>${esc(r["대상"] || "-")}</td><td class="wrap">${esc(r["내용"])}${r["비고"] ? `<div class="muted">${esc(r["비고"])}</div>` : ""}</td><td>${esc(r["작성일"] || "")}</td><td class="actions"><button type="button" class="btn btn-sm" data-memo-edit="${r._row}">수정</button> <button type="button" class="btn btn-sm btn-ghost" data-memo-del="${r._row}">삭제</button></td></tr>`).join("")}</tbody></table>`
+    : '<p class="empty">메모가 없습니다. [메모 추가]로 재원·거래처 특이사항이나 규정을 적어 두세요.</p>';
+}
+$("#memo-add")?.addEventListener("click", () => openForm("memo", null, { 종류: "일반", 작성일: today() }));
+$("#memo-list")?.addEventListener("click", e => {
+  const ed = e.target.closest("[data-memo-edit]"), dl = e.target.closest("[data-memo-del]");
+  if (ed) openForm("memo", Number(ed.dataset.memoEdit));
+  else if (dl) del("memo", Number(dl.dataset.memoDel));
+});
 
 // ================= 집행 상세 드로어 · 증빙 · 단계 처리 =================
 let QUICK = "";

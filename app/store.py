@@ -45,6 +45,7 @@ SHEET_VENDOR = "거래처"  # 적립금 거래처 마스터: 거래처명·코�
 SHEET_TAG = "태그"
 SHEET_EVID = "증빙"
 SHEET_FIXLOG = "보완이력"  # 집행 보완 표시·해제 로그 (2026-10-18)
+SHEET_MEMO = "메모"  # AI 도우미 메모: 재원·거래처별 특이사항, 일반 규정 (2026-10-20)
 SHEET_PEOPLE = "인원"
 SHEET_SALARY = "기준급여"
 SHEET_PAYEE = "지급처"
@@ -100,6 +101,8 @@ DEP_STATUS = ["대기", "발주", "결제", "수령"]  # 날짜에서 계산. �
 TAG_COLS = ["태그명", "분류", "설명"]
 EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
 FIXLOG_COLS = ["거래번호", "일시", "구분", "사유"]  # 구분: 표시 / 해제. 일시: YYYY-MM-DD HH:MM
+MEMO_COLS = ["종류", "대상", "내용", "작성일", "비고"]  # 종류: 재원(대상=재원코드) / 거래처(대상=거래처명) / 일반(대상 비움). AI 는 read_memo 로 읽는다
+MEMO_KINDS = ["재원", "거래처", "일반"]
 # 증빙번호 = {거래번호}-{n}: 거래번호별 일련번호, 지운 번호는 다시 쓰지 않음 (메타 시트 증빙번호최고-{거래번호}). 이전 장부는 맨 끝 열에 붙이고 시트 순서대로 부여
 # 파일 열(EVID_FILE_COLS)이 모두 비어 있는 행 = '실물만 (파일 없음)' 증빙 항목. 나중에 파일을 첨부하면 같은 행·같은 증빙번호에 채워짐
 EVID_FILE_COLS = ["파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일"]
@@ -144,7 +147,7 @@ BUDGET_HEAD_ROW = 8
 BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS + ["입금"]  # 새 장부: A~D + E~O (+ 입금: 공금 재원 전용, 맨 끝 열). 읽기·쓰기는 8행 머리글 이름 기준 (열 순서 무관)
 
 DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일", "발주일", "결제일", "수령일",
-             "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일"}
+             "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일", "작성일"}
 NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기", "부가세액", "입금"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
 IDENT_COLS = {
@@ -155,6 +158,7 @@ IDENT_COLS = {
     "people": ["이름"], "salary": ["이름", "시작월"], "payee": ["지급처코드"],
     "labor": ["지급월", "귀속월", "이름", "지급처"], "ladj": ["월", "이름", "금액"],
     "request": ["신청번호"], "order": ["주문번호"], "ratt": ["신청번호", "파일명"],
+    "memo": ["종류", "대상", "내용"],
 }
 
 _lock = threading.RLock()
@@ -480,7 +484,8 @@ def _ensure_structure(wb) -> bool:
                                                          12, 14, 14, 30, 12, 10, 12, 24, 18, 18, 30, 30, 20, 24)),
                                (SHEET_ORDER, ORDER_COLS, (18, 12, 12, 14, 14, 14, 10, 40, 24)),
                                (SHEET_RATT, RATT_COLS, (14, 44, 30, 36, 10, 12, 20)),
-                               (SHEET_FIXLOG, FIXLOG_COLS, (18, 16, 8, 60))):
+                               (SHEET_FIXLOG, FIXLOG_COLS, (18, 16, 8, 60)),
+                               (SHEET_MEMO, MEMO_COLS, (8, 16, 60, 12, 24))):
         if name not in wb.sheetnames:
             ws = wb.create_sheet(name)
             for i, c in enumerate(cols, 1):
@@ -811,6 +816,7 @@ def _raw_xlsx() -> tuple[dict, dict]:
         "order": _rows(wb[SHEET_ORDER], ORDER_COLS, 1, formulas),
         "ratt": _rows(wb[SHEET_RATT], RATT_COLS, 1, formulas),
         "fixlog": _rows(wb[SHEET_FIXLOG], FIXLOG_COLS, 1, formulas) if SHEET_FIXLOG in wb.sheetnames else [],
+        "memo": _rows(wb[SHEET_MEMO], MEMO_COLS, 1, formulas) if SHEET_MEMO in wb.sheetnames else [],
     }
     for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력
         if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산"):
@@ -865,6 +871,7 @@ def _derive(data: dict, meta: dict) -> dict:
         "dep_status": DEP_STATUS,
         "budget_items": BUDGET_ITEMS,
         "fund_types": FUND_TYPES,
+        "memo_kinds": MEMO_KINDS,
         "fund_type_pool": FUND_TYPE_POOL,
         "pay_methods": PAY_METHODS,
         "req_status": REQ_STATUS,
@@ -908,6 +915,7 @@ _SHEETS = {
     "request": (SHEET_RQ, REQUEST_COLS, 1, "신청번호"),
     "order": (SHEET_ORDER, ORDER_COLS, 1, "주문번호"),
     "ratt": (SHEET_RATT, RATT_COLS, 1, None),
+    "memo": (SHEET_MEMO, MEMO_COLS, 1, None),
 }
 
 
@@ -1565,6 +1573,30 @@ def _validate_months(rec: dict, cols):
             rec[c] = _to_month(rec[c])
 
 
+def _validate_memo(rec: dict):
+    """메모: 종류는 MEMO_KINDS 중 하나, 내용 필수, 재원·거래처 메모는 대상 필수, 일반 메모는 대상 비움, 작성일 비면 오늘."""
+    kind = str(rec.get("종류") or "").strip()
+    if kind not in MEMO_KINDS:
+        raise ValueError(f"종류는 {', '.join(MEMO_KINDS)} 중 하나여야 합니다.")
+    rec["종류"] = kind
+    rec["대상"] = str(rec.get("대상") or "").strip()
+    rec["내용"] = str(rec.get("내용") or "").strip()
+    if not rec["내용"]:
+        raise ValueError("내용은 필수입니다.")
+    if kind == "일반":
+        rec["대상"] = ""
+    elif not rec["대상"]:
+        raise ValueError(f"{kind} 메모는 대상({'재원코드' if kind == '재원' else '거래처명'})이 필요합니다.")
+    if not rec.get("작성일"):
+        rec["작성일"] = dt.date.today().isoformat()
+
+
+def _validate_memo_ref(wb, rec: dict):
+    """재원 메모의 대상은 재원 시트의 재원코드여야 한다 (거래처는 자유: 적립금 거래처 외 구매처도 가능)."""
+    if rec.get("종류") == "재원" and not any(_same_key(f["재원코드"], rec["대상"]) for f in _rows(wb[SHEET_FUND], FUND_COLS)):
+        raise ValueError(f"재원코드 '{rec['대상']}' 이(가) 재원 목록에 없습니다.")
+
+
 def _validate_text_len(kind: str, rec: dict, cols):
     """텍스트 열: 엑셀이 받지 않는 제어문자 제거(응답·저장 값 일치), 32,767자 초과는 오류."""
     for c in cols:
@@ -1592,6 +1624,9 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
         return
     if kind == "request":
         _validate_request(rec, existing)
+        return
+    if kind == "memo":
+        _validate_memo(rec)
         return
     if kind == "exec":
         rec["상태"] = exec_status(rec)  # 날짜 우선, '보완'만 유지
@@ -1914,6 +1949,8 @@ def create(kind: str, rec: dict) -> dict:
         _validate(kind, rec)
         if kind in ("exec", "req", "deposit"):
             _validate_tag(rec, wb)
+        if kind == "memo":
+            _validate_memo_ref(wb, rec)
         if kind == "labor":
             if rec["상태"] == "확정":
                 raise ValueError("새 지급 건은 '예정'으로 추가한 뒤 원장에서 확정하세요.")
@@ -1984,6 +2021,8 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
         if kind != "request":
             _validate(kind, rec)
+        if kind == "memo":
+            _validate_memo_ref(wb, rec)
         rec = {k: v for k, v in rec.items() if not k.startswith("_")}
         cur = _rows(ws, cols, head_row)
         existing = next((x for x in cur if x["_row"] == row), None)

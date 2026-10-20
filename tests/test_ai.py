@@ -120,6 +120,27 @@ def boom(url, timeout=6.0): raise OSError("no network")
 tools._http_get_json = boom
 ck("fx_rate: 실패는 error 로 (예외 없음)", "error" in tools.fx_rate("USD") and "no network" in tools.fx_rate("USD")["error"])
 
+# --- 메모: store 검증 + read_memo ---
+m1 = store.create("memo", {"종류": "일반", "내용": "식대는 참석자 명단과 영수증이 필요", "비고": ""})
+ck("memo: 일반 메모 저장, 작성일 자동", m1.get("_row") and m1["작성일"] and m1["대상"] == "", m1)
+m2 = store.create("memo", {"종류": "재원", "대상": f0, "내용": "장비 구매 전 사전승인 필요", "작성일": "2026-10-01"})
+ck("memo: 재원 메모 저장", m2["대상"] == f0 and m2["작성일"] == "2026-10-01")
+for bad, why in (({"종류": "기타", "내용": "x"}, "종류"), ({"종류": "일반", "내용": " "}, "내용"), ({"종류": "거래처", "내용": "x"}, "대상"), ({"종류": "재원", "대상": "ZZ99", "내용": "x"}, "재원코드")):
+    try:
+        store.create("memo", bad); ck(f"memo: 거부 ({why})", False)
+    except ValueError as e:
+        ck(f"memo: 거부 ({why})", why in str(e), str(e))
+allm = tools.read_memo()
+ck("read_memo: 전부", len(allm) == 2 and {r["종류"] for r in allm} == {"일반", "재원"})
+ck("read_memo: kind 필터", [r["내용"] for r in tools.read_memo(kind="일반")] == ["식대는 참석자 명단과 영수증이 필요"])
+ck("read_memo: target 부분일치", [r["_row"] for r in tools.read_memo(target=f0[:3])] == [m2["_row"]])
+ck("read_memo: 없으면 빈 목록", tools.read_memo(kind="거래처") == [])
+up = store.update("memo", m2["_row"], {**{k: v for k, v in m2.items() if not k.startswith("_")}, "내용": "장비 구매 전 사전승인 필요 (100만원 이상)"})
+ck("memo: 수정", up["내용"].endswith("(100만원 이상)"))
+store.delete("memo", m1["_row"])
+ck("memo: 삭제 후 read_memo (xlsx 는 행 번호가 당겨짐)", [r["내용"] for r in tools.read_memo()] == [up["내용"]])
+ck("memo: 메타 memo_kinds", store.read_all()["meta"]["memo_kinds"] == ["재원", "거래처", "일반"])
+
 # --- 도구 정의·호출 ---
 for n in tools.READ_TOOLS:
     s = tools.tool_schema(n)
@@ -160,7 +181,29 @@ def main() -> int:
     if pr.returncode == 0:
         for name, cond, detail in json.loads(pr.stdout.strip().splitlines()[-1]):
             ck(name, cond, detail)
+    api_checks(ck)
     return ck.done("AI 도구 검사")
+
+
+def api_checks(ck: Check):
+    """메모 CRUD 를 HTTP 로 (일반 /api/{kind} 경로). 서버는 QA 장부 복사본으로 뜬다."""
+    from _env import Server
+    with Server("ai-api") as sv:
+        s, r = sv.call("POST", "/api/memo", {"종류": "거래처", "대상": "알파미금역점", "내용": "결제는 적립금 우선"})
+        ck("API memo: POST 201/200", s == 200 and r.get("_row"), (s, r))
+        row = r["_row"]
+        s2, r2 = sv.call("POST", "/api/memo", {"종류": "재원", "대상": "없는재원", "내용": "x"})
+        ck("API memo: 없는 재원은 400", s2 == 400 and "재원코드" in r2.get("detail", ""), (s2, r2))
+        s3, all_ = sv.call("GET", "/api/all")
+        ck("API memo: /api/all 에 memo", any(m["_row"] == row and m["내용"] == "결제는 적립금 우선" for m in all_.get("memo", [])))
+        s4, r4 = sv.call("PUT", f"/api/memo/{row}", {"rec": {"종류": "거래처", "대상": "알파미금역점", "내용": "결제는 적립금 우선, 세금계산서 월말 일괄"}, "expect": {"종류": "거래처", "대상": "알파미금역점", "내용": "결제는 적립금 우선"}})
+        ck("API memo: PUT", s4 == 200 and r4["내용"].endswith("일괄"), (s4, r4))
+        s5, r5 = sv.call("PUT", f"/api/memo/{row}", {"rec": {"종류": "거래처", "대상": "알파미금역점", "내용": "다른 값"}, "expect": {"종류": "거래처", "대상": "알파미금역점", "내용": "옛 값"}})
+        ck("API memo: expect 불일치는 거부 (행 불일치 404)", s5 == 404 and "일치하지" in r5.get("detail", ""), (s5, r5))
+        s6, r6 = sv.call("DELETE", f"/api/memo/{row}", {"expect": {"종류": "거래처", "대상": "알파미금역점", "내용": "결제는 적립금 우선, 세금계산서 월말 일괄"}})
+        ck("API memo: DELETE", s6 == 200 and r6.get("ok"), (s6, r6))
+        s7, all2 = sv.call("GET", "/api/all")
+        ck("API memo: 삭제 뒤 목록에 없음", not any(m["_row"] == row for m in all2.get("memo", [])))
 
 
 if __name__ == "__main__":

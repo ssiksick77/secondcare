@@ -203,6 +203,18 @@ def budget_balance(fund: str, item: str = "") -> dict:
     return out
 
 
+def read_memo(kind: str = "", target: str = "") -> list[dict]:
+    """담당자가 적어 둔 메모(장부 밖 지식)를 읽는다: 재원별 특이사항(종류 '재원', 대상=재원코드), 거래처별 특이사항(종류 '거래처', 대상=거래처명),
+    일반 규정·관행(종류 '일반', 대상 없음: 예 "어떤 결제에 어떤 증빙이 필요한가"). 집행 규정·증빙 종류·재원 조건을 묻는 질문에는 먼저 이 도구로 메모를 확인할 것.
+    kind 를 비우면 전부, target 은 대상 부분일치. 각 행: 종류, 대상, 내용, 작성일, 비고, _row."""
+    rows = store.read_all().get("memo", [])
+    if kind:
+        rows = [r for r in rows if r.get("종류") == kind]
+    if target:
+        rows = [r for r in rows if target in str(r.get("대상") or "")]
+    return rows
+
+
 FX_URL = "https://api.frankfurter.app/{date}?from={cur}&to=KRW"
 
 
@@ -230,7 +242,7 @@ def fx_rate(currency: str = "USD", date: str = "") -> dict:
 
 # ---------- 도구 세트 ----------
 READ_TOOLS = ["list_funds", "list_vendors", "list_tags", "get_dashboard", "list_exec", "list_req", "list_budget", "list_deposit", "get_exec",
-              "budget_balance", "search_ledger", "fx_rate"]
+              "budget_balance", "search_ledger", "fx_rate", "read_memo"]
 
 _JSON_TYPES = {str: "string", int: "integer", float: "number", bool: "boolean"}
 

@@ -248,6 +248,28 @@ def main() -> int:
         ck("취소: 표 배지·해제 링크·흐린 행", pg.evaluate(f"(() => {{ const tr = document.querySelector('#exec-table tbody tr[data-row=\"{fx_row}\"]'); return !!tr && tr.classList.contains('row-cancel') && tr.innerText.includes('취소') && !!tr.querySelector('[data-action=uncancel]'); }})()"))
         ck("취소: 예산목 잔액 열 '-'", pg.evaluate(f"runningBalance(DATA.exec.find(x=>x._row==={fx_row})) === null"))
         ck("취소: 빠른 필터 타일", "취소" in pg.inner_text("#exec-tiles"))
+        # ---- 설정 패널 메모 (AI 도우미 참고용): 추가 → 목록 → 삭제 ----
+        pg.evaluate("closeExecDrawer()"); pg.wait_for_timeout(300)
+        pg.click("#btn-settings"); pg.wait_for_timeout(600)
+        ck("메모: 설정 패널에 빈 목록 안내", pg.evaluate("document.querySelector('#dlg-settings').open") and "메모가 없습니다" in pg.inner_text("#memo-list"))
+        pg.click("#memo-add"); pg.wait_for_timeout(400)
+        ck("메모: 추가 대화상자, 종류 기본 일반", pg.evaluate("document.querySelector('#dlg').open && document.querySelector('#f-종류').value === '일반' && document.querySelector('#f-작성일').value !== ''"))
+        pg.fill("#f-내용", "회의비는 참석자 명단 첨부"); pg.click("#dlg-save")
+        ck("메모: 저장 후 대화상자 닫힘", wait_closed(pg))
+        for _ in range(20):
+            if "참석자 명단" in pg.inner_text("#memo-list"):
+                break
+            pg.wait_for_timeout(300)
+        ck("메모: 목록에 새 행 (설정 패널 열린 채 갱신)", pg.evaluate("document.querySelector('#dlg-settings').open") and "참석자 명단" in pg.inner_text("#memo-list") and "일반" in pg.inner_text("#memo-list"))
+        pg.click("#memo-list [data-memo-del]"); pg.wait_for_timeout(400)
+        ck("메모: 삭제 확인 문구", pg.evaluate("document.querySelector('#dlg-confirm').open") and "일반" in pg.inner_text("#confirm-body"))
+        pg.click("#confirm-ok")
+        for _ in range(20):
+            if "메모가 없습니다" in pg.inner_text("#memo-list"):
+                break
+            pg.wait_for_timeout(300)
+        ck("메모: 삭제 후 빈 목록", "메모가 없습니다" in pg.inner_text("#memo-list"))
+        pg.click("#s-cancel"); pg.wait_for_timeout(200)
         ck("페이지 오류 없음", not errs, errs)
         b.close()
     return ck.done("화면")
