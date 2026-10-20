@@ -1191,7 +1191,7 @@ $("#dash-fund").addEventListener("change", renderDashboard);
 $("#dash-year").addEventListener("change", renderDashboard);
 $("#btn-reload").addEventListener("click", load);
 // 로그인 사용자 표시 · 로그아웃 (auth.py)
-api("GET", "/api/me").then(u => { if (u && u.email) { $("#top-user").textContent = u.email; $("#top-user").title = `로그인 계정: ${u.name || ""} ${u.email}`.trim(); } }).catch(() => { });
+api("GET", "/api/me").then(u => { if (u && u.email) { $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
 $("#btn-logout").addEventListener("click", async () => { try { await api("POST", "/auth/logout"); } catch { } location.href = "/login"; });
 document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
@@ -2151,6 +2151,8 @@ function voucherModel(r, evid, cfg) {
     req: req ? [req["품의번호"], req["품의자"]].filter(Boolean).join(" · ") : no || "-",
   };
 }
+// 결재란 담당 칸: 그 집행 행의 작성자(author 이메일) → users 표의 이름. 이름이 없으면 빈 칸 (2026-10-20)
+function authorSigner(r) { const name = (DATA.meta.authors || {})[String(r._author || "").toLowerCase()]; return name ? { name } : null; }
 function voucherHtml(v, withIds) {
   const r = v.r, t = x => esc(x == null ? "" : x), f = v.fund;
   const cur = x => !x.own ? "-" : x.cur > 0 ? "−" + fmt(x.cur) : x.cur < 0 ? "+" + fmt(-x.cur) : "0";
@@ -2160,7 +2162,7 @@ function voucherHtml(v, withIds) {
   <header class="vc-head">
     <p class="vc-inst">${t(v.org)}</p>
     <table class="vc-sign" aria-label="결재란"><tbody><tr><th scope="row" rowspan="2" class="vc-sign-k">결재</th>${VOUCHER_SIGNERS.map(x => `<th scope="col" class="vc-sign-t">${x}</th>`).join("")}</tr>
-      <tr>${VOUCHER_SIGNERS.map(x => { const n = VOUCHER_SIGNER_NAMES[x]; return n ? `<td class="vc-sign-n">${n.tag ? `<small>${n.tag}</small>` : ""}${n.name}</td>` : "<td></td>"; }).join("")}</tr></tbody></table>
+      <tr>${VOUCHER_SIGNERS.map(x => { const n = x === "담당" ? authorSigner(r) : VOUCHER_SIGNER_NAMES[x]; return n ? `<td class="vc-sign-n">${n.tag ? `<small>${n.tag}</small>` : ""}${t(n.name)}</td>` : "<td></td>"; }).join("")}</tr></tbody></table>
     <div class="vc-band"><h2 class="vc-title"${withIds ? ' id="voucher-title"' : ""}>지출결의서</h2></div>
   </header>
   <h3>결의 내역</h3>

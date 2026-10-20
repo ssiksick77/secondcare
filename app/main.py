@@ -77,6 +77,8 @@ async def _unhandled(request: Request, e: Exception):
 # ---------- 로그인 (auth.py) ----------
 # 로그인 없이 열 수 있는 경로. 나머지 화면은 /login 으로, /api/* 는 401 (아래 미들웨어)
 PUBLIC_PREFIXES = ("/login", "/auth/", "/static/")
+# 이름이 없는 계정도 열 수 있는 경로 (최초 로그인 이름 입력)
+NAME_FREE_PATHS = ("/welcome", "/api/me", "/api/me/name")
 
 
 @app.middleware("http")
@@ -87,9 +89,33 @@ async def _require_login(request: Request, call_next):
         if path.startswith("/api/"):
             return JSONResponse({"detail": "로그인이 필요합니다."}, status_code=401)
         return RedirectResponse("/login", status_code=302)
+    if user:
+        stored = store.user_name(user["email"]) if store.USE_DB else None
+        user = {**user, "needs_name": store.USE_DB and not stored and not auth.bypass_email(), **({"name": stored} if stored else {})}
+        if user["needs_name"] and path not in NAME_FREE_PATHS and not path.startswith(PUBLIC_PREFIXES):
+            if path.startswith("/api/"):
+                return JSONResponse({"detail": "이름을 먼저 입력하세요."}, status_code=403)
+            return RedirectResponse("/welcome", status_code=302)
     store.set_author(user["email"] if user else None)
     request.state.user = user
     return await call_next(request)
+
+
+@app.get("/welcome")
+def welcome_page(request: Request):
+    """최초 로그인: 이름 입력. 이미 이름이 있으면 메인으로."""
+    user = request.state.user
+    if not user or not user.get("needs_name"):
+        return RedirectResponse("/", status_code=302)
+    return FileResponse(STATIC / "welcome.html")
+
+
+@app.post("/api/me/name")
+def me_name(request: Request, body: dict):
+    """최초 로그인 이름 저장 (1~20자). 저장 뒤 /api/me 와 상단 표시에 쓰인다."""
+    user = request.state.user
+    name = store.set_user_name(user["email"], body.get("name"))
+    return {"email": user["email"], "name": name, "needs_name": False}
 
 
 @app.get("/login")

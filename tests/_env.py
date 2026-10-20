@@ -52,6 +52,7 @@ def free_port() -> int:
 
 class Server:
     TEST_EMAIL = "test@example.com"  # LEDGER_AUTH_BYPASS: 검사 서버는 이 이메일로 로그인한 것으로 본다 (구글 호출 없음)
+    SESSION_SECRET = "test-session-secret"
 
     def __init__(self, name: str, auth_bypass: bool = True):
         self.name = name
@@ -82,6 +83,8 @@ class Server:
                    LEDGER_DRIVE_MOCK_DIR=os.path.join(self.dir, "mock"), LEDGER_PORT=str(self.port), LEDGER_NO_BROWSER="1",
                    PYTHONIOENCODING="utf-8")
         env.pop("LEDGER_AUTH_BYPASS", None)
+        env["LEDGER_SESSION_SECRET"] = self.SESSION_SECRET  # 고정: 서버가 qa.env 에 비밀키를 쓰지 않게, 검사가 쿠키를 만들 수 있게
+        env["LEDGER_ALLOWED_EMAILS"] = self.TEST_EMAIL
         env["LEDGER_OAUTH_CLIENT"] = os.path.join(self.dir, "no_oauth_client.json")  # 검사는 구글을 부르지 않는다: 클라이언트 파일 없음으로 고정
         if self.auth_bypass:
             env["LEDGER_AUTH_BYPASS"] = self.TEST_EMAIL
@@ -109,9 +112,21 @@ class Server:
                 self.proc.kill()
         self.log.close()
 
-    def call(self, method: str, path: str, body=None):
+    def session_cookie(self, email: str | None = None) -> str:
+        """서버와 같은 비밀키로 서명한 로그인 쿠키 (로그인 우회 없는 서버 검사용)."""
+        import importlib
+        os.environ["LEDGER_SESSION_SECRET"] = self.SESSION_SECRET
+        if APP not in sys.path:
+            sys.path.insert(0, APP)
+        auth = importlib.import_module("auth")
+        return f"{auth.COOKIE}={auth.session_token(email or self.TEST_EMAIL, 'Google Name')}"
+
+    def call(self, method: str, path: str, body=None, cookie: str | None = None):
         data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(self.base + path, method=method, data=data, headers={"Content-Type": "application/json"})
+        headers = {"Content-Type": "application/json"}
+        if cookie:
+            headers["Cookie"] = cookie
+        req = urllib.request.Request(self.base + path, method=method, data=data, headers=headers)
         try:
             with urllib.request.urlopen(req) as r:
                 return r.status, json.loads(r.read())
@@ -122,14 +137,15 @@ class Server:
             except ValueError:
                 return e.code, raw.decode("utf-8", "replace")
 
-    def get_raw(self, path: str):
+    def get_raw(self, path: str, cookie: str | None = None):
         """리다이렉트를 따라가지 않고 (상태, Location 헤더) 반환 (로그인 화면 이동 검사용)."""
         class _NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *a, **k):
                 return None
         opener = urllib.request.build_opener(_NoRedirect)
+        req = urllib.request.Request(self.base + path, headers={"Cookie": cookie} if cookie else {})
         try:
-            with opener.open(self.base + path, timeout=5) as r:
+            with opener.open(req, timeout=5) as r:
                 return r.status, r.headers.get("Location")
         except urllib.error.HTTPError as e:
             return e.code, e.headers.get("Location")

@@ -634,6 +634,32 @@ def current_author() -> str | None:
     return _AUTHOR.get()
 
 
+def author_names() -> dict[str, str]:
+    """이메일 → 이름 (users 표). xlsx 모드는 빈 표."""
+    if not USE_DB:
+        return {}
+    with db.session() as con:
+        return db.user_names(con)
+
+
+def user_name(email: str) -> str | None:
+    return author_names().get((email or "").lower()) if USE_DB else None
+
+
+def set_user_name(email: str, name: str) -> str:
+    """최초 로그인 이름 저장. 1~20자, 앞뒤 공백 제거."""
+    name = re.sub(r"\s+", " ", str(name or "")).strip()
+    if not name:
+        raise ValueError("이름을 입력하세요.")
+    if len(name) > 20:
+        raise ValueError("이름은 20자 이하로 입력하세요.")
+    if not USE_DB:
+        raise ValueError("xlsx 저장소에서는 이름을 저장하지 않습니다.")
+    with _lock, db.session() as con:
+        db.set_user_name(con, email, name)
+    return name
+
+
 def last_write_id() -> str | None:
     return LAST_WRITE.get("id") if LAST_WRITE else None
 
@@ -869,6 +895,7 @@ def _derive(data: dict, meta: dict) -> dict:
         r["상태"] = exec_status(r)
         r["상태표시"] = EXEC_STATUS_LABEL.get(r["상태"], r["상태"])
     data["meta"] = {
+        "authors": author_names(),  # 이메일 → 이름 (결의서 담당 칸 등)
         "labor_kinds": LABOR_KINDS,
         "labor_status": LABOR_STATUS,
         "dep_types": DEP_TYPES,

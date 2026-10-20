@@ -122,7 +122,7 @@ def user_from_request(request) -> dict | None:
     """요청의 로그인 사용자 {email, name} 또는 None. 우회 이메일이 있으면 항상 그 사용자."""
     bp = bypass_email()
     if bp:
-        return {"email": bp.lower(), "name": bp.split("@")[0]}
+        return {"email": bp.lower(), "name": ""}  # 이름은 users 표에서만
     p = verify(request.cookies.get(COOKIE))
     if not p or not is_allowed(p.get("email", "")):
         return None

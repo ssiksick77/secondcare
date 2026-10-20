@@ -252,7 +252,15 @@ def main() -> int:
 
         # ---- 로그인: 상단 계정 표시, 로그인 화면 구조 ----
         pg.goto(sv.base + "/"); pg.wait_for_timeout(1000)
-        ck("상단: 로그인 이메일 표시", pg.inner_text("#top-user").strip() == sv.TEST_EMAIL, pg.inner_text("#top-user"))
+        ck("상단: 이름 없으면 이메일 표시", pg.inner_text("#top-user").strip() == sv.TEST_EMAIL, pg.inner_text("#top-user"))
+        if sv.mode == "db":
+            s, r = sv.call("POST", "/api/me/name", {"name": "검사자"})
+            pg.goto(sv.base + "/"); pg.wait_for_timeout(1200)
+            ck("상단: 이름 저장 뒤 이름 표시", s == 200 and pg.inner_text("#top-user").strip() == "검사자", pg.inner_text("#top-user"))
+            if pool_row:
+                pg.evaluate(f"openVoucher({pool_row})"); pg.wait_for_timeout(1000)
+                cells = pg.evaluate("[...document.querySelectorAll('#voucher-sheet .vc-sign td')].map(td => td.textContent.trim())")
+                ck("결의서 담당 칸: 작성자 이름", cells[:1] == ["검사자"] and "오인선" in cells, cells)
         ck("상단: 로그아웃 버튼", pg.is_visible("#btn-logout"))
         pg.goto(sv.base + "/login?err=denied&email=x%40y.z"); pg.wait_for_timeout(300)
         ck("로그인 화면: 우회 중이면 / 로 이동", pg.url.rstrip("/") == sv.base, pg.url)
