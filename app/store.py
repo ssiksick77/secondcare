@@ -68,7 +68,7 @@ BUDGET_ROUNDS = ["이월", "당초"]  # 그 외에는 1,2,3... 숫자 회차
 FUND_COLS = ["재원코드", "과제명", "시작일", "종료일", "비고", "인건비예산", "종류", "잔액미관리"]
 FUND_UNTRACKED = "잔액미관리"  # "Y" 면 재원 출처로만 쓰고 예산·잔액을 관리하지 않음 (예산변동 불가, 집계·경고·결의서 재원 현황 제외)
 # 재원 종류 (2026-10-16 사용자 결정). 공금은 예산목별 예산 없이 '입금'(예산변동 열)으로 잔액만 관리. 빈 값은 국책으로 읽는다
-FUND_TYPES = ["국책", "원내", "위탁", "교육", "공금", "기타"]
+FUND_TYPES = ["국책", "교육", "원내", "위탁", "연구지원", "공금", "기타"]  # 순서 = 재원 목록 기본 정렬 (2026-10-20 사용자). 연구지원: 교수 연구지원비 (옛 외부 지급처에서 재원으로 승격)
 FUND_TYPE_DEFAULT = "국책"
 FUND_TYPE_POOL = "공금"
 # 인건비 (인건비_설계_2026-10-13.md)
@@ -896,6 +896,8 @@ def _derive(data: dict, meta: dict) -> dict:
     for r in data["funds"]:  # 종류: 빈 값은 국책
         r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
         r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
+    # 기본 정렬: 종류 순서(FUND_TYPES) → 장부 순서 (2026-10-20 사용자: 국책-교육-원내-위탁-연구지원-기타)
+    data["funds"].sort(key=lambda r: (FUND_TYPES.index(r["종류"]) if r["종류"] in FUND_TYPES else len(FUND_TYPES), r["_row"]))
     for r in data["deposit"]:  # 적립금 상태는 날짜에서 계산 (사용 행만)
         r["상태"] = dep_status(r)
     for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)

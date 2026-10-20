@@ -131,7 +131,7 @@ function formFields(kind) {
   ];
   if (kind === "funds") return [
     { k: "재원코드", type: "text", req: true, hint: "'-' 없이, 예: AI01" },
-    { k: "종류", type: "select", opts: DATA.meta.fund_types || ["국책", "원내", "위탁", "교육", "공금", "기타"], req: true, hint: "공금은 예산목 없이 잔액만 관리" },
+    { k: "종류", type: "select", opts: DATA.meta.fund_types || ["국책", "교육", "원내", "위탁", "연구지원", "공금", "기타"], req: true, hint: "공금은 예산목 없이 잔액만 관리" },
     { k: "과제명", type: "text", cls: "mid" },
     { k: "잔액미관리", type: "check", cls: "wide", label: "잔액 미관리 — 재원 출처로만 쓰고 예산·잔액을 관리하지 않음 (예산변동 불가, 대시보드·가용잔액·결의서 재원 현황 제외)" },
     { k: "시작일", type: "date" }, { k: "종료일", type: "date" }, { k: "비고", type: "text", cls: "wide" },
