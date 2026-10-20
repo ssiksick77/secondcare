@@ -82,6 +82,7 @@ class Server:
                    LEDGER_DRIVE_MOCK_DIR=os.path.join(self.dir, "mock"), LEDGER_PORT=str(self.port), LEDGER_NO_BROWSER="1",
                    PYTHONIOENCODING="utf-8")
         env.pop("LEDGER_AUTH_BYPASS", None)
+        env["LEDGER_OAUTH_CLIENT"] = os.path.join(self.dir, "no_oauth_client.json")  # 검사는 구글을 부르지 않는다: 클라이언트 파일 없음으로 고정
         if self.auth_bypass:
             env["LEDGER_AUTH_BYPASS"] = self.TEST_EMAIL
         self.log = open(os.path.join(self.dir, "server.log"), "w", encoding="utf-8")

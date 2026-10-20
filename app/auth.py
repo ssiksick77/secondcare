@@ -143,10 +143,11 @@ def _flow(state: str | None = None):
 
 
 def login_url() -> tuple[str, str]:
-    """(구글 인증 주소, state). state 는 서명 쿠키로 보관해 콜백에서 대조."""
+    """(구글 인증 주소, state 쿠키값). state 와 PKCE code verifier 를 서명 쿠키로 보관해 콜백에서 쓴다.
+    (Flow 는 요청마다 새로 만들므로 verifier 를 메모리에 둘 수 없다: 없으면 구글이 invalid_grant 'Missing code verifier')"""
     flow = _flow()
     url, state = flow.authorization_url(prompt="select_account", include_granted_scopes="false")
-    return url, sign({"state": state, "exp": int(time.time()) + 600})
+    return url, sign({"state": state, "verifier": flow.code_verifier, "exp": int(time.time()) + 600})
 
 
 def finish_login(code: str, state: str, state_cookie: str | None) -> dict:
@@ -155,6 +156,7 @@ def finish_login(code: str, state: str, state_cookie: str | None) -> dict:
     if not saved or saved.get("state") != state:
         raise AuthError("로그인 요청이 만료되었거나 일치하지 않습니다. 다시 시도하세요.")
     flow = _flow(state=state)
+    flow.code_verifier = saved.get("verifier")
     flow.fetch_token(code=code)
     from google.oauth2 import id_token as gid
     from google.auth.transport.requests import Request
