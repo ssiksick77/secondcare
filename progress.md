@@ -4,11 +4,16 @@ Updated: 2026-10-20
 
 ## Goal
 
-Let the master accountant add and remove login-allowed emails in the settings dialog, without editing `app/.env` or restarting. Checked by: a new email added in the dialog can log in; a removed one gets 403 on the next request; non-master accounts cannot see or call the management API.
+Let the master accountant add and remove login-allowed accounts in the settings dialog, with a role (required) and a name (optional), without editing `app/.env` or restarting. Checked by: an account added in the dialog can log in with that role; a removed one gets 401 on the next request; non-master accounts cannot see or call the management API.
 
 ## Done
 
-- (this task: none yet)
+- 2104461 / 6c3b01e Allow-list in the SQLite `users` table (`allowed`, `added_at`, `added_by`); `auth.is_allowed` = `.env` masters OR allowed rows; `auth.is_master`; `GET/POST/DELETE /api/users` (master only, 403 otherwise); settings fieldset "로그인 허용 계정" (`#s-users`, hidden for non-masters): table email · role · name ("—" until first login) · added date · [삭제], add row, masters shown without a delete button; lowercase, format check, duplicate = notice only, self and master delete refused; deleted accounts keep their row and name (voucher 담당 cell). xlsx mode: list shows `.env` only, add disabled.
+- 4d171e0 Role (manager / staff / researcher per `docs/권한_설계_2026-10-20.md`) required on add, name optional (20 chars); a name set by the master skips the first-login name prompt; `/api/me` carries `role` (`master` for `.env` accounts); rows allowed before the role column exist are backfilled as `staff`.
+- 7a7f92d Role design doc copied from branch claude/permission-hierarchy-design-15c7d4 with a note that storage is now `.env` masters + SQLite `users` (not `users.json`).
+- 1c1a46b / a3ebb19 Settings list header on one line; stacked labels in the add row. b0e843b README login section.
+- 782b992 Merged main (Second Care rename, AI helper overhaul, chat rooms) into this branch; progress.md and ideas.md conflicts resolved by hand.
+- Checked in the browser on a SQLite copy of the QA ledger (add, duplicate notice, delete, role column, backfill).
 
 ## Done before this task (kept for reference)
 
@@ -35,14 +40,15 @@ Let the master accountant add and remove login-allowed emails in the settings di
 
 ## In progress
 
-Allowed-email management (brainstormed 2026-10-20). First version:
-1. Allow-list = SQLite `users` table: add `allowed`, `added_at`, `added_by`; login check = `.env` emails OR allowed users rows. Done when: an email not in `.env` but allowed in the table can log in, and after allowed is cleared the next request gets 403 / login page (API test).
-2. Settings dialog group "로그인 허용 계정": table email · name ("—" if never logged in) · added date · [삭제]; input + [추가]; `.env` accounts marked 마스터 with no delete button. Done when: add shows the row at once, delete removes it, both survive a reload (UI test).
-3. Master only: group hidden for non-master; `GET/POST/DELETE /api/users` return 403 for non-master cookies (API test).
-4. Input checks: lowercase, email format, duplicate add is a notice only, deleting self or a master email is refused. Done when: each case returns 400 with a Korean message (API test).
+None. The allowed-account screen with roles is complete; the user has not yet tried it with real accounts.
 
 ## Open issues
 
+- checks: pass on the final tree (calc 32, API 120, db 55, ai 122, api-db 149, UI 79, ui-db 89; about 6 minutes). Run with a timeout above 360 s.
+- Server role checks are not implemented: `role` is stored and shown only. Design doc §4 and §8 step 3 describe the checks. `extra.admin` from the request screen is still trusted.
+- No UI to change an account's role or name after adding; delete and add again. Masters are `.env` only.
+- krds-improve / impeccable were not run on the new fieldset; it follows the existing memo fieldset pattern (label, aria-live, button names).
+- The design doc §5.3 (no-login local mode) and §6 (`users.json`) are superseded; the note at the top of the doc says so.
 - Live ledger is SQLite since 2026-10-20 14:58. `의료인공지능센터_지출장부_2026.xlsx` is frozen at that moment: do not edit it by hand, it is no longer read. For an Excel view run `python app/export_xlsx.py <sqlite> <copy.xlsx>`. Backups are `app/backup/*.sqlite`. `_row` in the API is the SQLite id.
 - Worktree branches claude/sqlite-migration-difficulty-9c1e10, claude/resolution-signature-names-196bd0 and claude/google-login-implementation-33c005 are merged and can be deleted.
 - Static files have no version query, so a code change can show stale CSS until a hard refresh (ideas.md [later][fix] 2026-10-20).
@@ -64,6 +70,7 @@ Allowed-email management (brainstormed 2026-10-20). First version:
 
 ## Decisions
 
+- 2026-10-20 (user) Allowed-account management: store in the SQLite `users` table (option 2 of 3), only master accounts (`.env` `LEDGER_ALLOWED_EMAILS`) may manage; on add set a role (required) and a name (optional) per `docs/권한_설계_2026-10-20.md`. My calls: fieldset inside the settings dialog (not a separate page); delete keeps the row and name; allow check runs in the middleware on every request so removal needs no restart; xlsx mode uses `.env` only; a master-given name skips the first-login prompt; re-adding an allowed account changes nothing; no title field; pre-existing allowed rows default to `staff`.
 - 2026-10-20 (user) Allowed-email management: store the allow-list in the SQLite `users` table (approach 2 of 3; `.env` emails stay as bootstrap masters that cannot be removed), and only master accounts (now: the `.env` emails) may manage it. Rejected: `.env`-only text field (no names, no room for roles); a separate `/users` page (too big now). My calls: removing keeps the users row and name (author names on ledger rows stay readable) and only clears allowed; the middleware checks the allow-list on every request so removal needs no restart; master is derived from `.env` only, no role column yet; xlsx mode uses the `.env` list only.
 - 2026-10-20 (user) First-login name entry instead of an email-to-name map in .env: ask once, no change UI yet; the imported author (snubh.ai.center.01@gmail.com) is asked like everyone else. My calls: `users` table in SQLite, prefill from the Google profile, xlsx mode skips the prompt, voucher 담당 cell reads the row author.
 - 2026-10-20 (user) 결의서 결재란 이름: 매니저 오인선, 선임연구원 이진영, 센터장 류지원 with small '직무대행' above the name, bold italic; 담당 cell stays empty until login gives an email-to-name map (per-transaction author, not a fixed setting). My calls: name 11pt, tag 6.5pt with -0.2mm tracking inside the name width.
@@ -99,4 +106,5 @@ Allowed-email management (brainstormed 2026-10-20). First version:
 
 ## Next action
 
-Start the work loop on feature 1 (users table `allowed` column and login check).
+Pick with the user: server role checks (design doc §4.2, §8 step 3: one FastAPI dependency, 403 by role, drop `extra.admin`), or the role/name edit UI, or multi-PC access (LEDGER_HOST, HTTPS redirect URI).
+
