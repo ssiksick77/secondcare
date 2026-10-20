@@ -1267,13 +1267,18 @@ $("#ai-form").addEventListener("submit", async e => {
   $("#ai-input").value = "";
   addMsg("user", q);
   const qIdx = CHAT.push({ role: "user", content: q }) - 1;
-  const pending = addMsg("assistant", "답변 생성 중… (장부 전체를 전송하므로 수십 초 걸릴 수 있음)", "pending");
+  const pending = addMsg("assistant", "답변 생성 중… (필요한 범위를 장부에서 조회합니다)", "pending");
   $("#ai-send").disabled = true; $("#ai-input").disabled = true;
   CHAT_TURN++;
   try {
     const r = await api("POST", "/api/ai/chat", { messages: CHAT.slice(-24), turn: CHAT_TURN });
     pending.textContent = r.answer || "(제안만 생성)"; pending.classList.remove("pending");
     CHAT.push({ role: "assistant", content: r.answer || "(제안 생성)" });
+    if (r.calls?.length) {  // 근거 확인용: 이번 답변에 실행된 조회 도구 한 줄
+      const c = document.createElement("div"); c.className = "ai-calls";
+      c.textContent = "조회: " + r.calls.map(x => `${x.tool}(${Object.entries(x.input || {}).filter(([, v]) => v !== "" && v != null).map(([k, v]) => `${k}=${v}`).join(", ")})${x.error ? " (오류)" : ""}`).join(" · ");
+      $("#ai-log").appendChild(c);
+    }
     (r.proposals || []).forEach(renderProposal);
     if (r.usage) { const u = document.createElement("div"); u.className = "toolbar-note"; u.style.alignSelf = "flex-start"; u.textContent = `이번 질문 입력 약 ${(r.usage.input || 0).toLocaleString()} 토큰${r.usage.cached ? ` (캐시 ${(r.usage.cached).toLocaleString()})` : ""}`; $("#ai-log").appendChild(u); }
   } catch (err) {
@@ -1287,7 +1292,7 @@ $("#ai-form").addEventListener("submit", async e => {
 });
 
 // ---- 거래 제안 카드 (사용자 확인·수정 후 저장) ----
-const PROPOSAL_LABEL = { propose_exec: "집행 추가", propose_req: "품의 추가", propose_deposit: "적립금 기록", propose_update: "행 수정", propose_req_to_exec: "품의→집행 전환" };
+const PROPOSAL_LABEL = { propose_exec: "집행 추가", propose_req: "품의 추가", propose_deposit: "적립금 기록", propose_update: "행 수정", propose_req_to_exec: "품의→집행 전환", propose_memo: "메모 저장" };
 function renderProposal(p) {
   const card = document.createElement("div");
   card.className = "msg assistant proposal";
@@ -1321,11 +1326,12 @@ function renderProposal(p) {
         kind = inp.kind; row = inp.row;
         if (!DATA[kind]?.find(x => x._row === row)) throw new Error("해당 행을 찾을 수 없습니다. 새로고침 후 다시 시도하세요.");
       } else {
-        kind = { propose_exec: "exec", propose_req: "req", propose_deposit: "deposit" }[p.tool];
+        kind = { propose_exec: "exec", propose_req: "req", propose_deposit: "deposit", propose_memo: "memo" }[p.tool];
         preset = { ...inp };
+        if (p.tool === "propose_memo") { delete preset["이유"]; preset["작성일"] = today(); }
       }
       DLG_ON_SAVED = (saved) => {
-        const no = saved["거래번호"] || saved["품의번호"] || `행 ${saved._row}`;
+        const no = saved["거래번호"] || saved["품의번호"] || (saved["종류"] ? `메모 ${saved["종류"]}${saved["대상"] ? " " + saved["대상"] : ""}` : `행 ${saved._row}`);
         done(`저장됨 (${no})`);
         CHAT.push({ role: "user", content: `[알림] 제안 ${p.id} 를 사용자가 검토·수정 후 저장했습니다: ${no}` });
       };

@@ -477,6 +477,7 @@ textarea.xd-edit { resize: vertical; margin: 2px 0; }
 .msg.error { background: var(--alert-bg); color: var(--alert-deep); }
 .msg.pending { color: var(--ink-2); font-style: italic; }
 .msg .retry { margin-left: 8px; font-size: 12px; }
+.ai-calls { font-size: 11px; color: var(--ink-3); align-self: flex-start; max-width: 95%; word-break: break-all; }
 .msg.proposal { border: 1px solid var(--margin); background: var(--bg); width: 95%; }
 .proposal-head { font-weight: 700; color: var(--margin); margin-bottom: 4px; }
 .proposal-body { font-size: 12px; white-space: pre-wrap; }

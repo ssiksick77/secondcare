@@ -1,4 +1,4 @@
-"""AI 도우미 검사 (모델 호출 없음): 공통 도구 모듈 tools.py 와 MCP 서버의 읽기 도구.
+"""AI 도우미 검사 (모델 호출 없음): 공통 도구 모듈 tools.py, MCP 서버의 읽기 도구, 메모 저장소, 채팅 에이전트 루프(가짜 클라이언트).
 QA 장부 복사본(tests/.tmp/ai/)에 대해 실행한다: python -I tests/test_ai.py
 """
 import json
@@ -140,6 +140,43 @@ ck("memo: 수정", up["내용"].endswith("(100만원 이상)"))
 store.delete("memo", m1["_row"])
 ck("memo: 삭제 후 read_memo (xlsx 는 행 번호가 당겨짐)", [r["내용"] for r in tools.read_memo()] == [up["내용"]])
 ck("memo: 메타 memo_kinds", store.read_all()["meta"]["memo_kinds"] == ["재원", "거래처", "일반"])
+
+# --- 채팅 에이전트 (ai.py): 요약 프롬프트 + 도구 루프, 가짜 Anthropic 클라이언트 ---
+import ai, types
+NS = types.SimpleNamespace
+sysb = ai.agent_system()
+systxt = "".join(b["text"] for b in sysb)
+ck("agent_system: 장부 전체 없음, 작음", "<ledger>" not in systxt and "<summary>" in systxt and len(systxt) < 12000, len(systxt))
+ck("agent_system: 재원 코드·오늘 날짜", f0 in systxt and "오늘 날짜" in systxt)
+names = [t["name"] for t in ai.agent_tools()]
+ck("agent_tools: 읽기 도구 + 제안 도구 + propose_memo", names[:len(tools.READ_TOOLS)] == tools.READ_TOOLS and "propose_exec" in names and names[-1] == "propose_memo")
+def usage(): return NS(input_tokens=100, output_tokens=10, cache_read_input_tokens=0, cache_creation_input_tokens=0)
+script = [
+    NS(stop_reason="tool_use", content=[NS(type="text", text="확인 중"), NS(type="tool_use", id="t1", name="budget_balance", input={"fund": f0}),
+                                        NS(type="tool_use", id="t2", name="get_exec", input={"number": "0000-없음-999"})], usage=usage()),
+    NS(stop_reason="tool_use", content=[NS(type="tool_use", id="t3", name="propose_memo", input={"kind": "재원", "target": f0, "text": "장비는 사전승인", "reason": "규정"})], usage=usage()),
+    NS(stop_reason="end_turn", content=[NS(type="text", text="답입니다")], usage=usage()),
+]
+sent = []
+def fake_create(**kw):
+    sent.append(kw); return script[len(sent) - 1]
+ai._c = lambda: NS(beta=NS(messages=NS(create=fake_create)))
+before = len(tools.read_memo())
+res = ai.chat([{"role": "user", "content": f"{f0} 잔액?"}], turn=1)
+ck("chat: 답변·calls (오류 표시)", res["answer"] == "답입니다" and [c["tool"] for c in res["calls"]] == ["budget_balance", "get_exec"] and res["calls"][0]["error"] is False and res["calls"][1]["error"] is True, res)
+ck("chat: propose_memo 는 한글 키 제안 카드, 장부에 저장 안 됨", res["proposals"] == [{"id": "t1-p1", "tool": "propose_memo", "input": {"종류": "재원", "대상": f0, "내용": "장비는 사전승인", "이유": "규정"}}] and len(tools.read_memo()) == before, res["proposals"])
+r1 = sent[0]["messages"][2]["content"]  # messages 는 같은 목록 (질문, 응답1, 결과1, 응답2, 결과2)
+ck("chat: tool_result 에 도구 결과 JSON, 오류는 is_error", r1[0]["type"] == "tool_result" and "가용잔액" in r1[0]["content"] and r1[1].get("is_error") is True and "찾을 수 없습니다" in r1[1]["content"])
+ck("chat: 제안 tool_result 는 '직접 반영되지 않았습니다'", "직접 반영되지" in sent[0]["messages"][4]["content"][0]["content"])
+ck("chat: 요청에 장부 전체 없음, 도구 목록 전달", all("<ledger>" not in b["text"] for b in sent[0]["system"]) and [t["name"] for t in sent[0]["tools"]] == names and len(sent) == 3)
+ck("chat: 사용량 합산", res["usage"]["input"] == 300 and res["usage"]["output"] == 30, res["usage"])
+sent.clear()
+script[:] = [NS(stop_reason="tool_use", content=[NS(type="tool_use", id=f"x{i}", name="list_tags", input={})], usage=usage()) for i in range(ai.AGENT_ROUNDS + 1)]
+out2 = ai.chat([{"role": "user", "content": "루프"}])
+ck("chat: 왕복 상한에서 멈추고 안내", len(sent) == ai.AGENT_ROUNDS and "횟수를 넘었습니다" in out2["answer"] and len(out2["calls"]) == ai.AGENT_ROUNDS)
+big = tools.list_exec(limit=1000)
+ck("run_tool: 긴 결과는 잘라서 안내", len(ai.run_tool("list_exec", {"limit": 1000})[0]) <= ai.TOOL_RESULT_MAX + 120 or len(json.dumps(big, ensure_ascii=False)) <= ai.TOOL_RESULT_MAX)
+ck("run_tool: 알 수 없는 인자는 무시", ai.run_tool("list_funds", {"nope": 1})[1] is False)
 
 # --- 도구 정의·호출 ---
 for n in tools.READ_TOOLS:
