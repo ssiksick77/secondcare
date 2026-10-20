@@ -4,18 +4,12 @@ Updated: 2026-10-20
 
 ## Goal
 
-Fund kind 연구지원: payees whose name contains '연구지원' become proper funds of that kind, their codes drop the leading '연구', existing transaction codes are renamed, and the fund list sorts 국책-교육-원내-위탁-연구지원-공금-기타.
+Budget tab cleanup: the tab is named 예산, the 예산현액 summary sits above the change list and the add button, the change list stays empty until a fund is selected, and the summary hides 잔액미관리 funds and funds with no budget rows. Checked in the browser on the QA ledger and by `scripts/check.sh`.
 
 ## Done
 
-- a39201b merged into main (conflict only in progress.md); the app on port 8791 was restarted with the merged code and shows 연구지원 in the 재원 종류 list.
-- 4e1c5a1 fund kind 연구지원 (FUND_TYPES order 국책-교육-원내-위탁-연구지원-공금-기타 = fund list default sort in `store.load`; app.js fallback, tools docstring, README). Live ledger migrated 2026-10-20 17:43 by a scratch script (not in repo): payees whose 지급처명 contains '연구지원' (연구김지현, 연구김용수, 연구센소리, MATRIX, 연구류지원) became funds of kind 연구지원 with 잔액미관리=Y (my call: they have no budget rows) and 과제명 = old 지급처명; codes drop the leading 연구 (김지현, 김용수, 센소리, 류지원; MATRIX unchanged); 거래번호 and 재원 in 집행내역 (18 rows), 지급처 and 연결거래번호 in 인건비지급 (27 rows) renamed; no evidence, 품의, 예산변동 or memo referenced them. Payee 서울대산학 stays a payee. Backup app/backup/manual_before_research_support_20261020_174301.sqlite (and a duplicate …_174240 from the rehearsal). Checks pass.
-- 2104461 / 6c3b01e Allow-list in the SQLite `users` table (`allowed`, `added_at`, `added_by`); `auth.is_allowed` = `.env` masters OR allowed rows; `auth.is_master`; `GET/POST/DELETE /api/users` (master only, 403 otherwise); settings fieldset "로그인 허용 계정" (`#s-users`, hidden for non-masters): table email · role · name ("—" until first login) · added date · [삭제], add row, masters shown without a delete button; lowercase, format check, duplicate = notice only, self and master delete refused; deleted accounts keep their row and name (voucher 담당 cell). xlsx mode: list shows `.env` only, add disabled.
-- 4d171e0 Role (manager / staff / researcher per `docs/권한_설계_2026-10-20.md`) required on add, name optional (20 chars); a name set by the master skips the first-login name prompt; `/api/me` carries `role` (`master` for `.env` accounts); rows allowed before the role column exist are backfilled as `staff`.
-- 7a7f92d Role design doc copied from branch claude/permission-hierarchy-design-15c7d4 with a note that storage is now `.env` masters + SQLite `users` (not `users.json`).
-- 1c1a46b / a3ebb19 Settings list header on one line; stacked labels in the add row. b0e843b README login section.
-- 782b992 Merged main into this branch; merged back into main after dffd6a5 (chat rooms, memo kind 비세목), progress.md and ideas.md conflicts resolved by hand.
-- Checked in the browser on a SQLite copy of the QA ledger (add, duplicate notice, delete, role column, backfill).
+- 1eacbbc Tab label 예산변동 → 예산 (index.html; dashboard hint and README wording; sheet name and ids unchanged). Panel order: 재원별 예산현액 요약, then 변경 내역 heading, fund filter (blank option 선택), 예산 행 추가, list. `filtered("budget")` returns no rows without a fund; `SEL_HOOK.budget.empty` shows "재원을 선택하면 변경 내역이 보입니다." `renderBudgetSummary` keeps only funds with budget rows and not 잔액미관리. Verified in the browser pane on the QA copy (QA10 hidden, list fills on QA01).
+- 8e43f4c merged main (favicon, no browser auto-open) into this branch.
 
 ## Done before this task (kept for reference)
 
@@ -46,11 +40,11 @@ Fund kind 연구지원: payees whose name contains '연구지원' become proper 
 
 ## In progress
 
-None. The allowed-account screen with roles is complete; the user has not yet tried it with real accounts.
+None.
 
 ## Next action
 
-Hard-refresh the 재원 tab (Ctrl+F5) and review the five 연구지원 funds (잔액미관리=Y, 과제명 = old 지급처명); edit 과제명 or 잔액미관리 there if wanted. Delete the duplicate backup app/backup/manual_before_research_support_20261020_174240.sqlite by hand. Then pick with the user: server role checks (design doc §4.2, §8 step 3: one FastAPI dependency, 403 by role, drop `extra.admin`), or the role/name edit UI, or multi-PC access (LEDGER_HOST, HTTPS redirect URI).
+Fast-forward main to this branch (done at wrap-up if the check passed), hard-refresh the app on port 8791, and look at the 예산 tab with the live ledger. Then pick with the user: server role checks (design doc §4.2, §8 step 3), the role/name edit UI, or multi-PC access.
 
 ## Earlier note
 
@@ -70,7 +64,7 @@ Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE o
 - `mcp_server.py` was not run against SQLite; it only uses store functions, so it should work, but check it in session 3.
 - Manual QA launcher for the browser pane (local, untracked `.claude/launch.json` → scratchpad run_manual.py): QA copy in tests/.tmp/manual, LEDGER_AI_FAKE=1, LEDGER_AUTH_BYPASS=qa@example.com, port 8795.
 - Rename note for the AI tools: the brainstorm named `search_exec`; the tool is `search_ledger` (it spans 집행·신청·품의). `.claude/launch.json` (browser-pane launcher `qa-manual`) is local and untracked.
-- The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run.
+- The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout (`docs/qa_data_2026_01_09/qa_ledger.xlsx`). A fresh worktree needs the same copy before tests run. In worktree budget-tab-ui-cleanup-0e65ee an untracked `.claude/launch.json` (`qa`, port 8891, LEDGER_AUTH_BYPASS=preview@example.com, writes to the copied QA ledger) serves the browser pane.
 - The `api` group fails about once in six full `check.sh` runs and passes on rerun. Captured on 2026-10-20: test '구분 변경 → 재결재' got HTTP 423 '장부 파일에 쓸 수 없습니다' (store.py PermissionError on os.replace of the xlsx copy): a Windows file-lock race (indexer/antivirus), not a code bug. If it repeats often, retry the save once in `store._save` or run the api group on SQLite only.
 - checks: pass on the merged tree 2026-10-20 (smoke; test: calc 32, API 110, db 55, ai 122, api-db 120, UI 74, ui-db 76, about 7 minutes — run with a timeout above 420 s). No lint or typecheck. Two sessions running check.sh at the same time collide on tests/.tmp/ (one run fails); run checks from one session at a time.
 - The app running on port 8791 must be restarted to read the new REQUEST_SUPPLIERS in app/.env.
