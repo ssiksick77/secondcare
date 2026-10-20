@@ -26,6 +26,8 @@ XLSX_PATH = Path(os.environ.get("LEDGER_XLSX", APP_DIR.parent / "의료인공지
 BACKUP_DIR = APP_DIR / "backup"
 BACKUP_KEEP = 30
 LOCK_TIMEOUT = 15  # 초: 다른 프로세스(MCP 서버 등)가 쓰는 동안 대기
+# SQLite 이전 (2026-10-20, 1회차): LEDGER_DB 가 있으면 read_all 이 SQLite 를 읽는다. 쓰기 경로는 아직 xlsx (2회차에서 전환)
+USE_DB = bool(os.environ.get("LEDGER_DB"))
 
 SHEET_FUND = "재원"
 SHEET_BUDGET = "예산변동"
@@ -701,72 +703,100 @@ def init_file():
             _save(wb)
 
 
+def _raw_xlsx() -> tuple[dict, dict]:
+    """xlsx 에서 시트별 행을 읽는다 (파생 값 계산 전). 반환: (data, meta 추가 항목)."""
+    wb = _load()
+    _ensure_structure(wb)  # 메모리 상 보정 (저장은 쓰기 시)
+    formulas: list[str] = []
+    data = {
+        "funds": _rows(wb[SHEET_FUND], FUND_COLS, 1, formulas),
+        "budget": _rows(wb[SHEET_BUDGET], BUDGET_COLS, BUDGET_HEAD_ROW, formulas),
+        "exec": _rows(wb[SHEET_EXEC], EXEC_COLS, 1, formulas),
+        "req": _rows(wb[SHEET_REQ], REQ_COLS, 1, formulas),
+        "deposit": _rows(wb[SHEET_DEP], DEP_COLS, 1, formulas),
+        "vendor": _rows(wb[SHEET_VENDOR], VENDOR_COLS),
+        "tags": _rows(wb[SHEET_TAG], TAG_COLS, 1, formulas),
+        "evidence": _rows(wb[SHEET_EVID], EVID_COLS, 1, formulas),
+        "people": _rows(wb[SHEET_PEOPLE], PEOPLE_COLS, 1, formulas),
+        "salary": _rows(wb[SHEET_SALARY], SALARY_COLS, 1, formulas),
+        "payee": _rows(wb[SHEET_PAYEE], PAYEE_COLS, 1, formulas),
+        "labor": _rows(wb[SHEET_LABOR], LABOR_COLS, 1, formulas),
+        "ladj": _rows(wb[SHEET_LADJ], LADJ_COLS, 1, formulas),
+        "request": _rows(wb[SHEET_RQ], REQUEST_COLS, 1, formulas),
+        "order": _rows(wb[SHEET_ORDER], ORDER_COLS, 1, formulas),
+        "ratt": _rows(wb[SHEET_RATT], RATT_COLS, 1, formulas),
+        "fixlog": _rows(wb[SHEET_FIXLOG], FIXLOG_COLS, 1, formulas) if SHEET_FIXLOG in wb.sheetnames else [],
+    }
+    for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력
+        if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산"):
+            r["인건비예산"] = None
+    for r in data["payee"]:
+        if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산"):
+            r["인건비예산"] = None
+    meta = {
+        "file": str(XLSX_PATH),
+        "mtime": dt.datetime.fromtimestamp(XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"),
+        "locked": XLSX_PATH.with_name("~$" + XLSX_PATH.name).exists(),
+        # 수식 셀은 값으로 읽을 수 없어 0/문자열로 취급됨 → 화면에 경고
+        "formula_cells": formulas[:20],
+        "formula_count": len(formulas),
+    }
+    return data, meta
+
+
+def _raw_db() -> tuple[dict, dict]:
+    """SQLite 에서 시트별 행을 읽는다 (_row = 행 id). _raw_xlsx 와 같은 모양."""
+    import db
+    with db.session() as con:
+        data = {kind: db.read_rows(con, kind) for kind in db.tables()}
+    meta = {"file": str(db.DB_PATH), "mtime": db.file_mtime(), "locked": False, "formula_cells": [], "formula_count": 0}
+    return data, meta
+
+
+def _derive(data: dict, meta: dict) -> dict:
+    """읽은 행에 계산 값(상태·잠금·has_file 등)과 meta 를 붙인다. 원본 종류(xlsx/SQLite)와 무관."""
+    data["evidence"] = [_evid_out(e) for e in data["evidence"]]
+    req_state = _make_state(data["req"], data["order"])
+    for r in data["request"]:  # 연결 품의가 집행완료이거나 주문이 배송되면 '완료' (읽을 때 계산), 없어진 품의면 '승인'
+        _norm_request(r, req_state)
+        r["_can_convert"] = _can_convert(r, req_state)
+        r["상태"] = request_status(r, req_state)
+    dep_links = _dep_order_links(data["order"], data["deposit"])
+    for r in data["deposit"]:  # 주문이 남긴 적립금 '사용' 행: 증빙번호·금액·거래처·구분 수정과 삭제 잠금 (화면 표시용)
+        if r["_row"] in dep_links:
+            r["_locked_by"] = dep_links[r["_row"]]
+    for r in data["funds"]:  # 종류: 빈 값은 국책
+        r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
+        r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
+    for r in data["deposit"]:  # 적립금 상태는 날짜에서 계산 (사용 행만)
+        r["상태"] = dep_status(r)
+    for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
+        r["상태"] = exec_status(r)
+        r["상태표시"] = EXEC_STATUS_LABEL.get(r["상태"], r["상태"])
+    data["meta"] = {
+        "labor_kinds": LABOR_KINDS,
+        "labor_status": LABOR_STATUS,
+        "dep_types": DEP_TYPES,
+        "dep_status": DEP_STATUS,
+        "budget_items": BUDGET_ITEMS,
+        "fund_types": FUND_TYPES,
+        "fund_type_pool": FUND_TYPE_POOL,
+        "pay_methods": PAY_METHODS,
+        "req_status": REQ_STATUS,
+        "exec_status_labels": EXEC_STATUS_LABEL,
+        "request_types": REQUEST_TYPES,
+        "request_status": REQUEST_STATUS,
+        **supplier_meta(),
+        **meta,
+    }
+    return data
+
+
 def read_all() -> dict:
+    """장부 전체. USE_DB 면 SQLite (이전 1회차: 읽기만, 쓰기는 아직 xlsx), 아니면 xlsx."""
     with _lock:
-        wb = _load()
-        _ensure_structure(wb)  # 메모리 상 보정 (저장은 쓰기 시)
-        formulas: list[str] = []
-        data = {
-            "funds": _rows(wb[SHEET_FUND], FUND_COLS, 1, formulas),
-            "budget": _rows(wb[SHEET_BUDGET], BUDGET_COLS, BUDGET_HEAD_ROW, formulas),
-            "exec": _rows(wb[SHEET_EXEC], EXEC_COLS, 1, formulas),
-            "req": _rows(wb[SHEET_REQ], REQ_COLS, 1, formulas),
-            "deposit": _rows(wb[SHEET_DEP], DEP_COLS, 1, formulas),
-            "vendor": _rows(wb[SHEET_VENDOR], VENDOR_COLS),
-            "tags": _rows(wb[SHEET_TAG], TAG_COLS, 1, formulas),
-            "evidence": [_evid_out(e) for e in _rows(wb[SHEET_EVID], EVID_COLS, 1, formulas)],
-            "people": _rows(wb[SHEET_PEOPLE], PEOPLE_COLS, 1, formulas),
-            "salary": _rows(wb[SHEET_SALARY], SALARY_COLS, 1, formulas),
-            "payee": _rows(wb[SHEET_PAYEE], PAYEE_COLS, 1, formulas),
-            "labor": _rows(wb[SHEET_LABOR], LABOR_COLS, 1, formulas),
-            "ladj": _rows(wb[SHEET_LADJ], LADJ_COLS, 1, formulas),
-            "request": _rows(wb[SHEET_RQ], REQUEST_COLS, 1, formulas),
-            "order": _rows(wb[SHEET_ORDER], ORDER_COLS, 1, formulas),
-            "ratt": _rows(wb[SHEET_RATT], RATT_COLS, 1, formulas),
-            "fixlog": _rows(wb[SHEET_FIXLOG], FIXLOG_COLS, 1, formulas) if SHEET_FIXLOG in wb.sheetnames else [],
-        }
-        req_state = _make_state(data["req"], data["order"])
-        for r in data["request"]:  # 연결 품의가 집행완료이거나 주문이 배송되면 '완료' (읽을 때 계산), 없어진 품의면 '승인'
-            _norm_request(r, req_state)
-            r["_can_convert"] = _can_convert(r, req_state)
-            r["상태"] = request_status(r, req_state)
-        dep_links = _dep_order_links(data["order"], data["deposit"])
-        for r in data["deposit"]:  # 주문이 남긴 적립금 '사용' 행: 증빙번호·금액·거래처·구분 수정과 삭제 잠금 (화면 표시용)
-            if r["_row"] in dep_links:
-                r["_locked_by"] = dep_links[r["_row"]]
-        for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력. 종류: 빈 값은 국책
-            r["인건비예산"] = None if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산") else r["인건비예산"]
-            r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
-            r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
-        for r in data["payee"]:
-            r["인건비예산"] = None if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산") else r["인건비예산"]
-        for r in data["deposit"]:  # 적립금 상태는 날짜에서 계산 (사용 행만)
-            r["상태"] = dep_status(r)
-        for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
-            r["상태"] = exec_status(r)
-            r["상태표시"] = EXEC_STATUS_LABEL.get(r["상태"], r["상태"])
-        data["meta"] = {
-            "labor_kinds": LABOR_KINDS,
-            "labor_status": LABOR_STATUS,
-            "dep_types": DEP_TYPES,
-            "dep_status": DEP_STATUS,
-            "budget_items": BUDGET_ITEMS,
-            "fund_types": FUND_TYPES,
-            "fund_type_pool": FUND_TYPE_POOL,
-            "pay_methods": PAY_METHODS,
-            "req_status": REQ_STATUS,
-            "exec_status_labels": EXEC_STATUS_LABEL,
-            "request_types": REQUEST_TYPES,
-            "request_status": REQUEST_STATUS,
-            **supplier_meta(),
-            "file": str(XLSX_PATH),
-            "mtime": dt.datetime.fromtimestamp(XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"),
-            "locked": XLSX_PATH.with_name("~$" + XLSX_PATH.name).exists(),
-            # 수식 셀은 값으로 읽을 수 없어 0/문자열로 취급됨 → 화면에 경고
-            "formula_cells": formulas[:20],
-            "formula_count": len(formulas),
-        }
-        return data
+        data, meta = _raw_db() if USE_DB else _raw_xlsx()
+        return _derive(data, meta)
 
 
 def _has_value(ws, row: int, col: str) -> bool:

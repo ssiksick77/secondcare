@@ -1,6 +1,6 @@
 """모든 검사를 차례로 실행한다 (scripts/check.sh 의 test 단계). 하나라도 실패하면 종료 코드 1.
     python -I tests/run.py          # 전부
-    python -I tests/run.py calc api # 일부만 (calc · api · ui)
+    python -I tests/run.py calc api # 일부만 (calc · api · db · ui)
 """
 import os
 import subprocess
@@ -10,6 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 STEPS = {
     "calc": ["node", os.path.join(HERE, "test_calc.js")],
     "api": [sys.executable, "-I", os.path.join(HERE, "test_api.py")],
+    "db": [sys.executable, "-I", os.path.join(HERE, "test_db.py")],
     "ui": [sys.executable, "-I", os.path.join(HERE, "test_ui.py")],
 }
 
