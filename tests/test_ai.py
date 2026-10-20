@@ -178,6 +178,13 @@ big = tools.list_exec(limit=1000)
 ck("run_tool: 긴 결과는 잘라서 안내", len(ai.run_tool("list_exec", {"limit": 1000})[0]) <= ai.TOOL_RESULT_MAX + 120 or len(json.dumps(big, ensure_ascii=False)) <= ai.TOOL_RESULT_MAX)
 ck("run_tool: 알 수 없는 인자는 무시", ai.run_tool("list_funds", {"nope": 1})[1] is False)
 
+# --- 추천(/api/ai/suggest) 프롬프트: 장부 전체가 아니라 같은 거래처 이력·같은 금액·해당 재원 예산만 ---
+sg_sys, sg_user = ai.suggest_prompt({"재원": f0, "거래처": vend, "금액": 10000, "적요": "검사"}, "exec")
+sg = json.loads(sg_user)
+ck("suggest_prompt: 장부 전체 없음", "<ledger>" not in sg_sys and set(sg) == {"입력중인행", "종류", "같은거래처_최근이력", "같은금액_최근이력", "해당재원_예산현황"}, list(sg))
+ck("suggest_prompt: 같은 거래처 이력만 (30건 이하)", all(r["거래처"] == vend for r in sg["같은거래처_최근이력"]) and len(sg["같은거래처_최근이력"]) <= 30)
+ck("suggest_prompt: 해당 재원 예산만", all(t["재원"] == f0 for t in sg["해당재원_예산현황"]) and sg["해당재원_예산현황"])
+
 # --- 도구 정의·호출 ---
 for n in tools.READ_TOOLS:
     s = tools.tool_schema(n)

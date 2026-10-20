@@ -270,6 +270,18 @@ def main() -> int:
             pg.wait_for_timeout(300)
         ck("메모: 삭제 후 빈 목록", "메모가 없습니다" in pg.inner_text("#memo-list"))
         pg.click("#s-cancel"); pg.wait_for_timeout(200)
+        # ---- 폼 'AI 추천·검증': 입력된 예산목은 덮어쓰지 않고 빈 칸만 채운다 (가짜 /api/ai/suggest) ----
+        pg.evaluate("""() => { AI = { enabled: true, provider: 'test', model: 't' }; const _api = api;
+          api = async (m, p, b) => p === '/api/ai/suggest' ? { '예산목': DATA.meta.budget_items[1], '세목': '검사세목', '태그': '', '근거': '검사', '경고': [] } : _api(m, p, b); }""")
+        pg.evaluate("openForm('exec')"); pg.wait_for_timeout(400)
+        pg.evaluate("document.querySelector('#f-예산목').value = DATA.meta.budget_items[0]")
+        ck("추천: AI 바 표시", pg.evaluate("!document.querySelector('#dlg-ai').hidden"))
+        pg.click("#dlg-suggest"); pg.wait_for_timeout(600)
+        ck("추천: 입력된 예산목 유지, 빈 세목만 채움", pg.evaluate("document.querySelector('#f-예산목').value === DATA.meta.budget_items[0] && document.querySelector('#f-세목').value === '검사세목'"))
+        ck("추천: 다른 추천은 안내문으로", "그대로 두었습니다" in pg.inner_text("#dlg-ai-msg"))
+        pg.evaluate("document.querySelector('#f-예산목').value = ''"); pg.click("#dlg-suggest"); pg.wait_for_timeout(600)
+        ck("추천: 빈 예산목은 채움", pg.evaluate("document.querySelector('#f-예산목').value === DATA.meta.budget_items[1]"))
+        pg.evaluate("$('#dlg').dataset.initial = ''; $('#dlg').close()")
         ck("페이지 오류 없음", not errs, errs)
         b.close()
     return ck.done("화면")

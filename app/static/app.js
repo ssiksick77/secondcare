@@ -1394,10 +1394,11 @@ $("#dlg-suggest").addEventListener("click", async () => {
   $("#dlg-suggest").disabled = true;
   try {
     const d = await api("POST", "/api/ai/suggest", { rec, kind });
-    if (d["예산목"] && $("#f-예산목")) $("#f-예산목").value = d["예산목"];
-    ["세목", "태그"].forEach(k => { if (d[k] && F(k) && !F(k).value) setField(k, d[k]); });
+    const cur = F("예산목")?.value || "";
+    ["예산목", "세목", "태그"].forEach(k => { if (d[k] && F(k) && !F(k).value) setField(k, d[k]); });  // 빈 칸만 채운다 (입력된 예산목을 덮어쓰지 않음, 2026-10-20)
+    const diff = cur && d["예산목"] && cur !== d["예산목"] ? ` · 입력된 예산목(${cur})은 그대로 두었습니다` : "";
     const warn = (d["경고"] || []).length ? " 경고: " + d["경고"].join(" / ") : "";
-    aiMsg(`추천: ${d["예산목"]} · ${d["세목"] || "-"}${d["태그"] ? " · " + d["태그"] : ""} (${d["근거"]})${warn}`, !!warn);
+    aiMsg(`추천: ${d["예산목"]} · ${d["세목"] || "-"}${d["태그"] ? " · " + d["태그"] : ""} (${d["근거"]})${diff}${warn}`, !!warn || !!diff);
   } catch (err) { aiMsg("추천 실패: " + err.message, true); }
   finally { $("#dlg-suggest").disabled = false; }
 });
