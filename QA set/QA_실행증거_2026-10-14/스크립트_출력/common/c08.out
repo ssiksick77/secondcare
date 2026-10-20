@@ -1,0 +1,20 @@
+orig [가상 QA26JANSEP_V1] E073 반복 1월 1차 51000
+A dialog: 집행 수정 · 2026-QA05-001
+B toasts: ['2026-QA05-001 저장했습니다.'] B dlg open: 0
+after B api: C08 B가 먼저 수정 51000
+A confirm: None
+A form error: 다른 곳에서 이 행의 적요 이(가) 먼저 바뀌었습니다. 새로고침한 뒤 다시 시도하세요.
+A toasts: ['저장 실패: 다른 곳에서 이 행의 적요 이(가) 먼저 바뀌었습니다. 새로고침한 뒤 다시 시도하세요.']
+A dlg open: 1 A 금액 field kept: 99,999
+after A update api: C08 B가 먼저 수정 51000
+A DATA 적요 (stale?): [가상 QA26JANSEP_V1] E073 반복 1월 1차
+A delete confirm body: 2026-QA05-001 · 가상거래처01 · 51,000원
+
+합계 51,000원. 삭제 직후 알림의 [되돌리기]로 복구할 수 있습니다.
+A toasts: ['저장 실패: 다른 곳에서 이 행의 적요 이(가) 먼저 바뀌었습니다. 새로고침한 뒤 다시 시도하세요.', '삭제 실패: 행 2026-QA05-001: 다른 곳에서 이 행의 적요 이(가) 먼저 바뀌었습니다. 새로고침한 뒤 다시 시도하세요.']
+after A delete api exists: 1 C08 B가 먼저 수정
+API PUT stale snapshot: 400 {"detail": "재원은 필수입니다."} wid=2d1d2558acfa
+API PUT wrong ident: 400 {"detail": "재원은 필수입니다."} wid=2d1d2558acfa
+API DELETE stale snapshot: 404 {"detail": "다른 곳에서 이 행의 금액 이(가) 먼저 바뀌었습니다. 새로고침한 뒤 다시 시도하세요."} wid=2d1d2558acfa
+API DELETE wrong ident: 404 {"detail": "다른 곳에서 장부가 바뀌어 행이 일치하지 않습니다. 새로고침 후 다시 시도하세요."} wid=2d1d2558acfa
+still exists: C08 B가 먼저 수정 51000

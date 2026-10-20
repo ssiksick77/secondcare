@@ -1,0 +1,10 @@
+locked
+GET /api/all while locked: 200 meta.locked: True
+API POST while locked: 423 {"detail": "장부 파일이 다른 프로그램에서 열려 있어 저장할 수 없습니다 (엑셀에서 열려 있음). 닫은 뒤 다시 시도하세요."} wid=31d5b4381b59
+header status: 주의: 엑셀에서 열려 있음 (저장 불가) · 파일 수정 2026-10-14 20:28:17
+form err: 장부 파일이 다른 프로그램에서 열려 있어 저장할 수 없습니다 (엑셀에서 열려 있음). 닫은 뒤 다시 시도하세요.
+toasts: ['저장 실패: 장부 파일이 다른 프로그램에서 열려 있어 저장할 수 없습니다 (엑셀에서 열려 있음). 닫은 뒤 다시 시도하세요.']
+dialog open: 1 values kept: ['QA10', 'C12거래처', '12,345', 'C12 잠금중 UI 저장']
+lock released after 25.2s
+retry: dialog open: 0 toasts: ['저장 실패: 장부 파일이 다른 프로그램에서 열려 있어 저장할 수 없습니다 (엑셀에서 열려 있음). 닫은 뒤 다시 시도하세요.', '2026-QA10-001 저장했습니다.']
+C12 rows: [('2026-QA10-001', 12345, 'C12 잠금중 UI 저장')] total exec 148 before 147

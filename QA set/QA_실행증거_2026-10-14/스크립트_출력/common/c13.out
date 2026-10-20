@@ -1,0 +1,11 @@
+before: 11500 [가상 QA26JANSEP_V1] E002 반복 1월 2차 totals (148, 8854848) | backups: 30
+change: 200
+after change totals (148, 9843347)
+newest backup: ledger_common_20261014_202930_013984.xlsx | backup count: 30 | md5 equals pre-change file: True
+backup row value: 11500 [가상 QA26JANSEP_V1] E002 반복 1월 2차
+stopped 8832
+
+up: http://127.0.0.1:8811 pid=32244 ledger=C:\Users\parkj\AppData\Local\Temp\claude\c--Users-parkj-Desktop-Project-01-in-progress\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa\inst_common\ledger_common.xlsx
+
+after restore: 11500 [가상 QA26JANSEP_V1] E002 반복 1월 2차 totals (148, 8854848) match pre-change: True
+backup naming sample: ['ledger_common_20261014_202733_497946.xlsx', 'ledger_common_20261014_202913_609283.xlsx', 'ledger_common_20261014_202930_013984.xlsx']

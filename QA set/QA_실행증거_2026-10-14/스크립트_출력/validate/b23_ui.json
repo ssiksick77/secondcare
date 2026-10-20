@@ -1,0 +1,12 @@
+{
+ "btn_ai": {
+  "hidden": false,
+  "disabled": true,
+  "title": "AI 도우미를 쓰려면 오른쪽 위 설정(톱니)에서 API 키를 입력하세요",
+  "reportHidden": true
+ },
+ "btn_ai_click": "not clickable: Page.click: Timeout 3000ms exceeded.",
+ "ai_requests_on_load": [
+  "http://127.0.0.1:8814/api/ai/status"
+ ]
+}

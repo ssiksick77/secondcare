@@ -1,0 +1,35 @@
+exec starred: ['원인발생일 * (발생 단계)', '재원 *', '예산목 *', '금액 *']
+  exec missing=원인발생일: error='입력 필요: 원인발생일' focus=원인발생일 open=1
+  exec missing=재원: error='입력 필요: 재원' focus=재원 open=1
+  exec missing=예산목: error='입력 필요: 예산목' focus=예산목 open=1
+  exec missing=금액: error='입력 필요: 금액' focus=금액 open=1
+  exec missing=__ALL__: error='입력 필요: 원인발생일, 재원, 예산목, 금액' focus=원인발생일 open=1
+  exec count before 147 after 147
+req starred: ['원인발생일 * (발생 단계)', '재원 *', '예산목 *', '금액 *', '상태 *']
+  req missing=원인발생일: error='입력 필요: 원인발생일' focus=원인발생일 open=1
+  req missing=재원: error='입력 필요: 재원' focus=재원 open=1
+  req missing=예산목: error='입력 필요: 예산목' focus=예산목 open=1
+  req missing=금액: error='입력 필요: 금액' focus=금액 open=1
+  req missing=상태: error='입력 필요: 상태' focus=상태 open=1
+  req missing=__ALL__: error='입력 필요: 원인발생일, 재원, 예산목, 금액, 상태' focus=원인발생일 open=1
+  req count before 8 after 8
+deposit starred: ['일자 *', '거래처 *', '구분 *', '금액 *']
+  deposit missing=일자: error='입력 필요: 일자' focus=일자 open=1
+  deposit missing=거래처: error='입력 필요: 거래처' focus=거래처 open=1
+  deposit missing=구분: error='입력 필요: 구분' focus=구분 open=1
+  deposit missing=금액: error='입력 필요: 금액' focus=금액 open=1
+  deposit missing=__ALL__: error='입력 필요: 일자, 거래처, 구분, 금액' focus=일자 open=1
+  deposit count before 6 after 6
+budget starred: ['재원 *', '변경회차 * (이월 / 당초 / 1, 2, 3…)']
+  budget missing=재원: error='입력 필요: 재원' focus=재원 open=1
+  budget missing=변경회차: error='입력 필요: 변경회차' focus=변경회차 open=1
+  budget missing=__ALL__: error='입력 필요: 재원, 변경회차' focus=재원 open=1
+  budget count before 11 after 11
+funds starred: ["재원코드 * ('-' 없이, 예: AI01)"]
+  funds missing=재원코드: error='입력 필요: 재원코드' focus=재원코드 open=1
+  funds missing=__ALL__: error='입력 필요: 재원코드' focus=재원코드 open=1
+  funds count before 10 after 10
+tags starred: ['태그명 * (쉼표 금지)']
+  tags missing=태그명: error='입력 필요: 태그명' focus=태그명 open=1
+  tags missing=__ALL__: error='입력 필요: 태그명' focus=태그명 open=1
+  tags count before 3 after 3
