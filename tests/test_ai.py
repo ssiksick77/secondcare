@@ -185,6 +185,74 @@ ck("suggest_prompt: 장부 전체 없음", "<ledger>" not in sg_sys and set(sg) 
 ck("suggest_prompt: 같은 거래처 이력만 (30건 이하)", all(r["거래처"] == vend for r in sg["같은거래처_최근이력"]) and len(sg["같은거래처_최근이력"]) <= 30)
 ck("suggest_prompt: 해당 재원 예산만", all(t["재원"] == f0 for t in sg["해당재원_예산현황"]) and sg["해당재원_예산현황"])
 
+# --- 채팅방 저장소 (chat_store) + chat_in_room (가짜 클라이언트) ---
+import chat_store, datetime as _dt
+A, B = "a@example.com", "b@example.com"
+c1 = chat_store.create_chat(A)
+ck("chat_store: 새 방 (제목 없음, 보관 아님)", c1["id"] and c1["title"] == "" and c1["kept"] is False and c1["count"] == 0)
+m1 = chat_store.add_message(A, c1["id"], "user", "  QA01   연구활동비 잔액이 얼마나 남았는지 자세히 알려줘 " + "x" * 50)
+ck("chat_store: 첫 질문으로 제목 30자", chat_store.get_chat(A, c1["id"])["title"] == ("QA01 연구활동비 잔액이 얼마나 남았는지 자세히 알려줘 " + "x" * 50)[:30] and m1["seq"] == 1)
+m2 = chat_store.add_message(A, c1["id"], "assistant", "답", calls=[{"tool": "budget_balance", "input": {"fund": "QA01"}, "error": False}], proposals=[{"id": "t1-p1", "tool": "propose_memo", "input": {"종류": "일반"}}])
+ms = chat_store.messages(A, c1["id"])
+ck("chat_store: 메시지 조회 (calls·proposals 복원)", len(ms) == 2 and ms[1]["calls"][0]["tool"] == "budget_balance" and ms[1]["proposals"][0]["id"] == "t1-p1" and ms[0]["calls"] == [])
+n1 = chat_store.add_message(A, c1["id"], "user", "[알림] 제안 t1-p1 저장됨", note=True)
+ck("chat_store: 알림은 note, 건수에서 제외", n1["note"] is True and chat_store.get_chat(A, c1["id"])["count"] == 2)
+for other in ("get_chat", "messages", "delete_chat"):
+    try:
+        getattr(chat_store, other)(B, c1["id"]); ck(f"chat_store: 다른 사용자 {other} → ChatNotFound", False)
+    except chat_store.ChatNotFound:
+        ck(f"chat_store: 다른 사용자 {other} → ChatNotFound", True)
+ck("chat_store: 다른 사용자 목록에 없음", chat_store.list_chats(B) == [] and [c["id"] for c in chat_store.list_chats(A)] == [c1["id"]])
+u = chat_store.update_chat(A, c1["id"], title="  새  제목 ", kept=True)
+ck("chat_store: 제목·보관 수정", u["title"] == "새 제목" and u["kept"] is True)
+try:
+    chat_store.update_chat(A, c1["id"], title="  "); ck("chat_store: 빈 제목 거부", False)
+except ValueError:
+    ck("chat_store: 빈 제목 거부", True)
+c2 = chat_store.create_chat(A, "둘째")
+for i in range(45):
+    chat_store.add_message(A, c2["id"], "user" if i % 2 == 0 else "assistant", f"m{i}")
+h = chat_store.history(A, c2["id"])
+ck("chat_store: history 는 최근 40개, 순서 유지", len(h) == chat_store.HISTORY_LIMIT == 40 and h[0]["content"] == "m5" and h[-1]["content"] == "m44")
+ck("chat_store: 목록은 최근 활동순", [c["id"] for c in chat_store.list_chats(A)] == [c2["id"], c1["id"]])
+# 7일 정리: c2 의 updated 를 8일 전으로, c1(보관) 도 8일 전으로 → c2 만 지워진다
+with chat_store._connect() as con:
+    old = (_dt.datetime.now() - _dt.timedelta(days=8)).isoformat(sep=" ")
+    con.execute("UPDATE chat SET updated = ?", (old,))
+ck("chat_store: purge 는 보관 안 한 7일 지난 방만", chat_store.purge() == 1 and [c["id"] for c in chat_store.list_chats(A)] == [c1["id"]])
+with chat_store._connect() as con:
+    ck("chat_store: 방 삭제 시 메시지도 삭제 (cascade)", con.execute("SELECT COUNT(*) FROM message WHERE chat_id = ?", (c2["id"],)).fetchone()[0] == 0)
+c3 = chat_store.create_chat(A)
+with chat_store._connect() as con:
+    con.execute("UPDATE chat SET updated = ? WHERE id = ?", ((_dt.datetime.now() - _dt.timedelta(days=6)).isoformat(sep=" "), c3["id"]))
+ck("chat_store: 6일 된 방은 남는다", chat_store.purge() == 0)
+chat_store.delete_chat(A, c3["id"])
+# chat_in_room: 가짜 클라이언트로 (답 저장, 40개 제한, 실패 시 저장 없음)
+sent.clear()
+script[:] = [NS(stop_reason="end_turn", content=[NS(type="text", text="방 답변")], usage=usage())]
+c4 = chat_store.create_chat(A)
+for i in range(44):
+    chat_store.add_message(A, c4["id"], "user" if i % 2 == 0 else "assistant", f"h{i}")
+res2 = ai.chat_in_room(A, c4["id"], "질문입니다")
+ck("chat_in_room: 답 저장 + message·chat 반환", res2["answer"] == "방 답변" and res2["message"]["role"] == "assistant" and res2["message"]["content"] == "방 답변" and res2["chat"]["count"] == 46)
+ck("chat_in_room: 모델에는 최근 40개 + 질문", len(sent[0]["messages"]) == 41 and sent[0]["messages"][-1]["content"] == "질문입니다" and sent[0]["messages"][0]["content"] == "h4")
+ck("chat_in_room: 질문·답이 마지막 두 메시지", [m["content"] for m in chat_store.messages(A, c4["id"])[-2:]] == ["질문입니다", "방 답변"])
+def fail_create(**kw): raise ai.AIError("모델 실패")
+ai._c = lambda: NS(beta=NS(messages=NS(create=fail_create)))
+try:
+    ai.chat_in_room(A, c4["id"], "실패 질문"); ck("chat_in_room: 실패는 AIError", False)
+except ai.AIError:
+    ck("chat_in_room: 실패는 AIError", True)
+ck("chat_in_room: 실패하면 아무것도 저장 안 함", chat_store.get_chat(A, c4["id"])["count"] == 46)
+try:
+    ai.chat_in_room(A, c4["id"], "  "); ck("chat_in_room: 빈 질문 거부", False)
+except ai.AIError:
+    ck("chat_in_room: 빈 질문 거부", True)
+os.environ["LEDGER_AI_FAKE"] = "1"
+rf = ai.chat_in_room(A, c4["id"], "가짜로")
+ck("chat_in_room: LEDGER_AI_FAKE 는 모델 없이 답", rf["answer"].startswith("(가짜 답변)") and ai.enabled() is True)
+del os.environ["LEDGER_AI_FAKE"]
+
 # --- 도구 정의·호출 ---
 for n in tools.READ_TOOLS:
     s = tools.tool_schema(n)
@@ -219,7 +287,8 @@ def main() -> int:
     xlsx = os.path.join(d, "ledger.xlsx")
     shutil.copyfile(QA_XLSX, xlsx)
     settle_xlsx(xlsx)
-    env = dict(os.environ, LEDGER_XLSX=xlsx, LEDGER_ENV=os.path.join(QA_DIR, "qa.env"), LEDGER_DRIVE_MOCK="1", PYTHONIOENCODING="utf-8")
+    env = dict(os.environ, LEDGER_XLSX=xlsx, LEDGER_ENV=os.path.join(QA_DIR, "qa.env"), LEDGER_DRIVE_MOCK="1", PYTHONIOENCODING="utf-8",
+               LEDGER_CHAT_DB=os.path.join(d, "chats.sqlite"))
     pr = subprocess.run([sys.executable, "-I", "-X", "utf8", "-c", PROBE], cwd=APP, env=env, capture_output=True, text=True, encoding="utf-8")
     ck("탐침 종료 코드 0", pr.returncode == 0, pr.stderr[-800:])
     if pr.returncode == 0:
@@ -248,6 +317,33 @@ def api_checks(ck: Check):
         ck("API memo: DELETE", s6 == 200 and r6.get("ok"), (s6, r6))
         s7, all2 = sv.call("GET", "/api/all")
         ck("API memo: 삭제 뒤 목록에 없음", not any(m["_row"] == row for m in all2.get("memo", [])))
+    # --- 채팅방 API: 사용자별 격리, 모델 실패 시 저장 없음, 알림 ---
+    with Server("ai-chat", auth_bypass=False) as sv:
+        ca, cb = sv.session_cookie(), sv.session_cookie(sv.OTHER_EMAIL)
+        s, r = sv.call("POST", "/api/chats", {}, cookie=ca)
+        ck("API chats: POST 새 방", s == 200 and r.get("id"), (s, r))
+        cid = r["id"]
+        s, r = sv.call("GET", "/api/chats", cookie=ca)
+        ck("API chats: 목록에 내 방", s == 200 and [c["id"] for c in r] == [cid])
+        s, r = sv.call("GET", "/api/chats", cookie=cb)
+        ck("API chats: 다른 사용자 목록은 비어 있음", s == 200 and r == [])
+        for m, p, b in (("GET", f"/api/chats/{cid}/messages", None), ("PATCH", f"/api/chats/{cid}", {"title": "x"}), ("DELETE", f"/api/chats/{cid}", None), ("POST", f"/api/chats/{cid}/messages", {"content": "q"})):
+            s, r = sv.call(m, p, b, cookie=cb)
+            ck(f"API chats: 다른 사용자 {m} {p.split('/')[-1]} → 404", s == 404, (s, r))
+        s, r = sv.call("GET", "/api/chats", cookie=None)
+        ck("API chats: 미로그인 401", s == 401)
+        s, r = sv.call("POST", f"/api/chats/{cid}/messages", {"content": "키 없이"}, cookie=ca)
+        ck("API chats: AI 키 없으면 502, 저장 없음", s == 502 and sv.call("GET", f"/api/chats/{cid}/messages", cookie=ca)[1] == [], (s, r))
+        s, r = sv.call("POST", f"/api/chats/{cid}/notes", {"content": "[알림] 제안 p1 무시함"}, cookie=ca)
+        ck("API chats: 알림 저장", s == 200 and r["note"] is True and r["role"] == "user")
+        s, r = sv.call("PATCH", f"/api/chats/{cid}", {"title": "회의비 질문", "kept": True}, cookie=ca)
+        ck("API chats: PATCH 제목·보관", s == 200 and r["title"] == "회의비 질문" and r["kept"] is True, (s, r))
+        s, r = sv.call("PATCH", f"/api/chats/{cid}", {"title": " "}, cookie=ca)
+        ck("API chats: 빈 제목 400", s == 400, (s, r))
+        s, r = sv.call("DELETE", f"/api/chats/{cid}", cookie=ca)
+        ck("API chats: DELETE", s == 200 and sv.call("GET", "/api/chats", cookie=ca)[1] == [])
+        s, r = sv.call("POST", "/api/ai/chat", {"messages": []}, cookie=ca)
+        ck("API chats: 옛 /api/ai/chat 없음", s in (404, 405), s)
 
 
 if __name__ == "__main__":

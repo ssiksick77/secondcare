@@ -44,7 +44,14 @@ def effort() -> str:
     return settings.get("LEDGER_EFFORT") or "medium"
 
 
+def fake() -> bool:
+    """LEDGER_AI_FAKE=1: 모델 호출 없이 정해진 답을 돌려준다 (화면 검사 전용, 실제 운영에서는 설정하지 말 것)."""
+    return os.environ.get("LEDGER_AI_FAKE") == "1"
+
+
 def enabled() -> bool:
+    if fake():
+        return True
     if provider() == "openai":
         return bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_BASE_URL"))
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
@@ -238,7 +245,7 @@ def finalize_answer(answer: str, stop: str, proposals: list) -> dict:
 
 
 # ========== 도구 호출 에이전트 (채팅, Anthropic) ==========
-AGENT_SYSTEM = """당신은 Second Care(분당서울대학교병원 의료인공지능센터 연구비 관리 시스템)의 AI 도우미로, 연구비 회계 담당자를 돕습니다. 한국어로 간결하게 답하세요.
+AGENT_SYSTEM = """당신은 Second Care(분당서울대학교병원 의료인공지능센터 연구비 관리 시스템)의 AI 도우미 '행정보조 김연구'입니다. 연구비 회계 담당자를 돕는 행정보조 역할로, 자신을 소개할 때는 "행정보조 김연구"라고 하세요. 한국어로 간결하고 공손하게 답하세요.
 장부(회계대장)는 아래 <summary> 요약만 보입니다. 그 밖의 모든 사실은 도구로 조회해야 합니다. 조회하지 않은 내용은 추측하지 말고, 도구로 확인하거나 모른다고 답하세요.
 
 도구 사용 규칙:
@@ -459,9 +466,28 @@ def chat(messages: list[dict], turn: int = 0) -> dict:
         raise AIError("마지막 메시지는 사용자 질문이어야 합니다.")
     msgs = [{"role": m["role"], "content": str(m["content"])} for m in messages if m.get("role") in ("user", "assistant")]
     prefix = f"t{turn}-" if turn else ""
+    if fake():
+        q = msgs[-1]["content"]
+        return {"answer": f"(가짜 답변) {q}\n\n| 항목 | 값 |\n|---|---|\n| 질문 | {q} |", "proposals": [], "calls": [{"tool": "list_funds", "input": {}, "error": False}],
+                "usage": {"input": 0, "cached": 0, "output": 0}}
     if provider() == "openai":
         return _oa().chat(msgs, prefix)
     return _chat_anthropic(msgs, prefix)
+
+
+def chat_in_room(owner: str, chat_id: int, question: str) -> dict:
+    """채팅방에 질문 하나를 더한다: 최근 이력(chat_store.HISTORY_LIMIT) + 질문 → 모델 → 질문과 답(조회·제안 포함)을 저장.
+    모델 호출이 실패하면 아무것도 저장하지 않는다 (화면이 질문을 되돌려 다시 보낼 수 있게). 반환: chat() 결과 + message(저장된 답) + chat."""
+    import chat_store
+    q = str(question or "").strip()
+    if not q:
+        raise AIError("질문을 입력하세요.")
+    hist = chat_store.history(owner, chat_id)
+    out = chat(hist + [{"role": "user", "content": q}], turn=len(hist) // 2 + 1)
+    chat_store.add_message(owner, chat_id, "user", q)
+    out["message"] = chat_store.add_message(owner, chat_id, "assistant", out["answer"], out.get("calls"), out.get("proposals"))
+    out["chat"] = chat_store.get_chat(owner, chat_id)
+    return out
 
 
 def extract_receipt(file_bytes: bytes, media_type: str) -> dict:
