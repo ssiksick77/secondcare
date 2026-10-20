@@ -115,8 +115,8 @@ function formFields(kind) {
     { k: "연결거래번호", type: "ro" },
   ];
   if (kind === "memo") return [
-    { k: "종류", type: "select", opts: DATA.meta.memo_kinds || ["재원", "거래처", "일반"], req: true, hint: "재원·거래처별 특이사항, 일반 규정" },
-    { k: "대상", type: "datalist", list: "대상", hint: "재원코드 또는 거래처명 · 일반은 비움" },
+    { k: "종류", type: "select", opts: DATA.meta.memo_kinds || ["재원", "거래처", "비세목", "일반"], req: true, hint: "재원·거래처·비세목(예산목·세목)별 규칙, 일반 규정" },
+    { k: "대상", type: "datalist", list: "대상", hint: "재원코드 · 거래처명 · 예산목/세목/세세목 이름 (일반은 비움)" },
     { k: "작성일", type: "date", hint: "비우면 오늘" },
     { k: "내용", type: "text", cls: "wide", req: true, hint: "AI 도우미가 답할 때 그대로 참고" },
     { k: "비고", type: "text", cls: "wide" },
@@ -1576,7 +1576,7 @@ $("#s-clear-key").addEventListener("click", async () => {
 // ---------- 메모 (설정 패널 · AI 도우미가 read_memo 로 읽는 장부 밖 지식) ----------
 function memoRender() {
   const box = $("#memo-list"); if (!box) return;
-  $("#dl-대상").innerHTML = [...new Set([...DATA.funds.map(f => f["재원코드"]), ...DATA.vendor.map(v => v["거래처명"]), ...DATA.exec.map(r => r["거래처"])].filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join("");
+  $("#dl-대상").innerHTML = [...new Set([...DATA.funds.map(f => f["재원코드"]), ...DATA.vendor.map(v => v["거래처명"]), ...DATA.exec.map(r => r["거래처"]), ...DATA.meta.budget_items, ...DATA.exec.flatMap(r => [r["세목"], r["세세목"]])].filter(Boolean))].sort().map(v => `<option value="${esc(v)}">`).join("");
   const rows = [...(DATA.memo || [])].sort((a, b) => (a["종류"] || "").localeCompare(b["종류"] || "") || (a["대상"] || "").localeCompare(b["대상"] || "") || a._row - b._row);
   box.innerHTML = rows.length ? `<table><thead><tr><th>종류</th><th>대상</th><th>내용</th><th>작성일</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r["종류"])}</td><td>${esc(r["대상"] || "-")}</td><td class="wrap">${esc(r["내용"])}${r["비고"] ? `<div class="muted">${esc(r["비고"])}</div>` : ""}</td><td>${esc(r["작성일"] || "")}</td><td class="actions"><button type="button" class="btn btn-sm" data-memo-edit="${r._row}">수정</button> <button type="button" class="btn btn-sm btn-ghost" data-memo-del="${r._row}">삭제</button></td></tr>`).join("")}</tbody></table>`
     : '<p class="empty">메모가 없습니다. [메모 추가]로 재원·거래처 특이사항이나 규정을 적어 두세요.</p>';

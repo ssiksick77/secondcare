@@ -102,8 +102,9 @@ DEP_STATUS = ["대기", "발주", "결제", "수령"]  # 날짜에서 계산. �
 TAG_COLS = ["태그명", "분류", "설명"]
 EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
 FIXLOG_COLS = ["거래번호", "일시", "구분", "사유"]  # 구분: 표시 / 해제. 일시: YYYY-MM-DD HH:MM
-MEMO_COLS = ["종류", "대상", "내용", "작성일", "비고"]  # 종류: 재원(대상=재원코드) / 거래처(대상=거래처명) / 일반(대상 비움). AI 는 read_memo 로 읽는다
-MEMO_KINDS = ["재원", "거래처", "일반"]
+MEMO_COLS = ["종류", "대상", "내용", "작성일", "비고"]  # 종류: 재원(대상=재원코드) / 거래처(대상=거래처명) / 비세목(대상=예산목·세목·세세목 이름) / 일반(대상 비움). AI 는 read_memo 로 읽는다
+MEMO_KINDS = ["재원", "거래처", "비세목", "일반"]
+MEMO_TARGET_LABEL = {"재원": "재원코드", "거래처": "거래처명", "비세목": "예산목·세목·세세목 이름"}
 # 증빙번호 = {거래번호}-{n}: 거래번호별 일련번호, 지운 번호는 다시 쓰지 않음 (메타 시트 증빙번호최고-{거래번호}). 이전 장부는 맨 끝 열에 붙이고 시트 순서대로 부여
 # 파일 열(EVID_FILE_COLS)이 모두 비어 있는 행 = '실물만 (파일 없음)' 증빙 항목. 나중에 파일을 첨부하면 같은 행·같은 증빙번호에 채워짐
 EVID_FILE_COLS = ["파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일"]
@@ -1611,7 +1612,7 @@ def _validate_months(rec: dict, cols):
 
 
 def _validate_memo(rec: dict):
-    """메모: 종류는 MEMO_KINDS 중 하나, 내용 필수, 재원·거래처 메모는 대상 필수, 일반 메모는 대상 비움, 작성일 비면 오늘."""
+    """메모: 종류는 MEMO_KINDS 중 하나, 내용 필수, 재원·거래처·비세목 메모는 대상 필수, 일반 메모는 대상 비움, 작성일 비면 오늘."""
     kind = str(rec.get("종류") or "").strip()
     if kind not in MEMO_KINDS:
         raise ValueError(f"종류는 {', '.join(MEMO_KINDS)} 중 하나여야 합니다.")
@@ -1623,7 +1624,7 @@ def _validate_memo(rec: dict):
     if kind == "일반":
         rec["대상"] = ""
     elif not rec["대상"]:
-        raise ValueError(f"{kind} 메모는 대상({'재원코드' if kind == '재원' else '거래처명'})이 필요합니다.")
+        raise ValueError(f"{kind} 메모는 대상({MEMO_TARGET_LABEL[kind]})이 필요합니다.")
     if not rec.get("작성일"):
         rec["작성일"] = dt.date.today().isoformat()
 
