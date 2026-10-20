@@ -28,7 +28,7 @@ import store  # noqa: E402
 
 # 시트 순서: 이전 장부와 같게 (인건비 → 재원·집행·품의·예산변동 → 적립금·거래처·태그·증빙·보완이력 → 신청·주문·첨부 → 메타)
 SHEET_ORDER = ["people", "salary", "payee", "labor", "ladj", "funds", "exec", "req", "budget",
-               "deposit", "vendor", "tags", "evidence", "fixlog", "request", "order", "ratt"]
+               "deposit", "vendor", "tags", "evidence", "fixlog", "memo", "request", "order", "ratt"]
 WIDTH_DEFAULT = 13
 BUDGET_LABELS = {4: "이월금", 5: "당초액", 6: "변경액", 7: "합계"}
 

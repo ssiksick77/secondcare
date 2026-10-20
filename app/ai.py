@@ -2,6 +2,9 @@
 
 제공자(provider)는 설정(LEDGER_PROVIDER)에 따라 Anthropic(이 파일) 또는 OpenAI 호환(ai_openai.py)로 분기한다.
 프롬프트·도구 정의·결과 매핑은 이 파일에 두고 두 백엔드가 공유한다.
+
+채팅(Anthropic)은 도구 호출 에이전트다 (2026-10-20 개편): 시스템 프롬프트에는 작은 요약(<summary>)만 넣고, 사실은 tools.py 의 읽기 도구로
+조회하며, 장부 변경은 propose_* 제안 카드로만 만든다. 영수증·추천·보고서와 OpenAI 경로는 아직 이전 방식(장부 전체 전송)이다.
 """
 from __future__ import annotations
 
@@ -15,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 import settings
 import store
+import tools
 
 # 안전장치 거부(refusal) 시 서버 측에서 다른 모델로 자동 재시도
 _FALLBACK = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
@@ -216,6 +220,8 @@ def localize(tool: str, inp: dict) -> dict:
         return inp
     if tool == "propose_req_to_exec":
         return inp
+    if tool == "propose_memo":
+        return {"종류": inp.get("kind", ""), "대상": inp.get("target", ""), "내용": inp.get("text", ""), "이유": inp.get("reason", "")}
     out = {_KEYMAP.get(k, k): v for k, v in inp.items()}
     if tool == "propose_deposit" and "원인발생일" in out:
         out["일자"] = out.pop("원인발생일")
@@ -227,8 +233,105 @@ def finalize_answer(answer: str, stop: str, proposals: list) -> dict:
     if stop == "max_tokens":
         answer += "\n\n[응답이 길이 제한으로 잘렸습니다. 질문을 나눠서 다시 물어보세요.]"
     elif stop == "tool_use":
-        answer += "\n\n[한 번에 처리할 수 있는 제안 수를 넘었습니다. 나머지는 다시 요청해 주세요.]"
+        answer += "\n\n[한 번에 처리할 수 있는 조회·제안 횟수를 넘었습니다. 질문을 나눠서 다시 요청해 주세요.]"
     return {"answer": answer.strip() or ("제안을 만들었습니다. 아래에서 검토해 주세요." if proposals else ""), "proposals": proposals}
+
+
+# ========== 도구 호출 에이전트 (채팅, Anthropic) ==========
+AGENT_SYSTEM = """당신은 Second Care(분당서울대학교병원 의료인공지능센터 연구비 관리 시스템)의 AI 도우미로, 연구비 회계 담당자를 돕습니다. 한국어로 간결하게 답하세요.
+장부(회계대장)는 아래 <summary> 요약만 보입니다. 그 밖의 모든 사실은 도구로 조회해야 합니다. 조회하지 않은 내용은 추측하지 말고, 도구로 확인하거나 모른다고 답하세요.
+
+도구 사용 규칙:
+- 잔액, "얼마 쓸 수 있나" → budget_balance(재원코드, 예산목). 재원코드는 <summary> 의 재원 목록에서 고르고, 사용자가 과제명으로 말하면 코드로 바꿔 부르세요.
+- 품목·장비·거래처 이름으로 "전에 얼마에 샀나", "언제 어느 재원으로 샀나" → search_ledger. 한 건의 상세·진행 상태·증빙·연결 품의 → get_exec(거래번호).
+- 집행 규정, 어떤 증빙이 필요한가, 재원·거래처별 특이사항 → 먼저 read_memo. 메모에 없으면 일반 원칙은 일반 원칙임을 밝히고 담당자 확인을 권하세요.
+- 환율 → fx_rate. 유럽중앙은행 기준이라 은행 고시 환율과 다를 수 있음을 함께 알리세요.
+- 재원×예산목 집계 표 → get_dashboard. 목록 → list_exec / list_req / list_budget / list_deposit. 태그·거래처 목록 → list_tags / list_vendors.
+- 한 번에 필요한 도구를 여러 개 불러도 됩니다. 결과가 길면 limit 를 줄이거나 조건을 더 주세요.
+
+답변 규칙:
+- 금액은 천 단위 쉼표와 '원'. 근거가 된 거래번호·품의번호·신청번호를 함께 적으세요. 도구 결과의 숫자를 그대로 옮기고 계산을 덧붙이지 마세요.
+- 집행 상태는 상태표시(발생/청구/보완/승인/완료/취소)로 말하세요.
+- 예산현액 = 예산변동 합계, 집행액 = 취소 제외 집행 합계(전체 기간), 가용잔액 = 예산현액 − 집행액 − 품의대기.
+
+거래 반영: 사용자가 집행·품의·적립금 입력이나 기존 행 수정을 요청하면 직접 반영하지 말고 propose_* 도구로 '제안'을 만드세요.
+propose_update 의 row 는 조회 결과의 _row 입니다. 제안은 사용자가 화면에서 검토·수정한 뒤 직접 저장합니다.
+기억해 둘 가치가 있는 사실(재원·거래처 특이사항, 규정)을 사용자가 알려 주면 propose_memo 로 메모를 제안하세요.
+제안 뒤에는 무엇을 제안했는지 한두 문장으로 요약하고 확인을 요청하세요. 금액·날짜·재원처럼 확실하지 않은 값은 추측하지 말고 물어보세요."""
+
+
+def summary_context(data: dict | None = None) -> str:
+    """시스템 프롬프트용 작은 요약: 재원 목록과 재원별 잔액 합계, 예산목·태그 목록, 열린 건 수, 메모 수. 장부 전체는 넣지 않는다."""
+    data = data or store.read_all()
+    import main  # 지연 임포트 (순환 방지)
+    per: dict[str, dict] = {}
+    for t in main.build_dashboard(data)["table"]:
+        p = per.setdefault(t["재원"], {"예산현액": 0, "집행액": 0, "품의대기": 0, "가용잔액": 0})
+        for k in p:
+            p[k] += t.get(k) or 0
+    funds = []
+    for f in data["funds"]:
+        code = f.get("재원코드")
+        if not code:
+            continue
+        row = {"재원코드": code, "과제명": f.get("과제명"), "종류": f.get("종류"), "기간": f"{f.get('시작일') or ''}~{f.get('종료일') or ''}"}
+        if (f.get("잔액미관리") or "").upper() == "Y":
+            row["잔액미관리"] = True
+        elif code in per:
+            row.update({k: round(v) for k, v in per[code].items()})
+        funds.append(row)
+    memos = data.get("memo", [])
+    summary = {
+        "재원": funds,
+        "예산목": store.BUDGET_ITEMS,
+        "태그": [t["태그명"] for t in data["tags"]][:60],
+        "건수": {"집행": len(data["exec"]), "미승인집행": sum(1 for r in store.active_exec(data["exec"]) if not r.get("지출완료일")),
+               "대기품의": sum(1 for r in data["req"] if r.get("상태") == "대기"), "신청": len(data.get("request", [])), "메모": len(memos)},
+        "메모종류별": {k: sum(1 for m in memos if m.get("종류") == k) for k in store.MEMO_KINDS},
+    }
+    return json.dumps(summary, ensure_ascii=False, default=str, separators=(",", ":"))
+
+
+PROPOSE_MEMO_TOOL = {
+    "name": "propose_memo", "strict": True,
+    "description": "메모 저장을 제안한다 (재원·거래처별 특이사항, 일반 규정·관행). 사용자가 카드에서 승인해야 저장된다. kind 는 재원/거래처/일반, target 은 재원코드/거래처명 (일반은 빈 문자열).",
+    "input_schema": _schema({
+        "kind": {"type": "string", "enum": store.MEMO_KINDS, "description": "종류"},
+        "target": _S("대상: 재원코드 또는 거래처명. 일반 메모는 빈 문자열"),
+        "text": _S("내용: 한두 문장, 나중에 그대로 읽힐 문장으로"),
+        "reason": _S("왜 기억해 둘 가치가 있는지 한 문장"),
+    }, ["kind", "target", "text", "reason"]),
+}
+
+
+def agent_tools() -> list[dict]:
+    """에이전트에 주는 도구: tools.py 읽기 도구(READ_TOOLS, 담당자용 세트) + 제안 도구. 역할별 세트는 여기서 조립한다."""
+    return [tools.tool_schema(n) for n in tools.READ_TOOLS] + PROPOSE_TOOLS + [PROPOSE_MEMO_TOOL]
+
+
+def agent_system(data: dict | None = None) -> list[dict]:
+    return [
+        {"type": "text", "text": AGENT_SYSTEM + "\n" + _today_line()},
+        {"type": "text", "text": "<summary>\n" + summary_context(data) + "\n</summary>", "cache_control": {"type": "ephemeral"}},
+    ]
+
+
+TOOL_RESULT_MAX = 40000  # 도구 결과 문자 수 상한 (모델 컨텍스트 보호)
+AGENT_ROUNDS = 10  # 한 턴의 도구 호출 왕복 상한
+
+
+def run_tool(name: str, args: dict) -> tuple[str, bool]:
+    """읽기 도구 실행 → (모델에 줄 결과 문자열, 오류 여부). 결과가 길면 앞부분만 준다."""
+    try:
+        out = tools.call(name, args or {})
+    except (ValueError, store.NotFound) as e:
+        return str(e), True
+    except Exception as e:  # 파일 없음·네트워크 등
+        return f"{type(e).__name__}: {str(e)[:200]}", True
+    s = json.dumps(out, ensure_ascii=False, default=str)
+    if len(s) > TOOL_RESULT_MAX:
+        s = s[:TOOL_RESULT_MAX] + f"… [결과가 길어 {len(s):,}자 중 앞부분만 표시. limit 를 줄이거나 조건을 더 주세요]"
+    return s, False
 
 
 # ---------- 영수증 / 추천 스키마 ----------
@@ -392,13 +495,16 @@ def test_connection() -> str:
 
 # ========== Anthropic 구현 ==========
 def _chat_anthropic(msgs: list[dict], prefix: str = "") -> dict:
-    system = _system_blocks()
+    """도구 호출 에이전트: 읽기 도구는 서버가 실행해 결과를 돌려주고, propose_* 는 제안 카드로만 만든다. 반환에 calls(실행한 조회 목록)."""
+    system = agent_system()
+    tool_defs = agent_tools()
     proposals: list[dict] = []
+    calls: list[dict] = []
     stop = "end"
     usage = {"input": 0, "cached": 0, "output": 0}
-    for _ in range(6):  # 한 턴 내 도구 호출 루프 상한
+    for _ in range(AGENT_ROUNDS):
         resp = _call(_c().beta.messages.create, model=model(), max_tokens=16000, output_config={"effort": effort()},
-                     system=system, messages=msgs, tools=PROPOSE_TOOLS, **_FALLBACK)
+                     system=system, messages=msgs, tools=tool_defs, **_FALLBACK)
         if resp.stop_reason == "refusal":
             raise AIError("모델이 요청을 거부했습니다.")
         u = getattr(resp, "usage", None)
@@ -413,15 +519,21 @@ def _chat_anthropic(msgs: list[dict], prefix: str = "") -> dict:
         msgs.append({"role": "assistant", "content": resp.content})
         results = []
         for tu in uses:
-            pid = f"{prefix}p{len(proposals) + 1}"
-            proposals.append({"id": pid, "tool": tu.name, "input": localize(tu.name, dict(tu.input))})
-            results.append({"type": "tool_result", "tool_use_id": tu.id, "content": TOOL_RESULT_TEXT.format(pid=pid)})
+            if tu.name.startswith("propose_"):
+                pid = f"{prefix}p{len(proposals) + 1}"
+                proposals.append({"id": pid, "tool": tu.name, "input": localize(tu.name, dict(tu.input))})
+                results.append({"type": "tool_result", "tool_use_id": tu.id, "content": TOOL_RESULT_TEXT.format(pid=pid)})
+            else:
+                text, err = run_tool(tu.name, dict(tu.input))
+                calls.append({"tool": tu.name, "input": dict(tu.input), "error": err})
+                results.append({"type": "tool_result", "tool_use_id": tu.id, "content": text, **({"is_error": True} if err else {})})
         msgs.append({"role": "user", "content": results})
     else:
         stop = "tool_use"
     answer = "".join(b.text for b in resp.content if b.type == "text")
     out = finalize_answer(answer, stop, proposals)
     out["usage"] = usage
+    out["calls"] = calls
     return out
 
 
