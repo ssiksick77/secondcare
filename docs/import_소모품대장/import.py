@@ -35,7 +35,7 @@ for _st in (sys.stdout, sys.stderr):  # cp949 콘솔에서 한글·기호가 깨
     except Exception:
         pass
 
-VENDOR, CODE = "알파", "알파"  # 사용자: 장부의 거래처 이름은 "알파"(알파미금역점)
+VENDOR, CODE = "알파미금역점", "알파"  # 사용자 2026-10-20: 장부의 거래처 이름은 "알파미금역점", 코드는 "알파"
 EXAMPLE_ITEMS = {"(알파몰의 품목 이름 복사)", "가나다"}
 
 

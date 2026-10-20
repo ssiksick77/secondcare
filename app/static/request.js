@@ -376,10 +376,10 @@ function requestFormAfterOpen(row) {
 const setLab = (el, text) => { const lab = el?.closest("label")?.querySelector(".lab"); if (lab?.firstChild?.nodeType === 3) lab.firstChild.nodeValue = text; };
 const setHint = (el, text) => { const lab = el?.closest("label")?.querySelector(".lab"); if (!lab) return; let sm = lab.querySelector("small"); if (!text) { sm?.remove(); return; } if (!sm) { sm = document.createElement("small"); lab.append(" ", sm); } sm.textContent = `(${text})`; };
 const setChkLab = (el, text) => { const lab = el?.closest("label.chk"); const tn = lab && [...lab.childNodes].reverse().find(n => n.nodeType === 3 && n.nodeValue.trim()); if (tn) tn.nodeValue = " " + text; };
-// 구분 안내 (사용자 결정 2026-10-16): 장비 = 전자제품, 소모품 = 알파·드림디포 구매, 학회, 그 밖의 모든 구매·결제 = 기타
+// 구분 안내 (사용자 결정 2026-10-16): 장비 = 전자제품, 소모품 = 알파미금역점·드림디포 구매, 학회, 그 밖의 모든 구매·결제 = 기타
 const REQ_TYPE_HINT = {
   장비: "전자제품 등 장비 구매",
-  소모품: "알파·드림디포에서 사는 소모품 (담당자가 모아 주문)",
+  소모품: "알파미금역점·드림디포에서 사는 소모품 (담당자가 모아 주문)",
   학회: "학회 참가 여비·등록비 (여비 계산기)",
   기타: "그 밖의 모든 구매·결제 — 소프트웨어 구독, 클라우드, 수리·용역, 회비, 교육, 인쇄, 배송, 쇼핑몰 외 구매",
 };
@@ -440,7 +440,7 @@ function reqResearcherNote() {
   p.firstChild.nodeValue = t === "학회"
     ? "① [신청 추가]에서 학회명·기간·장소를 적고 [여비 계산기]로 금액을 산출합니다. ② 행을 눌러 초청장·등록 인보이스·e-티켓을 첨부합니다. 담당자가 승인하면 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다."
     : t === "기타"
-    ? "장비(전자제품)·소모품(알파·드림디포)·학회가 아닌 모든 구매·결제는 여기에 신청합니다(구독·클라우드·수리·용역·회비·교육·인쇄·배송 등). ① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서·인보이스·요금제 안내를 첨부합니다. 담당자가 승인하면 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다."
+    ? "장비(전자제품)·소모품(알파미금역점·드림디포)·학회가 아닌 모든 구매·결제는 여기에 신청합니다(구독·클라우드·수리·용역·회비·교육·인쇄·배송 등). ① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서·인보이스·요금제 안내를 첨부합니다. 담당자가 승인하면 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다."
     : "① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.";
 }
 
@@ -1145,7 +1145,7 @@ function reqPrintHead() {
 let SUP_OFF = new Set();
 function renderSupChecks() {
   const box = $("#s-rq-sup-checks"); if (!box) return;
-  const names = supSplit($("#s-rq-sup").value || "알파,드림디포");
+  const names = supSplit($("#s-rq-sup").value || "알파미금역점,드림디포");
   box.innerHTML = `<span class="s-sup-lab" id="s-rq-sup-lab">현재 신청 가능:</span>` + names.map((n, i) => `<label class="chk" for="s-rq-sup-${i}"><input type="checkbox" id="s-rq-sup-${i}" data-sup="${esc(n)}"${SUP_OFF.has(n) ? "" : " checked"}> ${esc(n)}</label>`).join("");
   syncSupOff();
 }
