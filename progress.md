@@ -32,7 +32,7 @@ Ask each person for their name at the first login and use that name (not the ema
 
 ## In progress
 
-None. The first-login name is coded and checked; not yet tried with a real account (the user's account has no name yet, so the next login shows `/welcome` once).
+None. The first-login name is done; the user tried it with a real account on 2026-10-20 (name screen, header, voucher 담당 cell).
 
 ## Open issues
 
@@ -88,5 +88,5 @@ None. The first-login name is coded and checked; not yet tried with a real accou
 
 ## Next action
 
-User: log in once more; `/welcome` asks for the name; check the header and a voucher 담당 cell. Then pick from ideas.md: name change UI, allow-list management UI, roles, multi-PC access.
+Pick the next task with the user from ideas.md: name change UI, allow-list management UI, roles, multi-PC access.
 
