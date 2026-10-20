@@ -37,7 +37,7 @@ def main() -> int:
         pg = b.new_page(viewport={"width": 1366, "height": 900})
         errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
-        pg.goto(sv.base + "/request"); pg.wait_for_timeout(800)
+        pg.goto(sv.base + "/"); pg.wait_for_timeout(800)
         pg.evaluate("sessionStorage.setItem('request-admin','1')"); pg.reload(); pg.wait_for_timeout(800)
 
         # ---- 학회 ----
@@ -91,7 +91,7 @@ def main() -> int:
         pg.evaluate("switchReqSub('신청')"); pg.wait_for_timeout(300)
         pg.click("#request-tabs [data-rtype='학회']"); pg.wait_for_timeout(300)
         # ---- 기타 ----
-        pg.goto(sv.base + "/request"); pg.wait_for_timeout(800)
+        pg.goto(sv.base + "/"); pg.wait_for_timeout(800)
         pg.click("#request-tabs [data-rtype='기타']"); pg.wait_for_timeout(300)
         ck("기타: 연구원 안내문", "구독" in pg.inner_text(".req-researcher-note"))
         pg.click("button:has-text('신청 추가')"); pg.wait_for_timeout(400)
@@ -122,7 +122,7 @@ def main() -> int:
         sv.call("POST", "/api/budget", {"재원": "GG01", "변경회차": "당초", "신청일자": "2026-01-01", "입금": 500000})
         s, r = sv.call("POST", "/api/exec", {"재원": "GG01", "예산목": "연구활동비", "원인발생일": "2026-03-02", "거래처": "검사", "금액": 120000, "적요": "공금 지출", "지출완료일": "2026-03-02"})
         pool_row = r.get("_row")
-        pg.goto(sv.base + "/"); pg.wait_for_timeout(1200)
+        pg.goto(sv.base + "/fund"); pg.wait_for_timeout(1200)
         pg.evaluate("openForm('funds')"); pg.wait_for_timeout(300)
         ck("재원 폼: 종류 select, 기본 국책", pg.evaluate("(()=>{const s=document.getElementById('f-종류'); return s && s.tagName==='SELECT' && s.value==='국책' && [...s.options].some(o=>o.value==='공금')})()"))
         pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
@@ -346,11 +346,11 @@ def main() -> int:
         ck("페이지 오류 없음", not errs, errs)
 
         # ---- 로그인: 상단 계정 표시, 로그인 화면 구조 ----
-        pg.goto(sv.base + "/"); pg.wait_for_timeout(1000)
+        pg.goto(sv.base + "/fund"); pg.wait_for_timeout(1000)
         ck("상단: 이름 없으면 이메일 표시", pg.inner_text("#top-user").strip() == sv.TEST_EMAIL, pg.inner_text("#top-user"))
         if sv.mode == "db":
             s, r = sv.call("POST", "/api/me/name", {"name": "검사자"})
-            pg.goto(sv.base + "/"); pg.wait_for_timeout(1200)
+            pg.goto(sv.base + "/fund"); pg.wait_for_timeout(1200)
             ck("상단: 이름 저장 뒤 이름 표시", s == 200 and pg.inner_text("#top-user").strip() == "검사자", pg.inner_text("#top-user"))
             if pool_row:
                 pg.evaluate(f"openVoucher({pool_row})"); pg.wait_for_timeout(1000)
@@ -392,7 +392,26 @@ def main() -> int:
         ck("허용 계정: 마스터가 아니면 묶음 숨김", pg.evaluate("document.querySelector('#dlg-settings').open") and not pg.is_visible("#s-users"))
         pg.evaluate("$('#dlg-settings').close()")
         pg.goto(sv.base + "/login?err=denied&email=x%40y.z"); pg.wait_for_timeout(300)
-        ck("로그인 화면: 우회 중이면 / 로 이동", pg.url.rstrip("/") == sv.base, pg.url)
+        ck("로그인 화면: 우회 중이면 /enter 로 이동", pg.url.endswith("/enter"), pg.url)
+        # ---- 메뉴 화면 (enter.html): 버튼 세 개, 신청은 담당자 모드로, 기본 화면 설정 ----
+        ck("메뉴: 버튼 세 개 연구비·인건비·신청", pg.evaluate("[...document.querySelectorAll('.enter-btn')].map(a=>a.textContent.trim())") == ["연구비", "인건비", "신청"])
+        ck("메뉴: 버튼마다 아이콘", pg.evaluate("document.querySelectorAll('.enter-btn svg').length") == 3)
+        ck("메뉴: 주소 /fund /labor /", pg.evaluate("[...document.querySelectorAll('.enter-btn')].map(a=>a.getAttribute('href'))") == ["/fund", "/labor", "/"])
+        ck("메뉴: 상단 계정 표시", sv.TEST_EMAIL in pg.get_attribute("#top-user", "title"))
+        pg.evaluate("sessionStorage.removeItem('request-admin')")
+        pg.click(".enter-btn[data-home=request]"); pg.wait_for_timeout(1000)
+        ck("메뉴 → 신청: 담당자 모드 (연구원 아닌 계정)", pg.url.rstrip("/") == sv.base and pg.evaluate("document.body.classList.contains('req-admin')"), pg.url)
+        ck("상단: 메뉴 버튼 → /enter?menu=1", pg.get_attribute("#btn-enter", "href") == "/enter?menu=1")
+        pg.evaluate("openSettings()"); pg.wait_for_timeout(600)
+        pg.select_option("#s-home-sel", "fund"); pg.wait_for_timeout(500)
+        ck("설정: 기본 화면 저장됨", pg.inner_text("#s-home-msg").strip() == "저장됨", pg.inner_text("#s-home-msg"))
+        pg.evaluate("$('#dlg-settings').close()")
+        pg.goto(sv.base + "/enter"); pg.wait_for_timeout(1000)
+        ck("기본 화면 연구비: /enter → /fund", pg.url.endswith("/fund"), pg.url)
+        pg.goto(sv.base + "/enter?menu=1"); pg.wait_for_timeout(600)
+        ck("기본 화면 있어도 ?menu=1 은 메뉴", pg.url.endswith("/enter?menu=1") and pg.evaluate("document.querySelectorAll('.enter-btn').length") == 3, pg.url)
+        if sv.mode == "db": sv.call("POST", "/api/me/home", {"home": ""})
+        else: pg.evaluate("localStorage.removeItem('ledger-home')")
         b.close()
     # 우회 없는 서버: 로그인 화면 구조 (랜드마크·h1·버튼·오류 안내)
     with Server("ui-noauth", auth_bypass=False) as sv, sync_playwright() as pw:

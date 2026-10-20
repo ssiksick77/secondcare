@@ -672,6 +672,29 @@ def set_user_name(email: str, name: str) -> str:
     return name
 
 
+HOME_PATHS = {"fund": "/fund", "labor": "/labor", "request": "/"}
+
+
+def user_home(email: str) -> str:
+    """기본 화면 (fund/labor/request). xlsx 모드나 미설정은 '' (메뉴)."""
+    if not USE_DB:
+        return ""
+    with db.session() as con:
+        return db.user_home(con, email)
+
+
+def set_user_home(email: str, home) -> str:
+    """기본 화면 저장. '' 는 메뉴. xlsx 모드는 저장하지 않는다 (브라우저가 기억)."""
+    home = str(home or "").strip().lower()
+    if home and home not in HOME_PATHS:
+        raise ValueError("기본 화면은 메뉴 · 연구비 · 인건비 · 신청 중 하나입니다.")
+    if not USE_DB:
+        raise ValueError("xlsx 저장소에서는 기본 화면을 저장하지 않습니다.")
+    with _lock, db.session() as con:
+        db.set_user_home(con, email, home)
+    return home
+
+
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 

@@ -135,7 +135,7 @@ function syncReqSub() {
 $$("#req-seg [role=tab]").forEach(b => b.addEventListener("click", () => switchReqSub(b.dataset.rsub)));  // ←/→ 는 app.js 의 .subtabs rovingTabs
 $("#btn-request").addEventListener("click", () => {
   if (document.body.classList.contains("request-mode")) { setMode("main"); return; }
-  try { sessionStorage.setItem("request-admin", "1"); } catch { }  // 회계대장에서 들어오면 담당자 (이 탭이 열려 있는 동안)
+  try { sessionStorage.setItem("request-admin", "1"); } catch { }  // 회계대장(또는 메뉴, 연구원 아닌 계정)에서 들어오면 담당자 (이 탭이 열려 있는 동안)
   document.body.classList.add("req-admin");
   setMode("request");
   if (DATA) renderRequest();

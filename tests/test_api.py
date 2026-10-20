@@ -324,11 +324,34 @@ def main() -> int:
         if sv.mode == "db":
             ck("로그인: 새 행 author = 로그인 이메일 (SQLite)", s == 200 and sv.row("request", r["_row"]).get("_author") == sv.TEST_EMAIL, (s, r))
         s, loc = sv.get_raw("/login")
-        ck("로그인: 로그인 상태에서 /login → / 로 이동", s == 302 and loc == "/", (s, loc))
+        ck("로그인: 로그인 상태에서 /login → /enter 로 이동", s == 302 and loc == "/enter", (s, loc))
+        # ---- 메뉴 /enter 와 기본 화면 (2026-10-20): 옛 /request 는 / 로, 회계대장은 /fund ----
+        s, _ = sv.get_raw("/enter")
+        ck("메뉴: /enter 200 (기본 화면 없음)", s == 200, s)
+        s, _ = sv.get_raw("/fund")
+        ck("메뉴: /fund 200", s == 200, s)
+        s, loc = sv.get_raw("/request")
+        ck("메뉴: 옛 /request → 301 /", s == 301 and loc == "/", (s, loc))
+        s, r = sv.call("GET", "/api/me")
+        ck("메뉴: /api/me 에 home·db", r.get("home") == "" and r.get("db") == (sv.mode == "db"), r)
+        s, r = sv.call("POST", "/api/me/home", {"home": "nowhere"})
+        ck("기본 화면: 모르는 값 400", s == 400, (s, r))
+        s, r = sv.call("POST", "/api/me/home", {"home": "labor"})
+        if sv.mode == "db":
+            ck("기본 화면: labor 저장", s == 200 and r.get("home") == "labor", (s, r))
+            s, loc = sv.get_raw("/enter")
+            ck("기본 화면: /enter → /labor", s == 302 and loc == "/labor", (s, loc))
+            s, _ = sv.get_raw("/enter?menu=1")
+            ck("기본 화면: /enter?menu=1 은 메뉴 200", s == 200, s)
+            s, r = sv.call("POST", "/api/me/home", {"home": ""})
+            s, _ = sv.get_raw("/enter")
+            ck("기본 화면: 빈 값 → 메뉴 200", s == 200, s)
+        else:
+            ck("기본 화면: xlsx 는 저장 안 함 400", s == 400, (s, r))
 
     # ---- 로그인 우회가 없는 서버: 화면은 /login 으로, API 는 401, 로그인 화면·정적 파일은 열림 ----
     with Server("api-noauth", auth_bypass=False) as sv:
-        for path in ("/", "/labor", "/request"):
+        for path in ("/", "/labor", "/fund", "/enter"):
             s, loc = sv.get_raw(path)
             ck(f"미로그인: {path} → 302 /login", s == 302 and loc == "/login", (s, loc))
         s, r = sv.call("GET", "/api/all")
@@ -367,7 +390,7 @@ def main() -> int:
             s, loc = sv.get_raw("/", cookie=ck_)
             ck("이름 저장 뒤: / 200", s == 200, (s, loc))
             s, loc = sv.get_raw("/welcome", cookie=ck_)
-            ck("이름 저장 뒤: /welcome → /", s == 302 and loc == "/", (s, loc))
+            ck("이름 저장 뒤: /welcome → /enter", s == 302 and loc == "/enter", (s, loc))
             s, r = sv.call("GET", "/api/all", cookie=ck_)
             ck("meta.authors 에 이름", s == 200 and r["meta"].get("authors", {}).get(sv.TEST_EMAIL) == "검사 담당", r.get("meta", {}).get("authors"))
         else:

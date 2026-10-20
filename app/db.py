@@ -86,8 +86,9 @@ def create_schema(con: sqlite3.Connection):
 #  name: 표시 이름 ('' 이면 아직 로그인 전). allowed: 1 이면 로그인 허용 (.env 의 마스터 계정은 표와 무관하게 항상 허용)
 #  role: manager(관리자) / staff(담당자) / researcher(연구원) — docs/권한_설계_2026-10-20.md 2절. 마스터는 .env 에 있으므로 표에 없다.
 USERS_DDL = ("CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, "
-             "allowed INTEGER NOT NULL DEFAULT 0, added_at TEXT, added_by TEXT, role TEXT)")
-_USERS_NEW_COLS = (("allowed", "INTEGER NOT NULL DEFAULT 0"), ("added_at", "TEXT"), ("added_by", "TEXT"), ("role", "TEXT"))
+             "allowed INTEGER NOT NULL DEFAULT 0, added_at TEXT, added_by TEXT, role TEXT, home TEXT)")
+_USERS_NEW_COLS = (("allowed", "INTEGER NOT NULL DEFAULT 0"), ("added_at", "TEXT"), ("added_by", "TEXT"), ("role", "TEXT"), ("home", "TEXT"))
+HOMES = ("fund", "labor", "request")  # 기본 화면 (빈 값 = 메뉴 /enter)
 ROLES = ("manager", "staff", "researcher")
 
 
@@ -115,6 +116,19 @@ def set_user_name(con: sqlite3.Connection, email: str, name: str):
     _ensure_users(con)
     con.execute("INSERT INTO users (email, name, created_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET name = excluded.name",
                 (email.lower(), name, _now()))
+
+
+def user_home(con: sqlite3.Connection, email: str) -> str:
+    """로그인 뒤 기본 화면 (fund/labor/request). 빈 값은 메뉴."""
+    _ensure_users(con)
+    r = con.execute("SELECT home FROM users WHERE email = ?", (email.lower(),)).fetchone()
+    return (r["home"] or "") if r else ""
+
+
+def set_user_home(con: sqlite3.Connection, email: str, home: str):
+    _ensure_users(con)
+    con.execute("INSERT INTO users (email, name, created_at, home) VALUES (?, '', ?, ?) ON CONFLICT(email) DO UPDATE SET home = excluded.home",
+                (email.lower(), _now(), home))
 
 
 def allowed_emails(con: sqlite3.Connection) -> set[str]:

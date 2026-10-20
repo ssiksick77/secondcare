@@ -101,7 +101,8 @@ async def _require_login(request: Request, call_next):
         stored = store.user_name(user["email"]) if store.USE_DB else None
         master = auth.is_master(user["email"])
         user = {**user, "needs_name": store.USE_DB and not stored and not auth.bypass_email(), **({"name": stored} if stored else {}),
-                "is_master": master, "role": "master" if master else (store.user_role(user["email"]) or "staff")}
+                "is_master": master, "role": "master" if master else (store.user_role(user["email"]) or "staff"),
+                "home": store.user_home(user["email"]), "db": store.USE_DB}
         if user["needs_name"] and path not in NAME_FREE_PATHS and not path.startswith(PUBLIC_PREFIXES):
             if path.startswith("/api/"):
                 return JSONResponse({"detail": "이름을 먼저 입력하세요."}, status_code=403)
@@ -116,8 +117,24 @@ def welcome_page(request: Request):
     """최초 로그인: 이름 입력. 이미 이름이 있으면 메인으로."""
     user = request.state.user
     if not user or not user.get("needs_name"):
-        return RedirectResponse("/", status_code=302)
+        return RedirectResponse("/enter", status_code=302)
     return _page("welcome.html")
+
+
+@app.get("/enter")
+def enter_page(request: Request, menu: str | None = None):
+    """로그인 뒤 메뉴 (연구비 / 인건비 / 신청). 기본 화면이 정해진 계정은 그 화면으로. ?menu=1 은 항상 메뉴."""
+    home = (request.state.user or {}).get("home") or ""
+    if home in store.HOME_PATHS and menu is None:
+        return RedirectResponse(store.HOME_PATHS[home], status_code=302)
+    return _page("enter.html")
+
+
+@app.post("/api/me/home")
+def me_home(request: Request, body: dict):
+    """기본 화면 저장 (fund/labor/request, 빈 값 = 메뉴). SQLite 모드만; xlsx 는 브라우저가 기억한다."""
+    home = store.set_user_home(request.state.user["email"], body.get("home"))
+    return {"home": home}
 
 
 @app.post("/api/me/name")
@@ -167,7 +184,7 @@ def users_remove(request: Request, email: str):
 @app.get("/login")
 def login_page(request: Request):
     if auth.user_from_request(request):
-        return RedirectResponse("/", status_code=302)
+        return RedirectResponse("/enter", status_code=302)
     return _page("login.html")
 
 
@@ -198,7 +215,7 @@ def auth_callback(request: Request, code: str = "", state: str = "", error: str 
         resp = RedirectResponse(f"/login?err=denied&email={_q(user['email'])}", status_code=302)
         resp.delete_cookie(auth.STATE_COOKIE)
         return resp
-    resp = RedirectResponse("/", status_code=302)
+    resp = RedirectResponse("/enter", status_code=302)
     resp.set_cookie(auth.COOKIE, auth.session_token(user["email"], user["name"]), max_age=auth.SESSION_DAYS * 86400,
                     httponly=True, samesite="lax")
     resp.delete_cookie(auth.STATE_COOKIE)
@@ -238,6 +255,13 @@ def _page(name: str):
 
 @app.get("/")
 def index():
+    """신청 화면 (연구원 기본 화면). 같은 페이지, 주소로 모드 전환 (2026-10-20: 옛 /request)."""
+    return _page("index.html")
+
+
+@app.get("/fund")
+def ledger_page():
+    """회계대장 화면 (집행·품의·예산·적립금). 2026-10-20 까지는 / 였다."""
     return _page("index.html")
 
 
@@ -255,8 +279,8 @@ def labor_page():
 
 @app.get("/request")
 def request_page():
-    """신청 화면: 같은 페이지, 주소로 모드 전환 (직접 접속은 연구원 화면)."""
-    return _page("index.html")
+    """옛 주소. 신청 화면은 / (즐겨찾기 호환)."""
+    return RedirectResponse("/", status_code=301)
 
 
 @app.post("/api/undo")

@@ -14,6 +14,7 @@
   <h1><span class="app-name">Second Care</span><small class="app-full">의료인공지능센터 연구비 관리 시스템</small></h1>
   <div class="top-status" id="file-status" aria-live="polite"></div>
   <button type="button" class="btn btn-ghost" id="btn-reload">새로고침</button>
+  <a class="btn btn-ghost" id="btn-enter" href="/enter?menu=1" title="메뉴 화면 (연구비 · 인건비 · 신청)">메뉴</a>
   <span class="top-sep" aria-hidden="true"></span>
   <button type="button" class="btn btn-ghost btn-mode" id="btn-mode" title="인건비 관리 화면으로 전환">인건비</button>
   <button type="button" class="btn btn-ghost btn-mode" id="btn-request" title="지출 신청 화면으로 전환 (담당자)">신청</button>
@@ -595,6 +596,14 @@
         <label class="mid" for="s-rq-ship">배송지<input id="s-rq-ship" name="REQUEST_SHIP_TO" type="text" autocomplete="off" placeholder="주소 · 호실"></label>
         <label class="wide" for="s-rq-contact">담당자 <small>(이름 · 연락처 · 결의서에는 괄호 앞 이름만)</small><input id="s-rq-contact" name="REQUEST_CONTACT" type="text" autocomplete="off" placeholder="예: 안윤아 (031-000-0000)"></label>
         <label class="wide" for="s-org">기관명 (결의서·발주서 머리글) <small>(비우면 분당서울대학교병원 의료인공지능센터)</small><input id="s-org" name="LEDGER_ORG" type="text" autocomplete="off" maxlength="80"></label>
+      </div>
+    </fieldset>
+    <fieldset class="wide s-group" id="s-home" style="margin:0 0 14px">
+      <legend>기본 화면 (로그인 뒤 바로 들어갈 화면)</legend>
+      <div class="fields">
+        <label for="s-home-sel">기본 화면 <small>(바꾸면 바로 저장 · 메뉴로 돌아가려면 상단 '메뉴' 버튼)</small>
+          <select id="s-home-sel"><option value="">메뉴 (선택 화면)</option><option value="fund">연구비</option><option value="labor">인건비</option><option value="request">신청</option></select></label>
+        <span class="toolbar-note" id="s-home-msg" role="status"></span>
       </div>
     </fieldset>
     <fieldset class="wide s-group" id="s-users" style="margin:0 0 14px" hidden>

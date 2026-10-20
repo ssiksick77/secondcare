@@ -89,6 +89,24 @@ code { font: inherit; }
 .login-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 #name-form .login-btn { margin-top: 12px; }
 .login-foot { padding: 12px 20px; border-top: 1px solid var(--rule); }
+
+/* ---------- 로그인 뒤 메뉴 (enter.html): 큰 정사각형 버튼 세 개 ---------- */
+.enter-body .top { justify-content: flex-end; }
+.enter-main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px 60px; }
+/* 워드마크 "SECONDCare": 한 단어, SECOND 는 굵은 대문자, Care 는 가는 남색 */
+.enter-mark { margin: 0 0 36px; display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; line-height: 1; }
+.enter-mark-a { font-size: 44px; font-weight: 800; letter-spacing: 0.06em; color: var(--ink); }
+.enter-mark-b { font-size: 44px; font-weight: 300; letter-spacing: 0; color: var(--margin); }
+.enter-mark small { width: 100%; margin-top: 14px; font-size: 13px; font-weight: 400; color: var(--ink-2); text-align: center; }
+.enter-menu { display: grid; grid-template-columns: repeat(3, minmax(0, 200px)); gap: 20px; width: 100%; max-width: 640px; }
+.enter-btn { aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  border: 1px solid var(--rule); border-top: 2px solid var(--margin); border-radius: var(--radius); background: var(--bg); color: var(--ink);
+  font-size: 20px; font-weight: 600; text-decoration: none; }
+.enter-btn svg { width: 56px; height: 56px; color: var(--margin); }
+.enter-btn:hover { background: var(--primary-bg); border-color: var(--margin); }
+.enter-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.enter-note { text-align: center; }
+@media (max-width: 640px) { .enter-menu { grid-template-columns: 1fr; max-width: 260px; } .enter-btn { aspect-ratio: auto; min-height: 96px; flex-direction: row; } }
 .tabs { background: var(--bg); border-bottom: 1px solid var(--rule); }
 .tabs ul { list-style: none; margin: 0; padding: 0 12px; display: flex; gap: 2px; }
 .tabs button { border: 0; background: none; font: inherit; font-weight: 600; padding: 0 14px; height: 40px; cursor: pointer; color: var(--ink-2); border-bottom: 2px solid transparent; margin-bottom: -1px; }

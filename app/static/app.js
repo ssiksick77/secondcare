@@ -1542,6 +1542,7 @@ async function openSettings() {
     memoRender();
     $("#s-users").hidden = !ME.is_master;
     if (ME.is_master) usersRender();
+    homeFill();
     $("#dlg-settings").showModal();
   } catch (e) { showAlert("설정을 불러오지 못했습니다: " + e.message, "error"); }
 }
@@ -1559,6 +1560,20 @@ async function saveSettings() {
   ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"].forEach(k => { const el = $(`[name=${k}]`); el.value = ""; const h = $(`#${el.id}-hint`); const v = r.values[k]; if (h) h.textContent = v.set ? `(설정됨 ${v.hint})` : "(미설정)"; });
   return r;
 }
+// 기본 화면 (로그인 뒤 /enter 가 보내는 곳): SQLite 는 계정별 저장, xlsx 는 이 브라우저만 기억
+function homeFill() {
+  let v = ME.home || "";
+  if (!v && !ME.db) { try { v = localStorage.getItem("ledger-home") || ""; } catch { } }
+  $("#s-home-sel").value = v; $("#s-home-msg").textContent = "";
+}
+$("#s-home-sel").addEventListener("change", async e => {
+  const v = e.target.value, msg = $("#s-home-msg");
+  try {
+    if (ME.db) { const r = await api("POST", "/api/me/home", { home: v }); ME.home = r.home; }
+    else { try { v ? localStorage.setItem("ledger-home", v) : localStorage.removeItem("ledger-home"); } catch { } }
+    msg.textContent = "저장됨";
+  } catch (err) { msg.textContent = "저장 실패: " + err.message; }
+});
 $("#btn-settings").addEventListener("click", openSettings);
 $("#s-provider").addEventListener("change", syncProviderGroups);
 $("#s-cancel").addEventListener("click", () => $("#dlg-settings").close());
