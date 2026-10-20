@@ -25,6 +25,8 @@ from mcp.types import ToolAnnotations
 import store
 from main import build_dashboard
 
+store.set_author("mcp")  # MCP 를 거친 쓰기의 author (로그인 없음)
+
 mcp = MCPServer(
     "ledger",
     instructions=(

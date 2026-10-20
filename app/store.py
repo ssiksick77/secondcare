@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import hashlib
 import json
 import math
@@ -369,7 +370,7 @@ def _write_session():
             con = db.connect()
             con.execute("BEGIN IMMEDIATE")
             try:
-                yield db.Workbook(con, CURRENT_AUTHOR)
+                yield db.Workbook(con, current_author())
             finally:
                 if con.in_transaction:
                     con.rollback()
@@ -384,7 +385,7 @@ def _write_session():
 def _load():
     """읽기용 워크북. SQLite 면 어댑터 (자동 커밋 연결, 트랜잭션 없음: 읽기 경로 전용. 쓰기는 _write_session)."""
     if USE_DB:
-        return db.Workbook(db.connect(), CURRENT_AUTHOR)
+        return db.Workbook(db.connect(), current_author())
     if not XLSX_PATH.exists():
         raise FileNotFoundError(f"장부 파일 없음: {XLSX_PATH}")
     try:
@@ -620,8 +621,17 @@ def data_stamp() -> str:
 
 # 직전 쓰기 기록: 되돌리기는 "그 이후 아무도 장부를 바꾸지 않았을 때"만 허용 (해시 비교)
 LAST_WRITE: dict | None = None
-# 쓰기 작성자 (SQLite author 열). 로그인이 붙기 전까지는 빈 값 → 가져온 행의 author 는 유지된다 (COALESCE)
-CURRENT_AUTHOR: str | None = None
+# 쓰기 작성자 (SQLite author 열): 요청별 ContextVar. main.py 미들웨어가 로그인 이메일을, mcp_server 가 "mcp" 를 넣는다.
+# 비어 있으면 가져온 행의 author 는 유지된다 (COALESCE)
+_AUTHOR: contextvars.ContextVar[str | None] = contextvars.ContextVar("ledger_author", default=None)
+
+
+def set_author(email: str | None):
+    _AUTHOR.set(email or None)
+
+
+def current_author() -> str | None:
+    return _AUTHOR.get()
 
 
 def last_write_id() -> str | None:

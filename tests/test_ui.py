@@ -249,6 +249,26 @@ def main() -> int:
         ck("취소: 예산목 잔액 열 '-'", pg.evaluate(f"runningBalance(DATA.exec.find(x=>x._row==={fx_row})) === null"))
         ck("취소: 빠른 필터 타일", "취소" in pg.inner_text("#exec-tiles"))
         ck("페이지 오류 없음", not errs, errs)
+
+        # ---- 로그인: 상단 계정 표시, 로그인 화면 구조 ----
+        pg.goto(sv.base + "/"); pg.wait_for_timeout(1000)
+        ck("상단: 로그인 이메일 표시", pg.inner_text("#top-user").strip() == sv.TEST_EMAIL, pg.inner_text("#top-user"))
+        ck("상단: 로그아웃 버튼", pg.is_visible("#btn-logout"))
+        pg.goto(sv.base + "/login?err=denied&email=x%40y.z"); pg.wait_for_timeout(300)
+        ck("로그인 화면: 우회 중이면 / 로 이동", pg.url.rstrip("/") == sv.base, pg.url)
+        b.close()
+    # 우회 없는 서버: 로그인 화면 구조 (랜드마크·h1·버튼·오류 안내)
+    with Server("ui-noauth", auth_bypass=False) as sv, sync_playwright() as pw:
+        b = pw.chromium.launch()
+        pg = b.new_page()
+        pg.goto(sv.base + "/"); pg.wait_for_timeout(300)
+        ck("로그인 화면: 미로그인 / → /login", pg.url.endswith("/login"), pg.url)
+        ck("로그인 화면: lang=ko, header/main/footer, h1, 바로가기", pg.evaluate(
+            "document.documentElement.lang === 'ko' && !!document.querySelector('header') && !!document.querySelector('main#main') && !!document.querySelector('footer') && !!document.querySelector('h1') && !!document.querySelector('a.skip')"))
+        ck("로그인 화면: 구글 로그인 버튼 → /auth/login", pg.get_attribute("#btn-google", "href") == "/auth/login" and "Google" in pg.inner_text("#btn-google"))
+        ck("로그인 화면: 오류 없을 때 알림 숨김", pg.evaluate("document.getElementById('login-alert').hidden"))
+        pg.goto(sv.base + "/login?err=denied&email=x%40y.z"); pg.wait_for_timeout(300)
+        ck("로그인 화면: 허용되지 않은 계정 안내 (role=alert)", pg.evaluate("!document.getElementById('login-alert').hidden && document.getElementById('login-alert').getAttribute('role') === 'alert'") and "x@y.z" in pg.inner_text("#login-alert"))
         b.close()
     return ck.done("화면")
 

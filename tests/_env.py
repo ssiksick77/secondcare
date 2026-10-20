@@ -51,8 +51,11 @@ def free_port() -> int:
 
 
 class Server:
-    def __init__(self, name: str):
+    TEST_EMAIL = "test@example.com"  # LEDGER_AUTH_BYPASS: 검사 서버는 이 이메일로 로그인한 것으로 본다 (구글 호출 없음)
+
+    def __init__(self, name: str, auth_bypass: bool = True):
         self.name = name
+        self.auth_bypass = auth_bypass
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         self.dir = os.path.join(TMP, name)
@@ -78,12 +81,17 @@ class Server:
         env = dict(os.environ, **self.store_env, LEDGER_ENV=os.path.join(QA_DIR, "qa.env"), LEDGER_DRIVE_MOCK="1",
                    LEDGER_DRIVE_MOCK_DIR=os.path.join(self.dir, "mock"), LEDGER_PORT=str(self.port), LEDGER_NO_BROWSER="1",
                    PYTHONIOENCODING="utf-8")
+        env.pop("LEDGER_AUTH_BYPASS", None)
+        if self.auth_bypass:
+            env["LEDGER_AUTH_BYPASS"] = self.TEST_EMAIL
         self.log = open(os.path.join(self.dir, "server.log"), "w", encoding="utf-8")
         self.proc = subprocess.Popen([sys.executable, "main.py"], cwd=APP, env=env, stdout=self.log, stderr=subprocess.STDOUT)
         for _ in range(60):
             try:
                 urllib.request.urlopen(self.base + "/api/all", timeout=1)
                 return self
+            except urllib.error.HTTPError:
+                return self  # 응답이 왔으면 서버는 떠 있다 (로그인 우회 없는 서버는 401)
             except Exception:
                 if self.proc.poll() is not None:
                     break
@@ -107,7 +115,23 @@ class Server:
             with urllib.request.urlopen(req) as r:
                 return r.status, json.loads(r.read())
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read())
+            raw = e.read()
+            try:
+                return e.code, json.loads(raw)
+            except ValueError:
+                return e.code, raw.decode("utf-8", "replace")
+
+    def get_raw(self, path: str):
+        """리다이렉트를 따라가지 않고 (상태, Location 헤더) 반환 (로그인 화면 이동 검사용)."""
+        class _NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        opener = urllib.request.build_opener(_NoRedirect)
+        try:
+            with opener.open(self.base + path, timeout=5) as r:
+                return r.status, r.headers.get("Location")
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers.get("Location")
 
     def row(self, kind: str, row: int) -> dict:
         s, r = self.call("GET", "/api/all")

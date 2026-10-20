@@ -157,6 +157,7 @@ async function api(method, url, body) {
   catch { throw new Error("서버에 연결할 수 없습니다. run.bat 이 실행 중인지 확인하세요."); }
   const wid = res.headers.get("X-Write-Id");
   if (wid && wid !== LAST_WRITE_ID) { LAST_WRITE_ID = wid; $$(".toast-undo").forEach(b => { if (b.dataset.wid !== wid) b.remove(); }); }  // 새 쓰기 뒤에는 이전 되돌리기 버튼 제거
+  if (res.status === 401) { location.href = "/login"; throw new Error("로그인이 필요합니다."); }  // 세션 만료·로그아웃 → 로그인 화면
   if (!res.ok) {
     let msg = { 404: "찾을 수 없습니다", 405: "지원하지 않는 요청입니다", 409: "충돌", 413: "파일이 너무 큽니다 (25MB 이하)", 422: "입력 형식 오류", 423: "장부 파일이 잠겨 있습니다", 500: "서버 오류" }[res.status] || res.statusText;
     try { const d = (await res.json()).detail; if (Array.isArray(d)) msg = d.map(x => x.msg || JSON.stringify(x)).join(" / "); else if (d) msg = typeof d === "string" ? d : JSON.stringify(d); } catch { }
@@ -1189,6 +1190,9 @@ document.addEventListener("click", e => {
 $("#dash-fund").addEventListener("change", renderDashboard);
 $("#dash-year").addEventListener("change", renderDashboard);
 $("#btn-reload").addEventListener("click", load);
+// 로그인 사용자 표시 · 로그아웃 (auth.py)
+api("GET", "/api/me").then(u => { if (u && u.email) { $("#top-user").textContent = u.email; $("#top-user").title = `로그인 계정: ${u.name || ""} ${u.email}`.trim(); } }).catch(() => { });
+$("#btn-logout").addEventListener("click", async () => { try { await api("POST", "/auth/logout"); } catch { } location.href = "/login"; });
 document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
 });

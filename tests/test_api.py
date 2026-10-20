@@ -294,6 +294,33 @@ def main() -> int:
         log = [x for x in r.get("fixlog", []) if x["거래번호"] == fx_no]
         ck("보완이력: 표시·해제 2줄, 사유 보존", len(log) == 2 and log[0]["구분"] == "표시" and log[0]["사유"] == "영수증 원본 누락" and log[1]["구분"] == "해제" and log[1]["사유"] == "원본 수령", log)
         ck("보완이력: 일시 형식", all(len(str(x["일시"])) >= 16 for x in log), [x["일시"] for x in log])
+
+        # ---- 로그인 (auth.py): 우회 서버에서는 /api/me 가 검사 이메일, 행 author 는 SQLite 모드에서만 ----
+        s, r = sv.call("GET", "/api/me")
+        ck("로그인: /api/me = 우회 이메일", s == 200 and r.get("email") == sv.TEST_EMAIL, (s, r))
+        s, r = sv.call("POST", "/api/request", {**base, "상세": {}, "금액": 11})
+        if sv.mode == "db":
+            ck("로그인: 새 행 author = 로그인 이메일 (SQLite)", s == 200 and sv.row("request", r["_row"]).get("_author") == sv.TEST_EMAIL, (s, r))
+        s, loc = sv.get_raw("/login")
+        ck("로그인: 로그인 상태에서 /login → / 로 이동", s == 302 and loc == "/", (s, loc))
+
+    # ---- 로그인 우회가 없는 서버: 화면은 /login 으로, API 는 401, 로그인 화면·정적 파일은 열림 ----
+    with Server("api-noauth", auth_bypass=False) as sv:
+        for path in ("/", "/labor", "/request"):
+            s, loc = sv.get_raw(path)
+            ck(f"미로그인: {path} → 302 /login", s == 302 and loc == "/login", (s, loc))
+        s, r = sv.call("GET", "/api/all")
+        ck("미로그인: /api/all → 401", s == 401, (s, r))
+        s, r = sv.call("POST", "/api/request", {"구분": "기타", "신청인": "x", "품목": "x", "금액": 1})
+        ck("미로그인: 쓰기 API → 401", s == 401, (s, r))
+        s, _ = sv.get_raw("/login")
+        ck("미로그인: /login 200", s == 200, s)
+        s, _ = sv.get_raw("/static/style.css")
+        ck("미로그인: 정적 파일 200", s == 200, s)
+        s, loc = sv.get_raw("/auth/login")
+        ck("미로그인: OAuth 클라이언트 없음 → /login?err=config", s == 302 and (loc or "").startswith("/login?err=config"), (s, loc))
+        s, loc = sv.get_raw("/auth/callback?code=x&state=y")
+        ck("미로그인: 잘못된 콜백 → /login 으로", s == 302 and (loc or "").startswith("/login?err="), (s, loc))
     return ck.done("API")
 
 

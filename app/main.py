@@ -18,13 +18,14 @@ from dotenv import load_dotenv
 import datetime as dt
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import settings  # noqa: E402  (외부 의존 없음: LEDGER_ENV 로 설정 파일 경로 결정)
 load_dotenv(settings.ENV_PATH)  # 기본 app/.env, LEDGER_ENV 가 있으면 그 파일
 
 import ai  # noqa: E402
+import auth  # noqa: E402
 import drive  # noqa: E402
 import store  # noqa: E402
 
@@ -71,6 +72,83 @@ async def _unhandled(request: Request, e: Exception):
     log.error("처리 중 오류: %s %s", request.method, request.url.path, exc_info=(type(e), e, e.__traceback__))
     msg = str(e).strip() or type(e).__name__
     return JSONResponse({"detail": f"서버 오류: {msg[:300]} (콘솔 창에 자세한 내용이 있습니다)"}, status_code=500)
+
+
+# ---------- 로그인 (auth.py) ----------
+# 로그인 없이 열 수 있는 경로. 나머지 화면은 /login 으로, /api/* 는 401 (아래 미들웨어)
+PUBLIC_PREFIXES = ("/login", "/auth/", "/static/")
+
+
+@app.middleware("http")
+async def _require_login(request: Request, call_next):
+    path = request.url.path
+    user = auth.user_from_request(request)
+    if user is None and not path.startswith(PUBLIC_PREFIXES):
+        if path.startswith("/api/"):
+            return JSONResponse({"detail": "로그인이 필요합니다."}, status_code=401)
+        return RedirectResponse("/login", status_code=302)
+    store.set_author(user["email"] if user else None)
+    request.state.user = user
+    return await call_next(request)
+
+
+@app.get("/login")
+def login_page(request: Request):
+    if auth.user_from_request(request):
+        return RedirectResponse("/", status_code=302)
+    return FileResponse(STATIC / "login.html")
+
+
+@app.get("/auth/login")
+def auth_login():
+    """구글 인증 페이지로. state 는 10분짜리 서명 쿠키."""
+    try:
+        url, state_token = auth.login_url()
+    except auth.AuthError as e:
+        return RedirectResponse(f"/login?err=config&msg={_q(str(e))}", status_code=302)
+    resp = RedirectResponse(url, status_code=302)
+    resp.set_cookie(auth.STATE_COOKIE, state_token, max_age=600, httponly=True, samesite="lax")
+    return resp
+
+
+@app.get("/auth/callback")
+def auth_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    if error or not code:
+        return RedirectResponse(f"/login?err=cancel", status_code=302)
+    try:
+        user = auth.finish_login(code, state, request.cookies.get(auth.STATE_COOKIE))
+    except auth.AuthError as e:
+        return RedirectResponse(f"/login?err=config&msg={_q(str(e))}", status_code=302)
+    except Exception as e:  # 토큰 교환 실패 등
+        log.error("구글 로그인 실패: %s", e)
+        return RedirectResponse(f"/login?err=google&msg={_q(str(e)[:200])}", status_code=302)
+    if not auth.is_allowed(user["email"]):
+        resp = RedirectResponse(f"/login?err=denied&email={_q(user['email'])}", status_code=302)
+        resp.delete_cookie(auth.STATE_COOKIE)
+        return resp
+    resp = RedirectResponse("/", status_code=302)
+    resp.set_cookie(auth.COOKIE, auth.session_token(user["email"], user["name"]), max_age=auth.SESSION_DAYS * 86400,
+                    httponly=True, samesite="lax")
+    resp.delete_cookie(auth.STATE_COOKIE)
+    return resp
+
+
+@app.post("/auth/logout")
+def auth_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(auth.COOKIE)
+    return resp
+
+
+@app.get("/api/me")
+def me(request: Request):
+    """로그인 사용자 (상단 표시용)."""
+    return request.state.user
+
+
+def _q(v: str) -> str:
+    from urllib.parse import quote
+    return quote(v, safe="")
 
 
 @app.get("/")
@@ -810,7 +888,15 @@ if __name__ == "__main__":
     except store.LedgerLocked as e:
         print(f"[경고] {e} (구조 보정은 첫 저장 시 적용됩니다)")
     ai_state = f"사용 ({ai.provider()} / {ai.model()})" if ai.enabled() else "비활성 (우하단 설정에서 API 키 입력)"
-    print(f"장부 파일: {store.DATA_PATH}\nAI: {ai_state}\n브라우저: http://{HOST}:{PORT}  (종료: Ctrl+C)")
+    if auth.bypass_email():
+        login_state = f"우회 (LEDGER_AUTH_BYPASS={auth.bypass_email()}; 검사용, 운영에서는 끄세요)"
+    elif not auth.allowed_emails():
+        login_state = "[경고] LEDGER_ALLOWED_EMAILS 가 비어 있어 아무도 로그인할 수 없습니다 (README 2-1)"
+    elif not auth.client_path().exists():
+        login_state = f"[경고] OAuth 클라이언트 파일이 없습니다: {auth.client_path().name} (README 2-1)"
+    else:
+        login_state = f"구글 로그인, 허용 {len(auth.allowed_emails())}명, 리다이렉트 {auth.redirect_uri()}"
+    print(f"장부 파일: {store.DATA_PATH}\nAI: {ai_state}\n로그인: {login_state}\n브라우저: http://{HOST}:{PORT}  (종료: Ctrl+C)")
     if not os.environ.get("LEDGER_NO_BROWSER"):  # 테스트(tests/)·자동 실행에서는 브라우저를 열지 않음
         threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
     import socket
