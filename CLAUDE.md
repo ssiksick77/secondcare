@@ -27,7 +27,9 @@ A local, single-user web app for the research-fund accountant of the 분당서�
 - Run: `app\run.bat` (runs `python main.py` in `app/`, opens http://127.0.0.1:8791; port from `LEDGER_PORT`)
 - Run against QA data: `app\run_qa.bat` (sets `LEDGER_XLSX`, `LEDGER_ENV`, `LEDGER_DRIVE_MOCK=1`, port 8792)
 - Check: `scripts/check.sh` (runs: smoke — dependency import check; test — `tests/run.py`: node calculator test, API test, Playwright UI test, all against a QA ledger copy in `tests/.tmp/`; about 1 minute)
-- Other: `python -I tests/run.py calc` — run one test group (`calc`, `api`, `ui`)
+- Other: `python -I tests/run.py calc` — run one test group (`calc`, `api`, `db`, `api-db`, `ui`, `ui-db`; the `-db` groups run the same tests with `LEDGER_TEST_MODE=db`, a SQLite copy of the QA ledger)
+- Other: `python app/import_xlsx.py <ledger.xlsx> <ledger.sqlite> [--author email] [--force]` — one-shot xlsx → SQLite import (migration, 2026-10-20). `LEDGER_DB=<path>` makes `store` read and write SQLite instead of the xlsx (backups and undo use `app/backup/*.sqlite`)
+- Other: `python app/export_xlsx.py <ledger.sqlite> <out.xlsx> [--force]` — SQLite → xlsx read-only copy (same sheets and columns as the old ledger; the budget summary rows and the hidden 메타 sheet are rebuilt)
 - Other: `app\run_mcp.bat` — starts `mcp_server.py` for Claude Desktop / Claude Code (not for double-click)
 - Other: `python docs/qa_data_2026_01_09/supplement_v11.py` — idempotent QA fixture supplement; needs `LEDGER_XLSX`, `LEDGER_ENV`, `LEDGER_DRIVE_MOCK=1`
 - Other: `python docs/qa_data_2026_01_09/write_checklist_results.py <runner_output.txt>` — writes QA results into the checklist docs

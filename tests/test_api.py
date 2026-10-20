@@ -16,7 +16,7 @@ def main() -> int:
         probe = ("import gc, os, shutil, store; gc.disable(); store.sheet_names(); p = str(store.XLSX_PATH); "
                  "shutil.copyfile(p, p + '.swap'); os.replace(p + '.swap', p)")
         pr = subprocess.run([sys.executable, "-c", probe], cwd=os.path.join(os.path.dirname(sv.dir), "..", "..", "app"),
-                            env=dict(os.environ, LEDGER_XLSX=xlsx), capture_output=True, text=True)
+                            env=dict(os.environ, LEDGER_XLSX=xlsx), capture_output=True, text=True, encoding="utf-8")
         ck("시트 이름 확인 후 장부 파일 교체 가능 (핸들 미점유)", pr.returncode == 0, pr.stderr[-300:])
 
         # ---- 학회: 계산 결과가 있으면 금액 = out.합계 ----
@@ -126,7 +126,7 @@ def main() -> int:
         import shutil
         shutil.copyfile(os.path.join(sv.dir, "ledger.xlsx"), os.path.join(fill_dir, "ledger.xlsx"))
         pr = subprocess.run([sys.executable, "-c", fill], cwd=os.path.join(os.path.dirname(sv.dir), "..", "..", "app"),
-                            env=dict(os.environ, LEDGER_XLSX=os.path.join(fill_dir, "ledger.xlsx")), capture_output=True, text=True)
+                            env=dict(os.environ, LEDGER_XLSX=os.path.join(fill_dir, "ledger.xlsx")), capture_output=True, text=True, encoding="utf-8")
         ck("빈 신청일자 → 장부 연도 1월 1일로 보정", pr.returncode == 0, pr.stderr[-300:])
         s, r = sv.call("POST", "/api/exec", {"재원": "SRC1", "예산목": "연구활동비", "원인발생일": "2026-03-05", "거래처": "검사", "금액": 7000, "적요": "출처 전용 집행"})
         ck("미관리 재원 집행은 저장됨", s == 200, (s, r))
@@ -182,7 +182,7 @@ def main() -> int:
                 "r2 = store.evidence_sync(%r, lambda fid: None); assert r2['removed'] == [%r] and not any(x.get('드라이브파일ID') for x in r2['items']), r2; "
                 "left = store.evidence_for(%r); assert len(left) == 1 and not left[0]['파일명'], left") % (dep_no, fid, dep_no, upj["items"][0]["증빙번호"], dep_no)
         pr = subprocess.run([sys.executable, "-c", sync], cwd=os.path.join(os.path.dirname(sv.dir), "..", "..", "app"),
-                            env=dict(os.environ, LEDGER_XLSX=os.path.join(sv.dir, "ledger.xlsx"), LEDGER_DRIVE_MOCK="1"), capture_output=True, text=True)
+                            env=dict(os.environ, **sv.store_env, LEDGER_DRIVE_MOCK="1"), capture_output=True, text=True, encoding="utf-8")
         ck("드라이브 이름 변경 → 장부 파일명 갱신, 삭제(휴지통) → 증빙 행 삭제", pr.returncode == 0, pr.stderr[-300:])
         s, r = sv.call("POST", f"/api/evidence/{quote(dep_no)}/entry", {"증빙종류": "영수증"})
         ck("지운 증빙번호 재사용", s == 200 and r.get("증빙번호") == f"{dep_no}-2", (s, r))
@@ -204,7 +204,7 @@ def main() -> int:
         fix2_dir = os.path.join(sv.dir, "fix2"); os.makedirs(fix2_dir, exist_ok=True)
         shutil.copyfile(os.path.join(sv.dir, "ledger.xlsx"), os.path.join(fix2_dir, "ledger.xlsx"))
         pr = subprocess.run([sys.executable, "-c", fix2], cwd=os.path.join(os.path.dirname(sv.dir), "..", "..", "app"),
-                            env=dict(os.environ, LEDGER_XLSX=os.path.join(fix2_dir, "ledger.xlsx")), capture_output=True, text=True)
+                            env=dict(os.environ, LEDGER_XLSX=os.path.join(fix2_dir, "ledger.xlsx")), capture_output=True, text=True, encoding="utf-8")
         ck("옛 적립번호 → 새 모양으로 바꾸고 증빙 참조 갱신", pr.returncode == 0, pr.stderr[-400:])
         # ---- 적립금 단계: 발주일/결제일/수령일 → 상태 (사용 행만) ----
         s, r = sv.call("POST", "/api/deposit", {"일자": "2026-03-09", "거래처": "검사상사", "구분": "사용", "금액": 3000, "적요": "단계 검사"})

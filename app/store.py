@@ -21,11 +21,20 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.datetime import from_excel
 
+import db
+
 APP_DIR = Path(__file__).resolve().parent
 XLSX_PATH = Path(os.environ.get("LEDGER_XLSX", APP_DIR.parent / "의료인공지능센터_지출장부_2026.xlsx"))
 BACKUP_DIR = APP_DIR / "backup"
 BACKUP_KEEP = 30
 LOCK_TIMEOUT = 15  # 초: 다른 프로세스(MCP 서버 등)가 쓰는 동안 대기
+# SQLite 이전 (2026-10-20): LEDGER_DB 가 있으면 읽기·쓰기 모두 SQLite. 쓰기 함수는 db.Workbook/db.Sheet 를 openpyxl 워크북 자리에 받는다 (아래 헬퍼가 분기)
+USE_DB = bool(os.environ.get("LEDGER_DB"))
+DATA_PATH = db.DB_PATH if USE_DB else XLSX_PATH  # 현재 장부 파일 (존재 확인·수정 시각·잠금 파일 기준)
+
+
+def _is_db(x) -> bool:
+    return isinstance(x, (db.Workbook, db.Sheet))
 
 SHEET_FUND = "재원"
 SHEET_BUDGET = "예산변동"
@@ -308,7 +317,7 @@ def _cell_out(col: str, v: Any) -> Any:
 @contextlib.contextmanager
 def _file_lock():
     """장부 옆 .lock 파일로 배타 잠금. Windows 는 msvcrt, 그 외는 fcntl."""
-    lock_path = XLSX_PATH.with_suffix(XLSX_PATH.suffix + ".lock")
+    lock_path = DATA_PATH.with_suffix(DATA_PATH.suffix + ".lock")
     try:
         fh = open(lock_path, "a+b")
     except PermissionError:
@@ -353,8 +362,19 @@ def _file_lock():
 
 @contextlib.contextmanager
 def _write_session():
-    """쓰기 작업 공통: 스레드 잠금 + 파일 잠금 + 워크북 로드/구조 보정."""
+    """쓰기 작업 공통: 스레드 잠금 + 파일 잠금 + 워크북 로드/구조 보정.
+    SQLite 면 한 트랜잭션(BEGIN IMMEDIATE): _save 가 커밋하고, 예외나 저장 없는 종료는 롤백."""
     with _lock, _file_lock():
+        if USE_DB:
+            con = db.connect()
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                yield db.Workbook(con, CURRENT_AUTHOR)
+            finally:
+                if con.in_transaction:
+                    con.rollback()
+                con.close()
+            return
         wb = _load()
         _ensure_structure(wb)
         yield wb
@@ -362,6 +382,9 @@ def _write_session():
 
 # ---------- 워크북 로드 / 저장 ----------
 def _load():
+    """읽기용 워크북. SQLite 면 어댑터 (자동 커밋 연결, 트랜잭션 없음: 읽기 경로 전용. 쓰기는 _write_session)."""
+    if USE_DB:
+        return db.Workbook(db.connect(), CURRENT_AUTHOR)
     if not XLSX_PATH.exists():
         raise FileNotFoundError(f"장부 파일 없음: {XLSX_PATH}")
     try:
@@ -372,6 +395,8 @@ def _load():
 
 def sheet_names() -> list[str]:
     """시트 이름만 읽는다. read_only 워크북은 close() 전까지 파일 핸들을 쥐고 있어 저장(os.replace)을 막으므로 반드시 닫는다."""
+    if USE_DB:
+        return [sheet for sheet, _cols in db.tables().values()]
     wb = openpyxl.load_workbook(XLSX_PATH, read_only=True)
     try:
         return wb.sheetnames
@@ -380,7 +405,9 @@ def sheet_names() -> list[str]:
 
 
 def _ensure_structure(wb) -> bool:
-    """필요한 시트/열이 없으면 추가. 변경 여부 반환."""
+    """필요한 시트/열이 없으면 추가. 변경 여부 반환. SQLite 는 가져오기 때 보정이 끝났으므로 건너뛴다."""
+    if _is_db(wb):
+        return False
     changed = False
     head_font = Font(bold=True)
     head_fill = PatternFill("solid", fgColor="E8EEF8")
@@ -563,22 +590,38 @@ def exec_req_link(rec: dict) -> str:
 
 
 def _backup():
+    """저장 직전 상태를 app/backup 에 복사. SQLite 는 커밋된 상태를 백업 API 로 복사 (쓰기 중인 트랜잭션은 제외)."""
     BACKUP_DIR.mkdir(exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    dst = BACKUP_DIR / f"{XLSX_PATH.stem}_{stamp}.xlsx"
-    shutil.copy2(XLSX_PATH, dst)
-    olds = sorted(BACKUP_DIR.glob(f"{XLSX_PATH.stem}_*.xlsx"))
+    dst = BACKUP_DIR / f"{DATA_PATH.stem}_{stamp}{DATA_PATH.suffix}"
+    if USE_DB:
+        db.backup_to(dst)
+    else:
+        shutil.copy2(XLSX_PATH, dst)
+    olds = sorted(BACKUP_DIR.glob(f"{DATA_PATH.stem}_*{DATA_PATH.suffix}"))
     for p in olds[:-BACKUP_KEEP]:
         p.unlink(missing_ok=True)
     return dst
 
 
 def _file_hash() -> str:
+    """'그 뒤에 바뀌었는가' 판별 값. xlsx 는 파일 해시, SQLite 는 저장 때마다 1 오르는 meta.write_seq."""
+    if USE_DB:
+        return f"seq:{db.write_seq()}"
     return hashlib.sha256(XLSX_PATH.read_bytes()).hexdigest()
+
+
+def data_stamp() -> str:
+    """다른 창·MCP 의 변경 감지용 값 (/api/meta). xlsx 는 수정 시각, SQLite 는 write_seq (WAL 이라 파일 시각이 믿을 수 없음)."""
+    if USE_DB:
+        return _file_hash()
+    return dt.datetime.fromtimestamp(XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds")
 
 
 # 직전 쓰기 기록: 되돌리기는 "그 이후 아무도 장부를 바꾸지 않았을 때"만 허용 (해시 비교)
 LAST_WRITE: dict | None = None
+# 쓰기 작성자 (SQLite author 열). 로그인이 붙기 전까지는 빈 값 → 가져온 행의 author 는 유지된다 (COALESCE)
+CURRENT_AUTHOR: str | None = None
 
 
 def last_write_id() -> str | None:
@@ -597,9 +640,12 @@ def undo_last(write_id: str | None = None) -> dict:
         if _file_hash() != LAST_WRITE["after"]:
             raise ValueError("그 뒤에 장부가 다시 바뀌어 되돌릴 수 없습니다. 목록을 새로고침하세요.")
         _check_writable()
-        tmp = XLSX_PATH.with_suffix(".tmp.xlsx")
-        shutil.copy2(LAST_WRITE["backup"], tmp)
-        os.replace(tmp, XLSX_PATH)
+        if USE_DB:
+            db.restore_from(Path(LAST_WRITE["backup"]))
+        else:
+            tmp = XLSX_PATH.with_suffix(".tmp.xlsx")
+            shutil.copy2(LAST_WRITE["backup"], tmp)
+            os.replace(tmp, XLSX_PATH)
         info = {"undone": LAST_WRITE.get("label", "")}
         LAST_WRITE = None
         return info
@@ -607,6 +653,8 @@ def undo_last(write_id: str | None = None) -> dict:
 
 def _check_writable():
     """엑셀 등 다른 프로그램이 파일을 점유 중인지 실제 쓰기 열기로 확인."""
+    if USE_DB:
+        return
     try:
         with open(XLSX_PATH, "r+b"):
             pass
@@ -617,6 +665,13 @@ def _check_writable():
 
 def _save(wb):
     global LAST_WRITE
+    if _is_db(wb):
+        backup = _backup()  # 커밋 전 = 저장 직전 상태
+        seq = int(db.meta_get(wb.con, "write_seq") or 0) + 1
+        db.meta_set(wb.con, "write_seq", seq)
+        wb.con.commit()
+        LAST_WRITE = {"backup": str(backup), "after": f"seq:{seq}", "at": dt.datetime.now().isoformat(timespec="seconds"), "id": uuid.uuid4().hex[:12]}
+        return
     _check_writable()
     backup = _backup()
     tmp = XLSX_PATH.with_suffix(".tmp.xlsx")
@@ -630,6 +685,8 @@ def _save(wb):
 
 
 def _headers(ws, row=1) -> list[str]:
+    if _is_db(ws):
+        return list(ws.cols)
     heads = []
     for i in range(1, ws.max_column + 1):
         v = ws.cell(row, i).value
@@ -640,6 +697,8 @@ def _headers(ws, row=1) -> list[str]:
 
 
 def _rows(ws, cols: list[str], head_row=1, formulas: list | None = None) -> list[dict]:
+    if _is_db(ws):
+        return ws.rows()
     heads = _headers(ws, head_row)
     idx = {h: i + 1 for i, h in enumerate(heads) if h}
     out = []
@@ -659,7 +718,18 @@ def _rows(ws, cols: list[str], head_row=1, formulas: list | None = None) -> list
     return out
 
 
+def _db_value(col: str, v: Any):
+    """API 값 -> DB 값: _cell_in 규칙(숫자·날짜·월·제어문자) 뒤 날짜는 문자열, 빈 값은 NULL."""
+    v = _cell_in(col, v)
+    if isinstance(v, (dt.date, dt.datetime)):
+        return _to_date(v)
+    return None if v in (None, "") else v
+
+
 def _write_row(ws, cols: list[str], r: int, rec: dict, head_row=1):
+    if _is_db(ws):
+        ws.write(r, {c: _db_value(c, rec[c]) for c in cols if c in rec})
+        return
     heads = _headers(ws, head_row)
     idx = {h: i + 1 for i, h in enumerate(heads) if h}
     for c in cols:
@@ -683,6 +753,9 @@ def _write_row(ws, cols: list[str], r: int, rec: dict, head_row=1):
 
 
 def _next_row(ws, head_row=1) -> int:
+    """다음 빈 행 번호. SQLite 는 빈 행을 넣고 그 id (트랜잭션 안이라 저장하지 않으면 사라진다)."""
+    if _is_db(ws):
+        return ws.new_row()
     r = ws.max_row
     while r > head_row and all(ws.cell(r, i).value in (None, "") for i in range(1, ws.max_column + 1)):
         r -= 1
@@ -690,86 +763,130 @@ def _next_row(ws, head_row=1) -> int:
 
 
 def _delete_row(ws, r: int):
+    if _is_db(ws):
+        ws.delete(r)
+        return
     ws.delete_rows(r, 1)
+
+
+def _row_in_range(ws, row: int, head_row: int) -> bool:
+    """수정·삭제 대상 행 번호가 시트 안에 있는지 (SQLite 는 id 존재 여부)."""
+    if _is_db(ws):
+        return ws.exists(row)
+    return head_row < row <= ws.max_row
 
 
 # ---------- 공개 API ----------
 def init_file():
+    if USE_DB:
+        with db.session() as con:
+            db.create_schema(con)
+        return
     with _lock, _file_lock():
         wb = _load()
         if _ensure_structure(wb):
             _save(wb)
 
 
+def _raw_xlsx() -> tuple[dict, dict]:
+    """xlsx 에서 시트별 행을 읽는다 (파생 값 계산 전). 반환: (data, meta 추가 항목)."""
+    wb = _load()
+    _ensure_structure(wb)  # 메모리 상 보정 (저장은 쓰기 시)
+    formulas: list[str] = []
+    data = {
+        "funds": _rows(wb[SHEET_FUND], FUND_COLS, 1, formulas),
+        "budget": _rows(wb[SHEET_BUDGET], BUDGET_COLS, BUDGET_HEAD_ROW, formulas),
+        "exec": _rows(wb[SHEET_EXEC], EXEC_COLS, 1, formulas),
+        "req": _rows(wb[SHEET_REQ], REQ_COLS, 1, formulas),
+        "deposit": _rows(wb[SHEET_DEP], DEP_COLS, 1, formulas),
+        "vendor": _rows(wb[SHEET_VENDOR], VENDOR_COLS),
+        "tags": _rows(wb[SHEET_TAG], TAG_COLS, 1, formulas),
+        "evidence": _rows(wb[SHEET_EVID], EVID_COLS, 1, formulas),
+        "people": _rows(wb[SHEET_PEOPLE], PEOPLE_COLS, 1, formulas),
+        "salary": _rows(wb[SHEET_SALARY], SALARY_COLS, 1, formulas),
+        "payee": _rows(wb[SHEET_PAYEE], PAYEE_COLS, 1, formulas),
+        "labor": _rows(wb[SHEET_LABOR], LABOR_COLS, 1, formulas),
+        "ladj": _rows(wb[SHEET_LADJ], LADJ_COLS, 1, formulas),
+        "request": _rows(wb[SHEET_RQ], REQUEST_COLS, 1, formulas),
+        "order": _rows(wb[SHEET_ORDER], ORDER_COLS, 1, formulas),
+        "ratt": _rows(wb[SHEET_RATT], RATT_COLS, 1, formulas),
+        "fixlog": _rows(wb[SHEET_FIXLOG], FIXLOG_COLS, 1, formulas) if SHEET_FIXLOG in wb.sheetnames else [],
+    }
+    for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력
+        if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산"):
+            r["인건비예산"] = None
+    for r in data["payee"]:
+        if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산"):
+            r["인건비예산"] = None
+    meta = {
+        "file": str(XLSX_PATH),
+        "mtime": dt.datetime.fromtimestamp(XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"),
+        "locked": XLSX_PATH.with_name("~$" + XLSX_PATH.name).exists(),
+        # 수식 셀은 값으로 읽을 수 없어 0/문자열로 취급됨 → 화면에 경고
+        "formula_cells": formulas[:20],
+        "formula_count": len(formulas),
+    }
+    return data, meta
+
+
+def _raw_db() -> tuple[dict, dict]:
+    """SQLite 에서 시트별 행을 읽는다 (_row = 행 id). _raw_xlsx 와 같은 모양."""
+    import db
+    with db.session() as con:
+        data = {kind: db.read_rows(con, kind) for kind in db.tables()}
+    meta = {"file": str(db.DB_PATH), "mtime": db.file_mtime(), "locked": False, "formula_cells": [], "formula_count": 0}
+    return data, meta
+
+
+def _derive(data: dict, meta: dict) -> dict:
+    """읽은 행에 계산 값(상태·잠금·has_file 등)과 meta 를 붙인다. 원본 종류(xlsx/SQLite)와 무관."""
+    data["evidence"] = [_evid_out(e) for e in data["evidence"]]
+    req_state = _make_state(data["req"], data["order"])
+    for r in data["request"]:  # 연결 품의가 집행완료이거나 주문이 배송되면 '완료' (읽을 때 계산), 없어진 품의면 '승인'
+        _norm_request(r, req_state)
+        r["_can_convert"] = _can_convert(r, req_state)
+        r["상태"] = request_status(r, req_state)
+    dep_links = _dep_order_links(data["order"], data["deposit"])
+    for r in data["deposit"]:  # 주문이 남긴 적립금 '사용' 행: 증빙번호·금액·거래처·구분 수정과 삭제 잠금 (화면 표시용)
+        if r["_row"] in dep_links:
+            r["_locked_by"] = dep_links[r["_row"]]
+    for r in data["funds"]:  # 종류: 빈 값은 국책
+        r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
+        r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
+    for r in data["deposit"]:  # 적립금 상태는 날짜에서 계산 (사용 행만)
+        r["상태"] = dep_status(r)
+    for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
+        r["상태"] = exec_status(r)
+        r["상태표시"] = EXEC_STATUS_LABEL.get(r["상태"], r["상태"])
+    data["meta"] = {
+        "labor_kinds": LABOR_KINDS,
+        "labor_status": LABOR_STATUS,
+        "dep_types": DEP_TYPES,
+        "dep_status": DEP_STATUS,
+        "budget_items": BUDGET_ITEMS,
+        "fund_types": FUND_TYPES,
+        "fund_type_pool": FUND_TYPE_POOL,
+        "pay_methods": PAY_METHODS,
+        "req_status": REQ_STATUS,
+        "exec_status_labels": EXEC_STATUS_LABEL,
+        "request_types": REQUEST_TYPES,
+        "request_status": REQUEST_STATUS,
+        **supplier_meta(),
+        **meta,
+    }
+    return data
+
+
 def read_all() -> dict:
+    """장부 전체. USE_DB 면 SQLite (이전 1회차: 읽기만, 쓰기는 아직 xlsx), 아니면 xlsx."""
     with _lock:
-        wb = _load()
-        _ensure_structure(wb)  # 메모리 상 보정 (저장은 쓰기 시)
-        formulas: list[str] = []
-        data = {
-            "funds": _rows(wb[SHEET_FUND], FUND_COLS, 1, formulas),
-            "budget": _rows(wb[SHEET_BUDGET], BUDGET_COLS, BUDGET_HEAD_ROW, formulas),
-            "exec": _rows(wb[SHEET_EXEC], EXEC_COLS, 1, formulas),
-            "req": _rows(wb[SHEET_REQ], REQ_COLS, 1, formulas),
-            "deposit": _rows(wb[SHEET_DEP], DEP_COLS, 1, formulas),
-            "vendor": _rows(wb[SHEET_VENDOR], VENDOR_COLS),
-            "tags": _rows(wb[SHEET_TAG], TAG_COLS, 1, formulas),
-            "evidence": [_evid_out(e) for e in _rows(wb[SHEET_EVID], EVID_COLS, 1, formulas)],
-            "people": _rows(wb[SHEET_PEOPLE], PEOPLE_COLS, 1, formulas),
-            "salary": _rows(wb[SHEET_SALARY], SALARY_COLS, 1, formulas),
-            "payee": _rows(wb[SHEET_PAYEE], PAYEE_COLS, 1, formulas),
-            "labor": _rows(wb[SHEET_LABOR], LABOR_COLS, 1, formulas),
-            "ladj": _rows(wb[SHEET_LADJ], LADJ_COLS, 1, formulas),
-            "request": _rows(wb[SHEET_RQ], REQUEST_COLS, 1, formulas),
-            "order": _rows(wb[SHEET_ORDER], ORDER_COLS, 1, formulas),
-            "ratt": _rows(wb[SHEET_RATT], RATT_COLS, 1, formulas),
-            "fixlog": _rows(wb[SHEET_FIXLOG], FIXLOG_COLS, 1, formulas) if SHEET_FIXLOG in wb.sheetnames else [],
-        }
-        req_state = _make_state(data["req"], data["order"])
-        for r in data["request"]:  # 연결 품의가 집행완료이거나 주문이 배송되면 '완료' (읽을 때 계산), 없어진 품의면 '승인'
-            _norm_request(r, req_state)
-            r["_can_convert"] = _can_convert(r, req_state)
-            r["상태"] = request_status(r, req_state)
-        dep_links = _dep_order_links(data["order"], data["deposit"])
-        for r in data["deposit"]:  # 주문이 남긴 적립금 '사용' 행: 증빙번호·금액·거래처·구분 수정과 삭제 잠금 (화면 표시용)
-            if r["_row"] in dep_links:
-                r["_locked_by"] = dep_links[r["_row"]]
-        for r in data["funds"]:  # 인건비예산: 빈 칸은 None (예산목 합계 사용), 숫자는 직접 입력. 종류: 빈 값은 국책
-            r["인건비예산"] = None if r.get("인건비예산") in (None, "", 0) and not _has_value(wb[SHEET_FUND], r["_row"], "인건비예산") else r["인건비예산"]
-            r["종류"] = str(r.get("종류") or "").strip() or FUND_TYPE_DEFAULT
-            r["잔액미관리"] = "Y" if _yes(r.get("잔액미관리")) else ""
-        for r in data["payee"]:
-            r["인건비예산"] = None if not _has_value(wb[SHEET_PAYEE], r["_row"], "인건비예산") else r["인건비예산"]
-        for r in data["deposit"]:  # 적립금 상태는 날짜에서 계산 (사용 행만)
-            r["상태"] = dep_status(r)
-        for r in data["exec"]:  # 상태는 날짜에서 계산 (시트 값은 '보완' 표시용). 상태표시 = 화면 이름 (완료→승인, 결의→완료)
-            r["상태"] = exec_status(r)
-            r["상태표시"] = EXEC_STATUS_LABEL.get(r["상태"], r["상태"])
-        data["meta"] = {
-            "labor_kinds": LABOR_KINDS,
-            "labor_status": LABOR_STATUS,
-            "dep_types": DEP_TYPES,
-            "dep_status": DEP_STATUS,
-            "budget_items": BUDGET_ITEMS,
-            "fund_types": FUND_TYPES,
-            "fund_type_pool": FUND_TYPE_POOL,
-            "pay_methods": PAY_METHODS,
-            "req_status": REQ_STATUS,
-            "exec_status_labels": EXEC_STATUS_LABEL,
-            "request_types": REQUEST_TYPES,
-            "request_status": REQUEST_STATUS,
-            **supplier_meta(),
-            "file": str(XLSX_PATH),
-            "mtime": dt.datetime.fromtimestamp(XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"),
-            "locked": XLSX_PATH.with_name("~$" + XLSX_PATH.name).exists(),
-            # 수식 셀은 값으로 읽을 수 없어 0/문자열로 취급됨 → 화면에 경고
-            "formula_cells": formulas[:20],
-            "formula_count": len(formulas),
-        }
-        return data
+        data, meta = _raw_db() if USE_DB else _raw_xlsx()
+        return _derive(data, meta)
 
 
 def _has_value(ws, row: int, col: str) -> bool:
+    if _is_db(ws):
+        return ws.has_value(row, col)
     heads = _headers(ws)
     return col in heads and ws.cell(row, heads.index(col) + 1).value not in (None, "")
 
@@ -989,6 +1106,8 @@ def _meta_ws(wb, create: bool = False):
 
 
 def _meta_get(wb, key: str):
+    if _is_db(wb):
+        return db.meta_get(wb.con, key)
     ws = _meta_ws(wb)
     if ws is None:
         return None
@@ -999,6 +1118,9 @@ def _meta_get(wb, key: str):
 
 
 def _meta_set(wb, key: str, value):
+    if _is_db(wb):
+        db.meta_set(wb.con, key, value)
+        return
     ws = _meta_ws(wb, create=True)
     for r in range(2, ws.max_row + 1):
         if str(ws.cell(r, 1).value or "").strip() == key:
@@ -1858,7 +1980,7 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
     reapproval = False
     with _write_session() as wb:
         ws = wb[sheet]
-        if row <= head_row or row > ws.max_row:
+        if not _row_in_range(ws, row, head_row):
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
         if kind != "request":
             _validate(kind, rec)
@@ -1982,7 +2104,7 @@ def delete(kind: str, row: int, expect: dict | None = None, cascade: bool = Fals
         raise ValueError("신청 첨부는 첨부 목록에서 삭제하세요.")
     with _write_session() as wb:
         ws = wb[sheet]
-        if row <= head_row or row > ws.max_row:
+        if not _row_in_range(ws, row, head_row):
             raise NotFound("행을 찾을 수 없습니다.")
         existing = next((x for x in _rows(ws, cols, head_row) if x["_row"] == row), None)
         if existing is None:
@@ -2172,9 +2294,8 @@ def labor_bulk(rows: list[dict], skip_dup: bool = False) -> dict:
             created.append(rec)
         if not created:
             raise ValueError("추가할 건이 없습니다." + (f" (중복 {len(skipped)}건 건너뜀)" if skipped else ""))
-        r = _next_row(ws)
         for rec in created:
-            _write_row(ws, LABOR_COLS, r, rec); r += 1
+            _write_row(ws, LABOR_COLS, _next_row(ws), rec)
         _save(wb)
         return {"created": len(created), "skipped": skipped}
 
@@ -2256,6 +2377,9 @@ def _rename_tag(wb, old: str, new: str):
     """태그명 변경 시 집행·품의·적립금의 태그 값을 함께 바꾼다."""
     for sheet in (SHEET_EXEC, SHEET_REQ, SHEET_DEP):
         ws = wb[sheet]
+        if _is_db(ws):
+            ws.replace_value("태그", old, new)
+            continue
         heads = _headers(ws)
         if "태그" not in heads:
             continue
@@ -2322,7 +2446,9 @@ def _fund_usage(wb, code: str) -> int:
 
 
 def _refresh_budget_summary(wb):
-    """예산변동 1~7행 요약(전체 재원 합계)을 갱신."""
+    """예산변동 1~7행 요약(전체 재원 합계)을 갱신. SQLite 는 표시용 요약이 없다 (내보내기가 만든다)."""
+    if _is_db(wb):
+        return
     ws = wb[SHEET_BUDGET]
     rows = _rows(ws, BUDGET_COLS, BUDGET_HEAD_ROW)
     n = len(BUDGET_ITEMS)

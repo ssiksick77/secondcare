@@ -18,3 +18,9 @@ Who reads what:
 - [later][idea] 2026-10-16: 연구원/담당자 역할을 서버가 검사 — 학회 탭 점검 D8, 사용자가 보류. LEDGER_HOST(타 PC 접속) 과제와 함께 다룰 것
 
 - [done 2026-10-19] 적립금 단계 발주일/결제일/수령일 — 커밋 참조 (feat: deposit stages).
+- [later][idea] 2026-10-20: 구글 로그인 + 담당자가 관리하는 허용 이메일 목록(첫 담당자는 app/.env) — SQLite 이전 브레인스토밍; 외부 접속 전에 필요
+- [later][idea] 2026-10-20: 연구원/담당자 역할 검사 — 2026-10-16 항목과 같은 작업; 로그인 뒤에
+- [later][idea] 2026-10-20: 센터 리눅스 서버 배포, 처음엔 센터 PC + 터널(Cloudflare Tunnel 등), 외부 접속 — SQLite 이전 뒤
+- [later][idea] 2026-10-20: 구글 OAuth 테스트 모드 100명 한도 확인, 프로덕션 전환 시 드라이브 범위 심사 — 로그인 작업 때
+- [later][idea] 2026-10-20: 드라이브 토큰을 공용 계정 하나로 할지 사용자별로 할지 — 다중 사용자 뒤
+- [done 2026-10-20][fix] tests/test_api.py 의 subprocess.run(text=True) 4곳이 자식 stderr 를 cp949 로 읽어 한글이 있으면 UnicodeDecodeError 로 검사가 중단됨 (간헐) — encoding='utf-8' 지정 필요. SQLite 이전 1회차 중 발견

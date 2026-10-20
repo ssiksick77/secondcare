@@ -29,6 +29,21 @@ QA_XLSX = os.path.join(QA_DIR, "qa_ledger.xlsx")
 TMP = os.path.join(ROOT, "tests", ".tmp")
 
 
+SETTLE = ("import openpyxl, store\n"
+          "wb = openpyxl.load_workbook(store.XLSX_PATH)\n"
+          "for _ in range(5):\n"
+          "    if not store._ensure_structure(wb): break\n"
+          "wb.save(store.XLSX_PATH)\n")
+
+
+def settle_xlsx(xlsx: str):
+    """xlsx 장부 복사본에 구조 보정을 끝까지 적용해 저장 (서버가 첫 저장 때 하는 일과 같은 상태로)."""
+    pr = subprocess.run([sys.executable, "-c", SETTLE], cwd=APP, env=dict(os.environ, LEDGER_XLSX=xlsx),
+                        capture_output=True, text=True, encoding="utf-8")
+    if pr.returncode != 0:
+        raise SystemExit(f"xlsx 구조 보정 실패: {pr.stderr[-500:]}")
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -50,7 +65,17 @@ class Server:
         os.makedirs(self.dir)
         xlsx = os.path.join(self.dir, "ledger.xlsx")
         shutil.copyfile(QA_XLSX, xlsx)
-        env = dict(os.environ, LEDGER_XLSX=xlsx, LEDGER_ENV=os.path.join(QA_DIR, "qa.env"), LEDGER_DRIVE_MOCK="1",
+        # 저장소 종류: LEDGER_TEST_MODE=db 면 QA 장부를 SQLite 로 가져와 그 파일로 서버를 띄운다 (SQLite 이전 검사). 기본은 xlsx
+        self.mode = os.environ.get("LEDGER_TEST_MODE", "xlsx")
+        self.store_env = {"LEDGER_XLSX": xlsx}
+        if self.mode == "db":
+            settle_xlsx(xlsx)  # xlsx 보정 로직을 직접 검사하는 probe 가 xlsx 모드와 같은 구조를 보도록
+            sqlite = os.path.join(self.dir, "ledger.sqlite")
+            pr = subprocess.run([sys.executable, "-I", "import_xlsx.py", xlsx, sqlite], cwd=APP, capture_output=True, text=True, encoding="utf-8")
+            if pr.returncode != 0:
+                raise SystemExit(f"SQLite 가져오기 실패: {pr.stderr[-500:]}")
+            self.store_env["LEDGER_DB"] = sqlite
+        env = dict(os.environ, **self.store_env, LEDGER_ENV=os.path.join(QA_DIR, "qa.env"), LEDGER_DRIVE_MOCK="1",
                    LEDGER_DRIVE_MOCK_DIR=os.path.join(self.dir, "mock"), LEDGER_PORT=str(self.port), LEDGER_NO_BROWSER="1",
                    PYTHONIOENCODING="utf-8")
         self.log = open(os.path.join(self.dir, "server.log"), "w", encoding="utf-8")

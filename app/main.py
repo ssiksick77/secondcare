@@ -99,8 +99,7 @@ def undo_last(body: dict | None = None):
 @app.get("/api/meta")
 def meta():
     """가벼운 상태 확인: 파일 수정 시각 (다른 창·MCP 변경 감지용) + 소모품 구매처 목록·이용 가능 여부·안내 (연구원 화면은 설정 API를 쓰지 않음)."""
-    import datetime as _dt
-    return {"mtime": _dt.datetime.fromtimestamp(store.XLSX_PATH.stat().st_mtime).isoformat(timespec="seconds"), "write_id": store.last_write_id(),
+    return {"mtime": store.data_stamp(), "write_id": store.last_write_id(),
             "exec_status_labels": store.EXEC_STATUS_LABEL, **store.supplier_meta()}
 
 
@@ -783,8 +782,8 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 if __name__ == "__main__":
-    if not store.XLSX_PATH.exists():
-        print(f"[오류] 장부 파일을 찾을 수 없습니다: {store.XLSX_PATH}\n"
+    if not store.DATA_PATH.exists():
+        print(f"[오류] 장부 파일을 찾을 수 없습니다: {store.DATA_PATH}\n"
               "  → 파일을 app 폴더의 상위 폴더에 두거나 .env 의 LEDGER_XLSX 에 경로를 지정하세요.")
         input("아무 키나 누르면 종료합니다...")
         raise SystemExit(1)
@@ -811,7 +810,7 @@ if __name__ == "__main__":
     except store.LedgerLocked as e:
         print(f"[경고] {e} (구조 보정은 첫 저장 시 적용됩니다)")
     ai_state = f"사용 ({ai.provider()} / {ai.model()})" if ai.enabled() else "비활성 (우하단 설정에서 API 키 입력)"
-    print(f"장부 파일: {store.XLSX_PATH}\nAI: {ai_state}\n브라우저: http://{HOST}:{PORT}  (종료: Ctrl+C)")
+    print(f"장부 파일: {store.DATA_PATH}\nAI: {ai_state}\n브라우저: http://{HOST}:{PORT}  (종료: Ctrl+C)")
     if not os.environ.get("LEDGER_NO_BROWSER"):  # 테스트(tests/)·자동 실행에서는 브라우저를 열지 않음
         threading.Timer(1.0, lambda: webbrowser.open(f"http://{HOST}:{PORT}")).start()
     import socket
