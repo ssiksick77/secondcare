@@ -9,7 +9,7 @@ Object.assign(COLS, {
     { k: "상태", t: "badge" }, { k: "지급일", t: "date" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
   people: [{ k: "이름", html: r => `${esc(r["이름"])}${r["숨김"] === "Y" ? ' <span class="muted">(숨김)</span>' : ""}` }, { k: "인건비구분", label: "구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
     { k: "이월선급", t: "num", amt: true, title: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", wrap: true }],
-  salary: [{ k: "이름" }, { k: "시작월" }, { k: "종료월" }, { k: "월액", label: "월지급액", t: "num", amt: true }, { k: "비고", wrap: true }],
+  salary: [{ k: "이름", hide: true }, { k: "시작월" }, { k: "종료월" }, { k: "월액", label: "월지급액", t: "num", amt: true }, { k: "비고", wrap: true }],
   payee: [{ k: "지급처코드" }, { k: "지급처명", wrap: true }, { k: "인건비예산", t: "num", amt: true }, { k: "사용건수", t: "num", calc: r => DATA.labor.filter(x => x["지급처"] === r["지급처코드"]).length }, { k: "비고", wrap: true }],
   ladj: [{ k: "월" }, { k: "이름" }, { k: "금액", t: "num", amt: true }, { k: "사유", wrap: true }],
 });
@@ -218,7 +218,7 @@ $("#labor-year").addEventListener("change", () => { FILTERS.labor.year = ""; ren
 // ---------- 인원 · 기준급여 (2단: 왼쪽 이름을 누르면 오른쪽에 그 사람의 기준급여) ----------
 SEL_HOOK.people = {
   head: () => "", cell: () => "", rowCls: r => FILTERS.salary["이름"] === r["이름"] ? " selected" : "",
-  after: () => $$("#people-table tbody tr[data-row]").forEach(tr => { tr.tabIndex = 0; tr.setAttribute("role", "button"); tr.setAttribute("aria-pressed", tr.classList.contains("selected")); tr.title = "클릭하면 오른쪽에 기준급여 내역"; }),
+  after: () => $$("#people-table tbody tr[data-row]").forEach(tr => { tr.tabIndex = 0; tr.setAttribute("role", "button"); tr.setAttribute("aria-pressed", tr.classList.contains("selected")); tr.title = "누르면 오른쪽에 기준급여 내역"; }),
 };
 SEL_HOOK.salary = {
   head: () => "", cell: () => "", rowCls: () => "",
