@@ -1,6 +1,6 @@
 """모든 검사를 차례로 실행한다 (scripts/check.sh 의 test 단계). 하나라도 실패하면 종료 코드 1.
     python -I tests/run.py          # 전부
-    python -I tests/run.py calc api # 일부만 (calc · api · db · api-db · ui · ui-db)
+    python -I tests/run.py calc api # 일부만 (calc · api · db · ai · api-db · ui · ui-db)
 """
 import os
 import subprocess
@@ -11,6 +11,7 @@ STEPS = {
     "calc": ["node", os.path.join(HERE, "test_calc.js")],
     "api": [sys.executable, "-I", os.path.join(HERE, "test_api.py")],
     "db": [sys.executable, "-I", os.path.join(HERE, "test_db.py")],
+    "ai": [sys.executable, "-I", os.path.join(HERE, "test_ai.py")],  # AI 도우미: 공통 도구 모듈·MCP 읽기 도구 (모델 호출 없음)
     "api-db": [sys.executable, "-I", os.path.join(HERE, "test_api.py")],  # 같은 API 검사를 SQLite 저장소로 (LEDGER_TEST_MODE=db)
     "ui": [sys.executable, "-I", os.path.join(HERE, "test_ui.py")],
     "ui-db": [sys.executable, "-I", os.path.join(HERE, "test_ui.py")],  # 화면 검사를 SQLite 저장소로
