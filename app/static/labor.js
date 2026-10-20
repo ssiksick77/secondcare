@@ -3,25 +3,26 @@
 
 // ---------- 공통 정의 확장 ----------
 Object.assign(IDENT, { people: ["이름"], salary: ["이름", "시작월"], payee: ["지급처코드"], labor: ["지급월", "귀속월", "이름", "지급처"], ladj: ["월", "이름", "금액"] });
-FILTERS.labor = {};
+FILTERS.labor = {}; FILTERS.people = {}; FILTERS.salary = {};  // salary 이름 = 인원 목록에서 고른 사람 (비면 기준급여 목록도 비움)
 Object.assign(COLS, {
   labor: [{ k: "지급월" }, { k: "귀속월" }, { k: "이름" }, { k: "지급처" }, { k: "지급처명", calc: r => payeeName(r["지급처"]), wrap: true }, { k: "금액", t: "num", amt: true },
     { k: "상태", t: "badge" }, { k: "지급일", t: "date" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
-  people: [{ k: "이름" }, { k: "인건비구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
+  people: [{ k: "이름", html: r => `<button type="button" class="rowbtn" aria-pressed="${FILTERS.salary["이름"] === r["이름"]}" title="이 사람의 기준급여 내역 보기">${esc(r["이름"])}</button>${r["숨김"] === "Y" ? ' <span class="muted">(숨김)</span>' : ""}` }, { k: "인건비구분", label: "구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
     { k: "이월선급", t: "num", amt: true, title: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", wrap: true }],
-  salary: [{ k: "이름" }, { k: "시작월" }, { k: "종료월" }, { k: "월액", t: "num", amt: true }, { k: "비고", wrap: true }],
+  salary: [{ k: "이름" }, { k: "시작월" }, { k: "종료월" }, { k: "월액", label: "월지급액", t: "num", amt: true }, { k: "비고", wrap: true }],
   payee: [{ k: "지급처코드" }, { k: "지급처명", wrap: true }, { k: "인건비예산", t: "num", amt: true }, { k: "사용건수", t: "num", calc: r => DATA.labor.filter(x => x["지급처"] === r["지급처코드"]).length }, { k: "비고", wrap: true }],
   ladj: [{ k: "월" }, { k: "이름" }, { k: "금액", t: "num", amt: true }, { k: "사유", wrap: true }],
 });
 const LABOR_TITLES = { people: "인원", salary: "기준급여", payee: "지급처", labor: "인건비 지급", ladj: "조정" };
 const LABOR_FORMS = {
   people: () => [
-    { k: "이름", type: "text", req: true, focus: true }, { k: "인건비구분", type: "select", opts: DATA.meta.labor_kinds, req: true, hint: "확정 시 예산목 결정" },
+    { k: "이름", type: "text", req: true, focus: true }, { k: "인건비구분", label: "구분", type: "select", opts: DATA.meta.labor_kinds, req: true, hint: "확정 시 예산목 결정 · 기타는 외부인건비" },
     { k: "입사일", type: "date" }, { k: "퇴사일", type: "date", hint: "예정일도 가능" },
     { k: "이월선급", type: "num", hint: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", type: "text", cls: "wide" },
+    { k: "숨김", type: "check", cls: "wide", label: "숨기기 — 인원 목록과 지급·기준급여·조정 입력의 이름 목록에서 뺍니다 (기록은 그대로)" },
   ],
   salary: () => [
-    { k: "이름", type: "select", opts: peopleNames(), req: true }, { k: "월액", type: "num", req: true },
+    { k: "이름", type: "select", opts: peopleNames(), req: true }, { k: "월액", label: "월지급액", type: "num", req: true },
     { k: "시작월", type: "month", req: true }, { k: "종료월", type: "month", req: true }, { k: "비고", type: "text", cls: "wide" },
   ],
   payee: () => [
@@ -43,7 +44,7 @@ function laborDefaults(kind) {
   const m = curMonth();
   if (kind === "labor") return { 귀속월: m, 지급월: m, 지급처: FILTERS.labor["지급처"] || "", 이름: FILTERS.labor["이름"] || "" };
   if (kind === "ladj") return { 월: m };
-  if (kind === "salary") return { 시작월: `${laborYear()}-01`, 종료월: `${laborYear()}-12` };
+  if (kind === "salary") return { 시작월: `${laborYear()}-01`, 종료월: `${laborYear()}-12`, 이름: FILTERS.salary["이름"] || "" };
   if (kind === "people") return { 인건비구분: "내부" };
   return {};
 }
@@ -70,7 +71,8 @@ function curMonth() { const y = laborYear(), now = new Date(); return y === Stri
 function closedMonth() { const y = laborYear(), now = new Date(); return y === String(now.getFullYear()) ? addMonth(localISO(now).slice(0, 7), -1) : (y < String(now.getFullYear()) ? `${y}-12` : `${y}-00`); }
 const monthsOf = y => Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`);
 const addMonth = (ym, n) => { let y = +ym.slice(0, 4), m = +ym.slice(5, 7) + n; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; } return `${y}-${String(m).padStart(2, "0")}`; };
-const peopleNames = () => DATA.people.map(p => p["이름"]);
+// 이름 선택 목록: 숨긴 인원은 빼고 가나다순 (2026-10-20)
+const peopleNames = () => DATA.people.filter(p => p["숨김"] !== "Y").map(p => p["이름"]).sort((a, b) => String(a).localeCompare(String(b), "ko"));
 const payeeOptions = () => [...DATA.funds.map(f => f["재원코드"]), ...DATA.payee.map(p => p["지급처코드"])];
 function payeeName(code) { const f = DATA.funds.find(x => x["재원코드"] === code); if (f) return f["과제명"] || ""; const p = DATA.payee.find(x => x["지급처코드"] === code); return p ? (p["지급처명"] || "") : "(미등록)"; }
 function laborBudget(code) {
@@ -140,13 +142,17 @@ function fillLaborSelects() {
   const ys = [...years].sort().reverse();
   setOptions($("#labor-year"), ys, ys);
   if (!$("#labor-year").dataset.init) { $("#labor-year").value = String(new Date().getFullYear()); $("#labor-year").dataset.init = 1; }
-  const names = peopleNames(), payees = payeeOptions();
-  $$("select[data-filter='이름']").forEach(sel => setOptions(sel, ["", ...names], ["전체", ...names]));
+  const payees = payeeOptions();
+  $$("select[data-filter='이름']").forEach(sel => {  // 숨긴 인원은 빼되, 이미 고른 이름은 남김
+    const names = peopleNames(), cur = FILTERS[sel.dataset.kind]?.["이름"];
+    if (cur && !names.includes(cur)) names.push(cur);
+    setOptions(sel, ["", ...names], ["전체", ...names]);
+  });
   $$("select[data-filter='지급처']").forEach(sel => setOptions(sel, ["", ...payees], ["전체", ...payees]));
 }
 function renderLabor() {
   renderLaborFunds(); renderLaborPlan();
-  renderList("labor"); renderList("people"); renderList("salary"); renderList("payee"); renderList("ladj");
+  renderList("labor"); renderPeople(); renderList("payee"); renderList("ladj");
   renderPrepaid();
 }
 function renderLaborFunds() {
@@ -209,12 +215,45 @@ function renderPrepaid() {
 }
 $("#labor-year").addEventListener("change", () => { FILTERS.labor.year = ""; renderLabor(); });
 
+// ---------- 인원 · 기준급여 (2단: 왼쪽 이름을 누르면 오른쪽에 그 사람의 기준급여) ----------
+SEL_HOOK.people = { head: () => "", cell: () => "", rowCls: r => FILTERS.salary["이름"] === r["이름"] ? " selected" : "" };
+SEL_HOOK.salary = {
+  head: () => "", cell: () => "", rowCls: () => "",
+  empty: () => FILTERS.salary["이름"] ? `${esc(FILTERS.salary["이름"])}의 기준급여 내역이 없습니다.` : "왼쪽 인원 목록에서 이름을 누르면 기준급여 내역이 보입니다.",
+};
+function renderPeople() {
+  renderList("people"); renderList("salary");
+  const name = FILTERS.salary["이름"];
+  $("#salary-who").textContent = name ? ` · ${name}` : "";
+}
+function selectPerson(name) {
+  FILTERS.salary["이름"] = FILTERS.salary["이름"] === name ? "" : name;  // 같은 이름을 다시 누르면 선택 해제
+  renderPeople();
+  $(`#people-table tbody tr .rowbtn[aria-pressed="true"]`)?.focus();
+}
+$("#people-table").addEventListener("click", e => {
+  const b = e.target.closest(".rowbtn"); if (!b) return;
+  const r = DATA.people.find(x => x._row === Number(b.closest("tr[data-row]").dataset.row)); if (r) selectPerson(r["이름"]);
+});
+async function togglePersonHidden(row) {
+  const r = DATA.people.find(x => x._row === row); if (!r) return;
+  const hide = r["숨김"] !== "Y";
+  const rec = Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith("_")));
+  rec["숨김"] = hide ? "Y" : "";
+  try {
+    await api("PUT", `/api/people/${row}`, { rec, expect: expectOf("people", r) });
+    if (hide && FILTERS.salary["이름"] === r["이름"] && !FILTERS.people.showHidden) FILTERS.salary["이름"] = "";
+    showAlert(hide ? `${r["이름"]}을(를) 숨겼습니다. '숨긴 인원 보기'에서 다시 보이게 할 수 있습니다.` : `${r["이름"]}을(를) 다시 보이게 했습니다.`, "ok", { undo: true });
+    await load();
+  } catch (err) { showAlert((hide ? "숨기기" : "보이기") + " 실패: " + err.message, "error"); }
+}
+
 // ---------- 확정 / 확정 취소 ----------
 function laborConfirm(row) {
   const r = DATA.labor.find(x => x._row === row); if (!r) return;
   const d = $("#dlg-pay"); $("#pay-label").textContent = `${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원`; $("#pay-date").value = today();
   const p = DATA.people.find(x => x["이름"] === r["이름"]);
-  $("#pay-note").textContent = `확정하면 집행내역에 재원 ${r["지급처"]} · ${p?.["인건비구분"] === "외부" ? "외부인건비(공통)" : "내부인건비(공통)"} 1건이 지급일 날짜로 추가되고, 이 지급 건은 잠깁니다. 금액·지급처를 바꾸려면 '확정 취소' 뒤에 수정하세요.`;
+  $("#pay-note").textContent = `확정하면 집행내역에 재원 ${r["지급처"]} · ${p?.["인건비구분"] === "외부" || p?.["인건비구분"] === "기타" ? "외부인건비(공통)" : "내부인건비(공통)"} 1건이 지급일 날짜로 추가되고, 이 지급 건은 잠깁니다. 금액·지급처를 바꾸려면 '확정 취소' 뒤에 수정하세요.`;
   d.dataset.row = row; d.showModal(); $("#pay-date").focus();
 }
 $("#dlg-pay-form").addEventListener("submit", async e => {
@@ -362,4 +401,5 @@ document.addEventListener("click", e => {
   if (b.dataset.labor === "copy") copyPrevMonth();
   if (b.dataset.labor === "confirm") laborConfirm(Number(b.dataset.row));
   if (b.dataset.labor === "unconfirm") laborUnconfirm(Number(b.dataset.row));
+  if (b.dataset.labor === "hide") togglePersonHidden(Number(b.dataset.row));
 });

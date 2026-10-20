@@ -4,15 +4,17 @@ Updated: 2026-10-20
 
 ## Goal
 
-Budget tab cleanup: the tab is named 예산, the 예산현액 summary sits above the change list and the add button, the change list stays empty until a fund is selected, and the summary hides 잔액미관리 funds and funds with no budget rows. Checked in the browser on the QA ledger and by `scripts/check.sh`.
+Staff tab (인건비 > 인원) update: label 구분 (not 인건비구분), new kind 기타, a hide function for people, name pickers in 가나다 order, a two-pane layout (name click filters 기준급여, empty by default), and the label 월지급액 (not 월액). Checked by `scripts/check.sh`.
 
 ## Done
 
-- 1eacbbc Tab label 예산변동 → 예산 (index.html; dashboard hint and README wording; sheet name and ids unchanged). Panel order: 재원별 예산현액 요약, then 변경 내역 heading, fund filter (blank option 선택), 예산 행 추가, list. `filtered("budget")` returns no rows without a fund; `SEL_HOOK.budget.empty` shows "재원을 선택하면 변경 내역이 보입니다." `renderBudgetSummary` keeps only funds with budget rows and not 잔액미관리. Verified in the browser pane on the QA copy (QA10 hidden, list fills on QA01).
-- 8e43f4c merged main (favicon, no browser auto-open) into this branch.
+- 6a2ba76 Staff tab. `PEOPLE_COLS` gains `숨김` (Y/blank, like 잔액미관리). `LABOR_KINDS` adds 기타; `LABOR_ITEM` maps 기타 → 외부인건비(공통). Screen labels 구분 and 월지급액; storage column names 인건비구분 and 월액 stay. Hidden people leave the people list and all name pickers (지급·기준급여·조정·일괄 생성, 지급 원장 이름 필터, 신청인 datalist); toolbar checkbox 숨긴 인원 보기 shows them with "(숨김)". Row button 숨기기/보이기 and a form checkbox. `peopleNames()` = visible names sorted with `localeCompare(…, "ko")`. Two panes (`.people-split`): left people, right 기준급여 of the selected name (`FILTERS.salary.이름`, toggle on second click, aria-pressed, row highlight); 기준급여 추가 prefills the name. `db.create_schema` now adds missing columns to existing tables (ALTER TABLE), so the live SQLite gets 숨김 at the next start. Tests: API +6, db +1, UI +10.
+- 440bfce merged main (budget tab cleanup, fund sort) into this branch; one conflict in `store._derive`, both sides kept.
 
 ## Done before this task (kept for reference)
 
+- 1eacbbc Tab label 예산변동 → 예산 (index.html; dashboard hint and README wording; sheet name and ids unchanged). Panel order: 재원별 예산현액 요약, then 변경 내역 heading, fund filter (blank option 선택), 예산 행 추가, list. `filtered("budget")` returns no rows without a fund; `SEL_HOOK.budget.empty` shows "재원을 선택하면 변경 내역이 보입니다." `renderBudgetSummary` keeps only funds with budget rows and not 잔액미관리. Verified in the browser pane on the QA copy (QA10 hidden, list fills on QA01).
+- 8e43f4c merged main (favicon, no browser auto-open) into this branch.
 - 137e869 AI chat rooms, first version: `app/chat_store.py` (`app/chats.sqlite`, rooms per login email, 7-day purge unless kept, history limit 40), routes `/api/chats…` (old `/api/ai/chat` removed), `ai.chat_in_room` (stores question and answer with calls/proposals only on success), panel room bar (select, 새 대화, 이름, 보관, 삭제), past proposal cards status-only, notice text, persona 행정보조 김연구 / button 김연구 호출하기, `LEDGER_AI_FAKE=1` canned answer for UI tests. Checks: calc 32, API 110, db 55, ai 158, api-db 120, UI 84, ui-db 86.
 - Memo kind 비세목 (예산목·세목·세세목 target, active when the row matches any of the three; `tools.memos_for`; suggest prompt sends 관련메모). ai 166.
 - 7475b7c chat answers rendered as markdown (shared `.md` styles).
@@ -44,7 +46,7 @@ None.
 
 ## Next action
 
-Fast-forward main to this branch (done at wrap-up if the check passed), hard-refresh the app on port 8791, and look at the 예산 tab with the live ledger. Then pick with the user: server role checks (design doc §4.2, §8 step 3), the role/name edit UI, or multi-PC access.
+Merge claude/friendly-greider-fb6c05 (xlsx mode removal, session local_7659ce74) into main if the user agrees. Then restart `appun.bat` once and check the 인원 tab on the live ledger.
 
 ## Earlier note
 
@@ -52,7 +54,8 @@ Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE o
 
 ## Open issues
 
-- checks: pass on the final tree (calc 32, API 120, db 55, ai 122, api-db 149, UI 79, ui-db 89; about 6 minutes). Run with a timeout above 360 s.
+- checks: pass on the merged tree 440bfce (calc 32, API 126, db 56, ai 166, api-db 155, UI 97, ui-db 107; about 7 minutes). Run with a timeout above 420 s.
+- Hidden people still appear in the 계획표 and 선급·미지급 tables when they have pay or accrual that year (my call: hiding must not drop money from totals).
 - Server role checks are not implemented: `role` is stored and shown only. Design doc §4 and §8 step 3 describe the checks. `extra.admin` from the request screen is still trusted.
 - No UI to change an account's role or name after adding; delete and add again. Masters are `.env` only.
 - krds-improve / impeccable were not run on the new fieldset; it follows the existing memo fieldset pattern (label, aria-live, button names).
@@ -114,4 +117,5 @@ Chat rooms first version done; checked in the browser pane with LEDGER_AI_FAKE o
 
 - 2026-10-20 (user) AI helper overhaul: hybrid C = small summary in the system prompt + read tools (not full ledger, not summary only); one tool module for MCP and the in-app agent; memo store by target kind (재원·거래처·일반), user edits, AI proposes and the user approves; fx_rate tool in the first version; OpenAI tool calling, receipt OCR (OCI candidate), report, travel calculator, rule-document answers all later. Accountant-role version first; the researcher version is a separate agent with its own smaller tool set (restriction by tool availability, not by prompt). My calls: memo UI in the settings panel; frankfurter.app for rates; tool loop cap stays 6; chat shows one line per tool call under the answer.
 
+- 2026-10-20 (user) Staff tab: 기타 is confirmed as 외부인건비(공통); 가나다 sort applies to people names only ("일단 인원 이름만"). My calls: rename labels only, not storage columns; 숨김 as a Y column like 잔액미관리; hidden people stay in plan and prepaid tables.
 - 2026-10-20 (user) AI chat rooms: server storage (not browser), separate file `app/chats.sqlite` (not the ledger DB: no backup/undo/export mixing), rooms per login email, 7-day auto-delete unless kept, model gets the last 40 messages, past proposal cards act only within their turn, xlsx mode not considered (owner falls back to `local`), notice that misuse may be forwarded to the master account (notice only; detection later). My calls: purge on startup and on list, by last message; title = first question (30 chars), renamable; room list at the top of the panel; delete is permanent.
