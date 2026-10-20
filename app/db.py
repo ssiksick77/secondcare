@@ -163,6 +163,7 @@ class Sheet:
 
     def __init__(self, con: sqlite3.Connection, kind: str, title: str, cols: list[str], author: str | None):
         self.con, self.kind, self.title, self.cols, self.author = con, kind, title, cols, author
+        self._created: set[int] = set()  # 이 세션에서 만든 행: 첫 write 는 'create' 한 줄로만 기록
 
     @property
     def max_row(self) -> int:
@@ -177,6 +178,8 @@ class Sheet:
 
     def new_row(self) -> int:
         cur = self.con.execute(f"INSERT INTO {_q(self.kind)} ({AUTHOR_COL}) VALUES (?)", (self.author,))
+        self._created.add(cur.lastrowid)
+        log_change(self.con, self.kind, cur.lastrowid, "create", self.author)
         return cur.lastrowid
 
     def write(self, row_id: int, values: dict):
@@ -188,9 +191,12 @@ class Sheet:
                                [*values.values(), self.author, row_id])
         if cur.rowcount != 1:
             raise ValueError(f"{self.title} 행 {row_id} 이 없습니다.")
+        if row_id not in self._created:
+            log_change(self.con, self.kind, row_id, "update", self.author, ",".join(values))
 
     def delete(self, row_id: int):
         self.con.execute(f"DELETE FROM {_q(self.kind)} WHERE id = ?", (row_id,))
+        log_change(self.con, self.kind, row_id, "delete", self.author)
 
     def has_value(self, row_id: int, col: str) -> bool:
         if col not in self.cols:
@@ -200,6 +206,8 @@ class Sheet:
 
     def replace_value(self, col: str, old, new) -> int:
         cur = self.con.execute(f"UPDATE {_q(self.kind)} SET {_q(col)} = ? WHERE {_q(col)} = ?", (new, old))
+        if cur.rowcount:
+            log_change(self.con, self.kind, None, "replace", self.author, f"{col}: {old} -> {new} ({cur.rowcount})")
         return cur.rowcount
 
 

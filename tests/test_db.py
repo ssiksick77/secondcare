@@ -75,10 +75,12 @@ def main() -> int:
             "store.update('tags', store.read_all()['tags'][0]['_row'], {**{k: v for k, v in store.read_all()['tags'][0].items() if not k.startswith('_')}, '설명': 'x'})\n"
             "try:\n    store.undo_last(wid); raise SystemExit('stale undo accepted')\n"
             "except ValueError:\n    pass\n"
+            "con = db.connect(); acts = [r['action'] for r in con.execute('SELECT action FROM changelog ORDER BY id')]; con.close()\n"
+            "assert acts == ['create', 'update'], acts\n"  # 되돌린 첫 쓰기의 기록은 백업 복원으로 함께 사라진다
             "print('ok')\n")
     pr = subprocess.run([sys.executable, "-c", undo], cwd=APP, env=dict(os.environ, LEDGER_XLSX=xlsx, LEDGER_DB=sqlite, PYTHONIOENCODING="utf-8"),
                         capture_output=True, text=True, encoding="utf-8")
-    ck("쓰기 → 백업 생성, 되돌리기 동작, 오래된 되돌리기 거부", pr.returncode == 0 and pr.stdout.strip().endswith("ok"), pr.stderr[-600:])
+    ck("쓰기 → 백업 생성, 되돌리기 동작, 오래된 되돌리기 거부, changelog 기록", pr.returncode == 0 and pr.stdout.strip().endswith("ok"), pr.stderr[-600:])
     return ck.done("db")
 
 
