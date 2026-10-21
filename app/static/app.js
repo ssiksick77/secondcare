@@ -553,7 +553,12 @@ function renderDashboard() {
   const pm = {};  // 공금 재원별 셀
   poolFunds.forEach(f => { pm[f] = cell(); pm[f].b = budgets.filter(r => r["재원"] === f).reduce((a, r) => a + (r["입금"] || 0), 0); });
   execsAll.forEach(r => { if (isUntrackedFund(r["재원"])) return; if (pm[r["재원"]]) { const c = pm[r["재원"]]; c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } return; } const c = !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]]; if (!c) { if (inYear(r) && upTo(r)) excluded.push(r); return; } c.sa += r["금액"] || 0; if (inYear(r) && upTo(r)) { c.s += r["금액"] || 0; if (inMonth(r)) c.sm += r["금액"] || 0; } });
-  reqs.forEach(r => { if (isUntrackedFund(r["재원"])) return; if (pm[r["재원"]]) { pm[r["재원"]].p += r["금액"] || 0; return; } !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]] && (m[r["재원"]][r["예산목"]].p += r["금액"] || 0); });
+  // 예정액 = 대기 품의 + 인건비 예정 지급 (2026-10-21 사용자). 인건비 예정 건은 확정 시 생기는 집행과 같은 재원(지급처)·예산목(인건비구분)으로 집계
+  const LABOR_ITEM = { 내부: "내부인건비(공통)", 외부: "외부인건비(공통)", 기타: "외부인건비(공통)" };
+  const kindOf = {}; (DATA.people || []).forEach(p => kindOf[p["이름"]] = p["인건비구분"]);
+  const laborPlan = (DATA.labor || []).filter(r => r["상태"] === "예정" && inScope(r["지급처"])).map(r => ({ 재원: r["지급처"], 예산목: LABOR_ITEM[kindOf[r["이름"]] || "내부"], 금액: r["금액"] }));
+  const addPlan = r => { if (isUntrackedFund(r["재원"])) return; if (pm[r["재원"]]) { pm[r["재원"]].p += r["금액"] || 0; return; } !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]] && (m[r["재원"]][r["예산목"]].p += r["금액"] || 0); };
+  reqs.forEach(addPlan); laborPlan.forEach(addPlan);
   const add = (t, c) => { t.b += c.b; t.s += c.s; t.sm += c.sm; t.sa += c.sa; t.p += c.p; };
 
   // 카드
@@ -569,15 +574,15 @@ function renderDashboard() {
     if (special === "pool" && !poolFunds.length) return `<div class="card" role="listitem" title="공금 종류의 재원이 없습니다"><div class="k">공금 잔액</div><div class="v nobudget dim">공금 재원 없음</div><div class="sub"><span>재원 탭에서 종류를 공금으로 등록</span><span></span></div></div>`;
     const avail = c.b - c.sa - c.p, rate = c.b ? c.sa / c.b : null, used = c.b ? Math.min(1, (c.sa + c.p) / c.b) : 1;
     const bar = c.b ? `<div class="bar" aria-hidden="true"><i class="${c.sa > c.b ? "over" : ""}" style="width:${Math.min(100, c.sa / c.b * 100).toFixed(1)}%"></i>${c.p ? `<i class="p" style="left:${Math.min(100, c.sa / c.b * 100).toFixed(1)}%;width:${Math.max(0, (used - Math.min(1, c.sa / c.b)) * 100).toFixed(1)}%"></i>` : ""}</div>` : "";
-    return `<div class="card" role="listitem" title="${esc(i)}: 예산현액 ${fmt(c.b)} · 집행 ${fmt(c.sa)}${c.p ? ` · 품의대기 ${fmt(c.p)}` : ""} · 가용잔액 ${fmt(avail)}"><div class="k">${esc(i)}</div>${c.b ? `<div class="v${avail < 0 ? " neg" : ""}">${fmt(avail)}</div>` : `<div class="v nobudget" title="예산변동에 이 예산목의 예산을 입력하면 가용잔액이 계산됩니다">예산 미입력</div>`}<div class="sub"><span>집행 ${fmt(c.sa)}${c.p ? ` <span class="muted">+대기 ${fmt(c.p)}</span>` : ""}</span><span>${rate == null ? "" : pct(rate)}</span></div>${bar}</div>`;
+    return `<div class="card" role="listitem" title="${esc(i)}: 예산현액 ${fmt(c.b)} · 집행 ${fmt(c.sa)} · 예정 ${fmt(c.p)} · 가용잔액 ${fmt(avail)}"><div class="k">${esc(i)}</div>${c.b ? `<div class="v${avail < 0 ? " neg" : ""}">${fmt(avail)}</div>` : `<div class="v nobudget" title="예산변동에 이 예산목의 예산을 입력하면 가용잔액이 계산됩니다">예산 미입력</div>`}<div class="sub"><span>집행 ${fmt(c.sa)}</span><span>${rate == null ? "" : pct(rate)}</span></div><div class="sub"><span${c.p ? "" : ' class="muted"'}>예정 ${fmt(c.p)}</span><span></span></div>${bar}</div>`;
   }).join("");
   const exAmt = excluded.reduce((a, r) => a + (r["금액"] || 0), 0);
-  $("#dash-note").innerHTML = esc((year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.sa / tot.b) : "-"} · ${tot.p || reqs.length ? `품의대기 ${fmt(tot.p)} (${reqs.length}건) · ` : ""}가용잔액 ${tot.b ? fmt(tot.b - tot.sa - tot.p) : "예산 미입력"} · 미승인 ${unpaid}건`)
+  $("#dash-note").innerHTML = esc((year ? (month ? `${year}년 1월~${parseInt(month)}월 누계 · ` : `${year}년 · `) : "전체 기간 · ") + `예산현액 ${fmt(tot.b)} · 집행 ${fmt(tot.s)}${month ? ` (${parseInt(month)}월 ${fmt(tot.sm)})` : ""} · 집행률 ${tot.b ? pct(tot.sa / tot.b) : "-"} · ${tot.p || reqs.length || laborPlan.length ? `예정 ${fmt(tot.p)} (품의 ${reqs.length}건 · 인건비 ${laborPlan.length}건) · ` : ""}가용잔액 ${tot.b ? fmt(tot.b - tot.sa - tot.p) : "예산 미입력"} · 미승인 ${unpaid}건`)
     + (untrackedFunds.length ? ` · <span class="muted" title="재원 탭에서 '잔액 미관리'로 표시한 재원: 재원 출처로만 쓰고 예산·잔액 집계에 넣지 않음">잔액 미관리 재원 ${untrackedFunds.length}곳 (${untrackedFunds.join(", ")})</span>` : "")
     + (excluded.length ? ` · <button type="button" class="link" data-act="show-excluded" title="재원 목록에 없는 지급처(외부 인건비 등)나 예산목 목록 밖의 집행. 집행내역·태그 집계에는 포함되지만 예산 집계에서는 제외">집계 제외 ${excluded.length}건 ${fmt(exAmt)}원</button>` : "");
-  $("#dash-defs").innerHTML = `칸의 큰 숫자 = 가용잔액 = 예산현액 − 집행(파일 전체) − 품의대기(날짜 무관, 선택한 재원 합산) · 막대 = 집행률(회색은 품의대기) · 예산현액 = 재원별 이월+당초+변경 합계 · 집행액 줄만 연도 필터(원인발생일, 헤더의 연도) 적용 · 잔액 = 예산현액 − 집행(전체) · 미승인 = 지출완료일 없는 집행 건 · 공금 재원은 예산목 구분 없이 입금 합계 − 집행으로 잔액 한 줄`;
+  $("#dash-defs").innerHTML = `칸의 큰 숫자 = 가용잔액 = 예산현액 − 집행(파일 전체) − 예정(날짜 무관, 선택한 재원 합산) · 예정 = 대기 품의 + 인건비 예정 지급(지급처가 재원, 인건비구분이 예산목) · 막대 = 집행률(회색은 예정) · 예산현액 = 재원별 이월+당초+변경 합계 · 집행액 줄만 연도 필터(원인발생일, 헤더의 연도) 적용 · 잔액 = 예산현액 − 집행(전체) · 미승인 = 지출완료일 없는 집행 건 · 공금 재원은 예산목 구분 없이 입금 합계 − 집행으로 잔액 한 줄`;
 
-  // 표: 재원(행) × 예산목(열) + 합계 열. 재원마다 4줄 = 예산현액 / (집행액) / (예정액 = 품의대기) / 가용잔액(이중실선). 집행액은 연·월 필터(월이면 연초~해당 월 누계), 가용잔액은 파일 전체 기준
+  // 표: 재원(행) × 예산목(열) + 합계 열. 재원마다 4줄 = 예산현액 / (집행액) / (예정액 = 대기 품의 + 인건비 예정) / 가용잔액(이중실선). 집행액은 연·월 필터(월이면 연초~해당 월 누계), 가용잔액은 파일 전체 기준
   const useItems = items.filter(i => i !== "내부인건비(공통)" && i !== "연구개발부담비");  // 값이 없는 예산목 열도 같은 폭으로 둔다; 내부인건비·연구개발부담비는 숨김 (2026-10-20 사용자). 합계 열은 전체 예산목 기준
   const th = `<thead><tr><th data-col="재원">재원</th><th data-col="항목">항목</th>${useItems.map(i => `<th class="num" data-col="${esc(i)}">${esc(i)}</th>`).join("")}<th class="num amt" data-col="합계">합계</th></tr></thead>`;
   const execLabel = month ? `집행액 (1~${parseInt(month)}월)` : "집행액";
@@ -612,7 +617,7 @@ function renderDashboard() {
 
   // 월별 차트 (누적선 + 예산현액 기준선)
   renderChart(execs, funds, year, tot.b);
-  DASH_PRINT = { year, kind, fund, funds, poolFunds, items, m, pm, nReq: reqs.length };  // 인쇄 보고서용
+  DASH_PRINT = { year, kind, fund, funds, poolFunds, items, m, pm, nReq: reqs.length + laborPlan.length };  // 인쇄 보고서용 (예정 건수 = 품의 + 인건비 예정)
 
   // 거래처별 적립금 잔액 (재원 구분 없음)
   const dep = {};
