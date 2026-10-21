@@ -404,8 +404,9 @@ function renderList(kind) {
   }
   let foot = "";
   if (rows.length && (kind === "exec" || kind === "req" || kind === "deposit" || kind === "labor" || kind === "request")) {
-    const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
-    foot = `<tfoot><tr class="total">${selHead ? '<td class="sel"></td>' : ""}${cols.map(c => c.k === "금액" ? `<td data-col="${esc(c.k)}" class="num amt${minorCls(c)}">${fmt(sum)}</td>` : `<td data-col="${esc(c.k)}" class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}${noAct ? "" : '<td class="actions"></td>'}</tr></tfoot>`;
+    // 적립 탭은 적립(+)·사용(−)의 순액 (2026-10-21 사용자: 둘을 양수로 더하던 문제)
+    const sum = rows.reduce((a, r) => a + (kind === "deposit" && r["구분"] !== "적립" ? -(r["금액"] || 0) : (r["금액"] || 0)), 0);
+    foot = `<tfoot><tr class="total">${selHead ? '<td class="sel"></td>' : ""}${cols.map(c => c.k === "금액" ? `<td data-col="${esc(c.k)}" class="num amt${minorCls(c)}${sum < 0 ? " neg" : ""}">${fmt(sum)}</td>` : `<td data-col="${esc(c.k)}" class="${minorCls(c).trim()}">${c === cols[0] ? `합계 ${rows.length}건` : ""}</td>`).join("")}${noAct ? "" : '<td class="actions"></td>'}</tr></tfoot>`;
   }
   table.innerHTML = headFinal + `<tbody>${body}</tbody>` + foot;
   fixEmptySpan(table); fitWraps();
