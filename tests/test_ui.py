@@ -181,7 +181,8 @@ def main() -> int:
         # ---- 열 숨기기 (cols.js, 2026-10-21): 팝오버·우클릭·스텁·최소 1열·세션 기억 ----
         pg.evaluate("sessionStorage.clear(); switchTab('exec')"); pg.wait_for_timeout(400)
         ck("열: 상세 열 체크박스 없음, [조회 열 관리] 있음", not pg.query_selector("#exec-cols-all") and bool(pg.query_selector("[data-cols=exec]")))
-        ck("열: 옛 상세 열(관리번호 등)은 스텁", pg.evaluate("['관리번호','세세목','사용자','비고'].every(k => document.querySelector(`#exec-table thead th[data-col='${k}']`).classList.contains('col-stub'))"))
+        ck("열: 집행 표에 비고 열 없음 (적요 메모 툴팁)", pg.evaluate("!document.querySelector(\"#exec-table thead th[data-col='비고']\")"))
+        ck("열: 옛 상세 열(관리번호 등)은 스텁", pg.evaluate("['관리번호','세세목','사용자'].every(k => document.querySelector(`#exec-table thead th[data-col='${k}']`).classList.contains('col-stub'))"))
         ck("열: 표 폭 ≥ 표 틀 폭 (빈 자리 없음)", pg.evaluate("(()=>{const t=document.querySelector('#exec-table'); return t.offsetWidth >= t.closest('.table-wrap').clientWidth - 1})()"))
         pg.click("[data-cols=exec]"); pg.wait_for_timeout(300)
         ck("열 관리 팝오버: 거래번호는 고정(비활성)", pg.evaluate("(()=>{const i=document.querySelector(\".col-pop input[data-k='거래번호']\"); return !!i && i.disabled && i.checked})()"))
