@@ -4,12 +4,13 @@ Updated: 2026-10-21
 
 ## Goal
 
-Center the main area when the 사이드바 is collapsed (2026-10-21, branch `claude/side-panel-collapse-center-align-b3078b`): the main area keeps the width it has with the panel open, and the freed width is split left and right. Checked by `scripts/check.sh` and the browser pane on the QA copy (port 8897).
+Make the 사이드바 collapsible on every screen width and center the main area when it is collapsed (2026-10-21, branch `claude/side-panel-collapse-center-align-b3078b`): the main area keeps the width it has with the panel open, and the freed width is split left and right. Checked by `scripts/check.sh` and the browser pane on the QA copy (port 8897).
 
 ## Done
 
 - 0f7ff38 `body.side-collapsed .col > main { max-width: calc(100% - var(--side-w)) }` in `style.css`; viewports under 1000px lift the cap; print already resets `max-width`. Browser pane at 1400px: main width 865 in both states, left gap 240 when collapsed. UI test viewport 1366 → 1900 (collapsed main was 831px, under the 900px column fold tier, so two column checks failed); three new checks (same width, centered, left-aligned when open). checks: pass (calc 32, api 168, db 56, ai 166, ui 126, ui-db 136).
-- main fast-forwarded to 0f7ff38 (user asked on 2026-10-21).
+- fa68d67 Collapse button on every width: the `@media (min-width: 1500px)` rule that hid `#side-collapse` is removed; `apply()` in app.js uses the saved `ledger-side` state first, and only without one opens at 1500px and wider. DESIGN.md updated. Browser pane at 1800px: button visible, collapse centers main (left 240, width 1265), state kept after reload. UI +2 checks. checks: pass (calc 32, api 168, db 56, ai 166, ui 128, ui-db 138).
+- main fast-forwarded to fa68d67 (user asked on 2026-10-21).
 
 ## In progress
 
@@ -28,7 +29,8 @@ None.
 
 ## Next action
 
-Restart the live app (`appun.bat`) and collapse the panel once on the live ledger. Then the ideas list: panel purpose, MSRI card, code id rename, 인건비·신청 table columns, critique P4.
+Restart the live app (`app
+un.bat`) and collapse the panel once on the live ledger. Then the ideas list: panel purpose, MSRI card, code id rename, 인건비·신청 table columns, critique P4.
 
 ## Done before this task (kept for reference)
 
