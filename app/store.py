@@ -672,7 +672,7 @@ def set_user_name(email: str, name: str) -> str:
     return name
 
 
-HOME_PATHS = {"fund": "/fund", "labor": "/labor", "request": "/"}
+HOME_PATHS = {"fund": "/fund", "labor": "/labor", "request": "/request"}
 
 
 def user_home(email: str) -> str:

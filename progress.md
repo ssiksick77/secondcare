@@ -4,17 +4,23 @@ Updated: 2026-10-20
 
 ## Goal
 
-Post-login menu screen `/enter` with three square buttons (연구비 / 인건비 / 신청) for every login account. 회계대장 moves to `/fund`, 신청 becomes `/`, old `/request` redirects to `/`. Settings has "기본 화면" (menu / 연구비 / 인건비 / 신청) per account; the default is the menu. Checked by `scripts/check.sh` and by screenshots of the QA copy.
+Terms, routes and column hiding on the 연구비 screen (2026-10-21, same branch): tables lost columns silently, users could not choose columns, and terms/paths did not match yesterday's structure. Checked by `scripts/check.sh` and the browser pane on the QA copy (port 8893).
 
 ## Done
 
-- d83e60e Menu screen `app/static/enter.html` (SECONDCare wordmark, three square buttons with icons, name and logout in the header, footer "분당서울대학교병원 의료인공지능센터"). Routes: `/enter` (menu; redirects to the account's home unless `?menu=1`), `/fund` (회계대장), `/` (신청), `/request` → 301 `/`. Login callback, `/login` when logged in, and `/welcome` after the name go to `/enter`. `users.home` column (`db.set_user_home`, `store.HOME_PATHS`), `/api/me` returns `home` and `db`, `POST /api/me/home`. Settings fieldset "기본 화면" saves on change (SQLite per account, xlsx localStorage `ledger-home`). Header: 메뉴 button (`/enter?menu=1`); back buttons read 연구비. `labor.js` MODE_PATH updated. Menu 신청 button sets `request-admin` for non-researcher roles. Tests: API +12, UI +10. README and PRODUCT.md route text updated.
-- Merged main 5872ffd (two-column frame with side panel, dashboard report, SECONDCare rename) into this branch on 2026-10-20; conflicts in style.css (both kept: menu styles + sticky tabs) and progress.md (this file kept). `enter.html` title changed to SECONDCare.
-- Previous goal (people tab layout) ended at 0dace3e; merged to main earlier.
+- fcf9ac7 Terms and routes: CLAUDE.md Terms/Routes tables (화면·시작 화면·메뉴 바·탭·서브탭·헤더·사이드바·패널·레일; payroll = labor in code). `/` redirects to `/enter`, `/request` serves the 신청 screen, `MODE_PATH.fund`, body `fund-mode`, header 메뉴 button removed (title links to `/enter?menu=1`), 회계대장 wording replaced. `app/migrate_req_dates.py` (dry run by default) copies 원인발생일 into empty 지출예정일; applied to the QA copy (9 rows).
+- faf7655 Column hiding `app/static/cols.js`: states 보임/스텁/없음, `COLW` widths in JS (CSS width rules and container-query folds removed), `COL_FOLD` tiers by main width, `COL_MINOR` default stubs (old 상세 열 checkbox removed), header right-click menu, [조회 열 관리] popover on 집행·품의·적립·예산·대시보드, fixed columns (번호·작업·대시보드 재원·항목), at least one visible, sessionStorage per table. 품의 원인발생일 and 예산 재원 columns deleted. DESIGN.md Layout updated. UI tests added (ui +14).
+
+- 2026-10-21 Live ledger: `migrate_req_dates.py --apply` run with the user's go (LEDGER_DB = the SQLite next to the main checkout): 12 품의 rows got 지출예정일 = 원인발생일 (all were empty before); 12 backups in `app/backup/` (09:07). Re-count 0.
+- checks: full `scripts/check.sh` on faf7655: calc 32, api 136, db 56, ai 166 pass; api-db 168, ui 122, ui-db 132 pass after two test fixes (router 302 in the welcome test, table width tolerance) and exec 적요 min 160 — the three groups were rerun alone after the fixes.
 
 ## In progress
 
 None.
+
+## Next action
+
+main is fast-forwarded to this branch. Restart `appun.bat` (main.py routes changed: / → /enter, /request). Then the ideas list: panel purpose, MSRI card, code id rename, 인건비·신청 table columns, critique P4.
 
 ## Open issues
 

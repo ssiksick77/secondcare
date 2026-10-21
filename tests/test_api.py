@@ -330,13 +330,15 @@ def main() -> int:
             ck("로그인: 새 행 author = 로그인 이메일 (SQLite)", s == 200 and sv.row("request", r["_row"]).get("_author") == sv.TEST_EMAIL, (s, r))
         s, loc = sv.get_raw("/login")
         ck("로그인: 로그인 상태에서 /login → /enter 로 이동", s == 302 and loc == "/enter", (s, loc))
-        # ---- 메뉴 /enter 와 기본 화면 (2026-10-20): 옛 /request 는 / 로, 회계대장은 /fund ----
+        # ---- 시작 화면 /enter 와 기본 화면 (2026-10-21): / 는 라우터, 신청 /request, 연구비 /fund ----
         s, _ = sv.get_raw("/enter")
         ck("메뉴: /enter 200 (기본 화면 없음)", s == 200, s)
         s, _ = sv.get_raw("/fund")
         ck("메뉴: /fund 200", s == 200, s)
-        s, loc = sv.get_raw("/request")
-        ck("메뉴: 옛 /request → 301 /", s == 301 and loc == "/", (s, loc))
+        s, _ = sv.get_raw("/request")
+        ck("시작 화면: /request 200 (신청 화면)", s == 200, s)
+        s, loc = sv.get_raw("/")
+        ck("시작 화면: / → 302 /enter (라우터)", s == 302 and loc == "/enter", (s, loc))
         s, r = sv.call("GET", "/api/me")
         ck("메뉴: /api/me 에 home·db", r.get("home") == "" and r.get("db") == (sv.mode == "db"), r)
         s, r = sv.call("POST", "/api/me/home", {"home": "nowhere"})
@@ -393,7 +395,7 @@ def main() -> int:
             s, r = sv.call("GET", "/api/me", cookie=ck_)
             ck("이름 저장 뒤: needs_name false, 이름", r.get("needs_name") is False and r.get("name") == "검사 담당", r)
             s, loc = sv.get_raw("/", cookie=ck_)
-            ck("이름 저장 뒤: / 200", s == 200, (s, loc))
+            ck("이름 저장 뒤: / → 302 /enter (라우터)", s == 302 and loc == "/enter", (s, loc))
             s, loc = sv.get_raw("/welcome", cookie=ck_)
             ck("이름 저장 뒤: /welcome → /enter", s == 302 and loc == "/enter", (s, loc))
             s, r = sv.call("GET", "/api/all", cookie=ck_)
@@ -401,7 +403,7 @@ def main() -> int:
         else:
             ck("xlsx: 이름을 묻지 않음", r.get("needs_name") is False, r)
             s, loc = sv.get_raw("/", cookie=ck_)
-            ck("xlsx: / 200", s == 200, (s, loc))
+            ck("xlsx: / → 302 /enter (라우터)", s == 302 and loc == "/enter", (s, loc))
         # ---- 허용 계정 관리 (/api/users): 마스터(.env)만, SQLite users 표에 저장 ----
         other = "guest@example.com"  # .env 마스터(TEST_EMAIL, OTHER_EMAIL)가 아닌 계정
         ck_o = sv.session_cookie(other)

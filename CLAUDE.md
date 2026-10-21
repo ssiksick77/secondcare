@@ -4,6 +4,30 @@ Program names: code name `caih-rfm` (MCP server name, log name), short name "SEC
 
 The shared rules in `../CLAUDE.md` apply here. This file holds the facts of this project only.
 
+## Terms (2026-10-21, user)
+
+Use these words in docs, progress.md, commit messages and UI copy. Code identifiers stay as they are until a later rename (ideas.md).
+
+| Term | Meaning | Code |
+|---|---|---|
+| 화면 (screen) | one of 연구비 / 인건비 (English: payroll) / 신청; one index.html switched by mode | `mode`: fund / labor / request; body classes `fund-mode`, `labor-mode`, `request-mode`. The code keeps `labor` for 인건비 (renaming to payroll is an ideas.md item) |
+| 시작 화면 | the /enter page with the three big buttons | `enter.html` |
+| 메뉴 바 | the tab row under the header | `#main-tabs`, `#labor-tabs`, `#request-tabs` |
+| 탭 | one item of a 메뉴 바 (대시보드·집행·품의·예산·적립·태그·재원 / 계획표·지급 원장·인원·지급처 / 장비·소모품·학회·기타) | `tab-*`, `ltab-*`, `rtab-*` |
+| 서브탭 | a switch inside a tab (대시보드 예산/태그) | `.subtabs` |
+| 헤더 | the title row (SECONDCare, 연도, 새로고침, 인건비, 신청, 로그아웃, 설정, 김연구) | `.top` |
+| 사이드바 | the right column (480 px body + 44 px rail) | `#side` |
+| 패널 | one view inside the 사이드바: 기본 / 상세 / AI | `#side-home`, `#exec-drawer`, `#req-drawer`, `#ai-drawer` |
+| 레일 | the vertical strip at the right edge of the 사이드바 | `#side-rail` |
+
+Do not call the 연구비 screen 회계대장 any more (old name; the folder name and `LEDGER_*` env vars stay).
+
+## Routes (2026-10-21, user)
+
+- `/` is the entry router, not a screen. It sends everyone to `/enter` (also after roles exist). With roles, `/enter` shows only the buttons the account may use (연구원: 신청 and later 근태; 담당자 and up: all), and a saved start screen may skip `/enter`.
+- `/enter` 시작 화면, `/fund` 연구비, `/labor` 인건비, `/request` 신청. `/login`, `/welcome` as before.
+- The header has no 메뉴 button; the SECONDCare title links to `/enter`.
+
 ## Purpose
 
 A local, single-user web app for the research-fund accountant of the 분당서울대병원 의료인공지능센터. It manages spending (집행, 품의, 예산변동, 적립금, 인건비, 신청) across several funding sources in one Excel ledger, which stays the source of truth. Evidence files go to Google Drive. An optional AI helper only suggests, and an MCP server exposes the ledger to Claude.

@@ -11,11 +11,10 @@
 <a class="skip" href="#main">본문 바로가기</a>
 
 <header class="top">
-  <h1><span class="app-name">SECONDCare</span><small class="app-full">의료인공지능센터 연구비 관리 시스템</small></h1>
+  <h1><a class="app-name app-home" href="/enter?menu=1" title="시작 화면 (연구비 · 인건비 · 신청)">SECONDCare</a><small class="app-full">의료인공지능센터 연구비 관리 시스템</small></h1>
   <label class="top-year" title="대시보드 집계 연도">연도 <select id="dash-year"></select></label>
   <div class="top-status" id="file-status" aria-live="polite"></div>
   <button type="button" class="btn btn-ghost" id="btn-reload">새로고침</button>
-  <a class="btn btn-ghost" id="btn-enter" href="/enter?menu=1" title="메뉴 화면 (연구비 · 인건비 · 신청)">메뉴</a>
   <span class="top-sep" aria-hidden="true"></span>
   <button type="button" class="btn btn-ghost btn-mode" id="btn-mode" title="인건비 관리 화면으로 전환">인건비</button>
   <button type="button" class="btn btn-ghost btn-mode" id="btn-request" title="지출 신청 화면으로 전환 (담당자)">신청</button>
@@ -62,7 +61,7 @@
     <li><button role="tab" id="rtab-학회" data-rtype="학회" aria-controls="rpanel" aria-selected="false">학회</button></li>
     <li><button role="tab" id="rtab-기타" data-rtype="기타" aria-controls="rpanel" aria-selected="false">기타</button></li>
   </ul>
-  <span class="req-role req-admin-only" title="회계대장에서 들어와 승인·반려·품의 전환·주문을 처리할 수 있습니다">담당자</span>
+  <span class="req-role req-admin-only" title="연구비 화면에서 들어와 승인·반려·품의 전환·주문을 처리할 수 있습니다">담당자</span>
   <button type="button" class="lnk req-prev-year" id="req-prev-year" hidden title="이전 연도에 아직 '신청' 상태로 남은 건을 봅니다"></button>
   <label class="tabs-year">연도 <select id="request-year"></select></label>
 </nav>
@@ -203,6 +202,7 @@
       <label>종류 <select id="dash-kind" title="재원 종류 (1차 필터)"><option value="">전체</option></select></label>
       <label>재원 <select id="dash-fund" title="개별 재원 (2차 필터)"><option value="">전체</option></select></label>
       <span class="toolbar-note" id="dash-note"></span>
+      <button type="button" class="btn" data-cols="dash" title="집행 현황 표의 보이는 열 고르기">조회 열 관리</button>
       <button type="button" class="btn" id="dash-csv" title="아래 표를 CSV 파일로 저장">CSV 저장</button>
       <button type="button" class="btn" id="dash-print" title="브라우저 인쇄 (대시보드만)">인쇄</button>
     </div>
@@ -244,8 +244,8 @@
       <label>예산목 <select data-filter="예산목" data-kind="exec"><option value="">전체</option></select></label>
       <label>검색 <input type="search" data-filter="q" data-kind="exec" placeholder="거래처, 적요, 번호, 태그"></label>
       <label class="chk"><input type="checkbox" data-filter="unpaid" data-kind="exec"> 미승인만</label>
-      <label class="chk" title="관리번호·세세목·사용자·비고 열 표시"><input type="checkbox" id="exec-cols-all"> 상세 열</label>
       <span class="toolbar-sum" id="exec-sum"></span>
+      <button type="button" class="btn" data-cols="exec" title="보이는 열 고르기 (머리글 우클릭으로도 숨길 수 있습니다)">조회 열 관리</button>
       <button type="button" class="btn" data-csv="exec" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn" id="btn-edit-mode" title="현재 필터의 집행을 팝업 격자에서 엑셀처럼 한꺼번에 편집">편집 모드</button>
       <button type="button" class="btn" id="btn-del-mode" title="체크한 집행을 한 번에 삭제">삭제</button>
@@ -266,6 +266,7 @@
       <label>월 <select data-filter="month" data-kind="req"><option value="">전체</option></select></label>
       <label>검색 <input type="search" data-filter="q" data-kind="req" placeholder="거래처, 적요, 번호, 태그"></label>
       <span class="toolbar-sum" id="req-sum"></span>
+      <button type="button" class="btn" data-cols="req" title="보이는 열 고르기 (머리글 우클릭으로도 숨길 수 있습니다)">조회 열 관리</button>
       <button type="button" class="btn" data-csv="req" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn btn-primary" data-add="req">품의 추가</button>
     </div>
@@ -280,6 +281,7 @@
     <div class="toolbar">
       <label>재원 <select data-filter="재원" data-kind="budget"><option value="">선택</option></select></label>
       <span class="toolbar-note">변경회차: <b>이월</b>(이월금) · <b>당초</b>(당초액) · 숫자(변경 회차)</span>
+      <button type="button" class="btn" data-cols="budget" title="보이는 열 고르기 (머리글 우클릭으로도 숨길 수 있습니다)">조회 열 관리</button>
       <button type="button" class="btn btn-primary" data-add="budget">예산 행 추가</button>
     </div>
     <div class="table-wrap"><table class="grid" id="budget-table"></table></div>
@@ -307,6 +309,7 @@
       <label>연도 <select data-filter="year" data-kind="deposit"><option value="">전체</option></select></label>
       <label>검색 <input type="search" data-filter="q" data-kind="deposit" placeholder="적요, 사용자, 증빙번호"></label>
       <span class="toolbar-note">적립 시 '집행내역에 기록'을 켜면 선결제 금액이 집행내역에 한 건 추가되어 예산에서 차감됩니다. 사용은 적립금 잔액만 줄입니다.</span>
+      <button type="button" class="btn" data-cols="deposit" title="보이는 열 고르기 (머리글 우클릭으로도 숨길 수 있습니다)">조회 열 관리</button>
       <button type="button" class="btn btn-primary" data-add="deposit">적립/사용 추가</button>
     </div>
     <div class="table-wrap"><table class="grid clickable" id="deposit-table" title="행을 누르면 상세·증빙 패널"></table></div>
@@ -708,6 +711,7 @@
 <script src="/static/edit.js"></script>
 <script src="/static/request.js"></script>
 <script src="/static/conf.js"></script>
+<script src="/static/cols.js"></script>
 <div id="print-sheet" class="print-root" aria-hidden="true"></div>
 <div id="print-conf" class="print-root" aria-hidden="true"></div>
 <div id="print-voucher" class="print-root" aria-hidden="true"></div>

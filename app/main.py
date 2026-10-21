@@ -123,7 +123,7 @@ def welcome_page(request: Request):
 
 @app.get("/enter")
 def enter_page(request: Request, menu: str | None = None):
-    """로그인 뒤 메뉴 (연구비 / 인건비 / 신청). 기본 화면이 정해진 계정은 그 화면으로. ?menu=1 은 항상 메뉴."""
+    """시작 화면 (연구비 / 인건비 / 신청). 기본 화면이 정해진 계정은 그 화면으로. ?menu=1 은 항상 시작 화면."""
     home = (request.state.user or {}).get("home") or ""
     if home in store.HOME_PATHS and menu is None:
         return RedirectResponse(store.HOME_PATHS[home], status_code=302)
@@ -255,13 +255,13 @@ def _page(name: str):
 
 @app.get("/")
 def index():
-    """신청 화면 (연구원 기본 화면). 같은 페이지, 주소로 모드 전환 (2026-10-20: 옛 /request)."""
-    return _page("index.html")
+    """진입 라우터 (2026-10-21): 화면이 아니라 시작 화면으로 보낸다. 역할이 생기면 /enter 가 역할에 맞는 버튼만 보여 준다."""
+    return RedirectResponse("/enter", status_code=302)
 
 
 @app.get("/fund")
 def ledger_page():
-    """회계대장 화면 (집행·품의·예산·적립금). 2026-10-20 까지는 / 였다."""
+    """연구비 화면 (대시보드·집행·품의·예산·적립·태그·재원)."""
     return _page("index.html")
 
 
@@ -279,8 +279,8 @@ def labor_page():
 
 @app.get("/request")
 def request_page():
-    """옛 주소. 신청 화면은 / (즐겨찾기 호환)."""
-    return RedirectResponse("/", status_code=301)
+    """신청 화면: 같은 페이지, 주소로 모드 전환 (2026-10-21: / 는 라우터)."""
+    return _page("index.html")
 
 
 @app.post("/api/undo")

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>메뉴 · SECONDCare</title>
+<title>시작 · SECONDCare</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/style.css">
 </head>
@@ -30,7 +30,7 @@
       </svg>
       <span>인건비</span>
     </a>
-    <a class="enter-btn" href="/" data-home="request">
+    <a class="enter-btn" href="/request" data-home="request">
       <svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 6h17l9 9v27H12z"/><path d="M29 6v9h9"/><path d="M24 20v14M17 27h14"/>
       </svg>
@@ -46,7 +46,7 @@
 
 <script>
 (async function () {
-  var HOME_PATHS = { fund: "/fund", labor: "/labor", request: "/" };
+  var HOME_PATHS = { fund: "/fund", labor: "/labor", request: "/request" };
   var stay = new URLSearchParams(location.search).has("menu");
   var me = {};
   try { me = await (await fetch("/api/me")).json(); } catch (e) { }

@@ -1,6 +1,6 @@
 /* 지출 신청 화면 (/request) — app.js 의 공통 함수($, api, openForm, renderList, confirmDlg, showAlert …)를 그대로 사용.
    연구원 화면: /request 직접 접속 (신청 목록·상태 확인, 본인 신청 추가·수정·첨부)
-   담당자 화면: 회계대장·인건비 화면에서 헤더 [신청] 버튼으로 들어온 경우 (sessionStorage "request-admin") — 승인·반려·품의 전환·주문 */
+   담당자 화면: 연구비·인건비 화면에서 헤더 [신청] 버튼으로 들어온 경우 (sessionStorage "request-admin") — 승인·반려·품의 전환·주문 */
 "use strict";
 
 // ---------- 공통 정의 확장 ----------
@@ -134,8 +134,8 @@ function syncReqSub() {
 }
 $$("#req-seg [role=tab]").forEach(b => b.addEventListener("click", () => switchReqSub(b.dataset.rsub)));  // ←/→ 는 app.js 의 .subtabs rovingTabs
 $("#btn-request").addEventListener("click", () => {
-  if (document.body.classList.contains("request-mode")) { setMode("main"); return; }
-  try { sessionStorage.setItem("request-admin", "1"); } catch { }  // 회계대장(또는 메뉴, 연구원 아닌 계정)에서 들어오면 담당자 (이 탭이 열려 있는 동안)
+  if (document.body.classList.contains("request-mode")) { setMode("fund"); return; }
+  try { sessionStorage.setItem("request-admin", "1"); } catch { }  // 연구비 화면(또는 시작 화면, 연구원 아닌 계정)에서 들어오면 담당자 (이 탭이 열려 있는 동안)
   document.body.classList.add("req-admin");
   setMode("request");
   if (DATA) renderRequest();
@@ -837,7 +837,7 @@ $("#rd-body").addEventListener("click", async e => {
   if (act === "order") return openOrderDialog([r]);
   if (act === "confview") { const d = reqDetail(r); return openConfCalc({ readonly: true, rec: r, calc: { v: d.v, in: d.in, out: d.out } }); }
   if (act === "gotoreq") {
-    const no = r["연결품의번호"]; setMode("main"); switchTab("req");
+    const no = r["연결품의번호"]; setMode("fund"); switchTab("req");
     FILTERS.req = { q: no }; $$("[data-filter][data-kind=req]").forEach(el => { el.value = el.dataset.filter === "q" ? no : ""; }); renderList("req");
   }
 });
