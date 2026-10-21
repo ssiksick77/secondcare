@@ -1,45 +1,34 @@
 # progress
 
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 ## Goal
 
-Terms, routes and column hiding on the 연구비 screen (2026-10-21, same branch): tables lost columns silently, users could not choose columns, and terms/paths did not match yesterday's structure. Checked by `scripts/check.sh` and the browser pane on the QA copy (port 8893).
+Center the main area when the 사이드바 is collapsed (2026-10-21, branch `claude/side-panel-collapse-center-align-b3078b`): the main area keeps the width it has with the panel open, and the freed width is split left and right. Checked by `scripts/check.sh` and the browser pane on the QA copy (port 8897).
 
 ## Done
 
-- fcf9ac7 Terms and routes: CLAUDE.md Terms/Routes tables (화면·시작 화면·메뉴 바·탭·서브탭·헤더·사이드바·패널·레일; payroll = labor in code). `/` redirects to `/enter`, `/request` serves the 신청 screen, `MODE_PATH.fund`, body `fund-mode`, header 메뉴 button removed (title links to `/enter?menu=1`), 회계대장 wording replaced. `app/migrate_req_dates.py` (dry run by default) copies 원인발생일 into empty 지출예정일; applied to the QA copy (9 rows).
-- faf7655 Column hiding `app/static/cols.js`: states 보임/스텁/없음, `COLW` widths in JS (CSS width rules and container-query folds removed), `COL_FOLD` tiers by main width, `COL_MINOR` default stubs (old 상세 열 checkbox removed), header right-click menu, [조회 열 관리] popover on 집행·품의·적립·예산·대시보드, fixed columns (번호·작업·대시보드 재원·항목), at least one visible, sessionStorage per table. 품의 원인발생일 and 예산 재원 columns deleted. DESIGN.md Layout updated. UI tests added (ui +14).
-
-- 2026-10-21 Live ledger: `migrate_req_dates.py --apply` run with the user's go (LEDGER_DB = the SQLite next to the main checkout): 12 품의 rows got 지출예정일 = 원인발생일 (all were empty before); 12 backups in `app/backup/` (09:07). Re-count 0.
-- checks: full `scripts/check.sh` on faf7655: calc 32, api 136, db 56, ai 166 pass; api-db 168, ui 122, ui-db 132 pass after two test fixes (router 302 in the welcome test, table width tolerance) and exec 적요 min 160 — the three groups were rerun alone after the fixes.
+- 0f7ff38 `body.side-collapsed .col > main { max-width: calc(100% - var(--side-w)) }` in `style.css`; viewports under 1000px lift the cap; print already resets `max-width`. Browser pane at 1400px: main width 865 in both states, left gap 240 when collapsed. UI test viewport 1366 → 1900 (collapsed main was 831px, under the 900px column fold tier, so two column checks failed); three new checks (same width, centered, left-aligned when open). checks: pass (calc 32, api 168, db 56, ai 166, ui 126, ui-db 136).
+- main fast-forwarded to 0f7ff38 (user asked on 2026-10-21).
 
 ## In progress
 
 None.
 
-## Next action
-
-main is fast-forwarded to this branch. Restart `appun.bat` (main.py routes changed: / → /enter, /request). Then the ideas list: panel purpose, MSRI card, code id rename, 인건비·신청 table columns, critique P4.
-
 ## Open issues
 
-- checks: pass on d83e60e (calc 32, API 133/165, db 56, ai 166, UI 107/117; about 7 minutes). Run with a timeout above 420 s.
-- Researcher accounts cannot change "기본 화면" because the settings dialog is hidden in the researcher view. Their only screen is 신청, so this is accepted for now.
-- `.claude/launch.json` (QA preview on port 8795 with LEDGER_AUTH_BYPASS) is local and uncommitted; the QA ledger copy lives in `%TEMP%\claude\preview_qa`.
-- Hidden people still appear in the 계획표 and 선급·미지급 tables when they have pay or accrual that year (my call: hiding must not drop money from totals).
-- Server role checks are not implemented: `role` is stored and shown only. Design doc §4 and §8 step 3 describe the checks. `extra.admin` from the request screen is still trusted.
-- No UI to change an account's role or name after adding; delete and add again. Masters are `.env` only.
+- A 1366px laptop with the panel collapsed now has an 831px main area, so the column fold tiers (`COL_FOLD` in `cols.js`) hide more columns than before. Accepted by the user's choice "same width as open". Revisit if users complain.
+- `.claude/launch.json` (QA preview `qa-pane`, port 8897, LEDGER_AUTH_BYPASS) is local and uncommitted; the QA ledger copy lives in `tests/.tmp/pane/`. The QA ledger `docs/qa_data_2026_01_09/qa_ledger.xlsx` is gitignored and was copied into this worktree from the main checkout.
+- Carried over: researcher accounts cannot change "기본 화면"; hidden people still appear in the 계획표 and 선급·미지급 tables; server role checks are not implemented (`role` stored and shown only, `extra.admin` trusted); no UI to change an account's role or name after adding.
 
 ## Decisions
 
-- 회계대장 path is `/fund` (matches the menu label 연구비); the internal home key is `fund`. Chosen by the user over `/ledger`.
-- The home preference is per account in SQLite, not in `.env`, because researchers and staff want different screens. xlsx mode keeps it in the browser only.
-- `/` direct access stays the researcher view. Only the menu button and the header 신청 button grant 담당자 mode.
+- Collapsed main width = open main width (user, 2026-10-21), not a fixed max width. Reason: the tables do not reflow when the panel toggles.
+- Carried over: 회계대장 path is `/fund`; home preference is per account in SQLite; `/` direct access stays the researcher view.
 
 ## Next action
 
-Merge this branch into main (user asked on 2026-10-20), restart the live app, and open `/enter` once on the live ledger to confirm the `users.home` column is added and the menu loads.
+Restart the live app (`appun.bat`) and collapse the panel once on the live ledger. Then the ideas list: panel purpose, MSRI card, code id rename, 인건비·신청 table columns, critique P4.
 
 ## Done before this task (kept for reference)
 
