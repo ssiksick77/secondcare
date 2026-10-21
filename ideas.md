@@ -54,3 +54,7 @@ Who reads what:
 - [later][idea] 2026-10-20: MSRI dashboard card: definition pending (user: 추후 설명) — KPI card row keeps a placeholder
 - [later][idea] 2026-10-20: copy 원인발생일 into empty 지출예정일 for existing 품의 rows (one-shot) — the screen falls back to 원인발생일 for now
 - [later][idea] 2026-10-20: year select in the header should switch the referenced ledger (DB) per year, not only filter — user remark while moving the year select
+- [later][idea] 2026-10-21: 근태변동관리 화면 (연차·재택 관리) as a fourth screen; 연구원 use it too. Entry: everyone goes to /enter after login and /enter shows only the buttons the role allows — user, during the terms discussion
+- [later][idea] 2026-10-21: rename code identifiers to the terms in CLAUDE.md: `#side` → sidebar, `.drawer` → panel, `#main-tabs` → fund tabs, and consider `labor` → `payroll` (keep the /labor path) — user: later, together
+- [later][idea] 2026-10-21: column hide + stub system for the 인건비 and 신청 screen tables (first version covers the 연구비 screen only) — column-hide brainstorming
+- [later][idea] 2026-10-21: 연구비 critique P4 toolbar fixed layout (filters left, 합계·CSV·추가 right), 적립 top two tables 50vh height review, 상태 ✓ undo in the list — app/.impeccable/critique/2026-10-20T13-45-39Z__localhost-fund.md
