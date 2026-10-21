@@ -34,7 +34,7 @@ def main() -> int:
     ck = Check()
     with Server("ui", extra_env={"LEDGER_AI_FAKE": "1"}) as sv, sync_playwright() as pw:  # 채팅방 검사: 모델 없이 가짜 답
         b = pw.chromium.launch()
-        pg = b.new_page(viewport={"width": 1366, "height": 900})
+        pg = b.new_page(viewport={"width": 1900, "height": 900})  # 본문 폭 ≥ 1300 (사이드바 접어도 본문은 펼친 폭과 같다, 2026-10-21)
         errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
         pg.goto(sv.base + "/request"); pg.wait_for_timeout(800)
@@ -180,6 +180,14 @@ def main() -> int:
         pg.click("#dlg-cancel"); pg.wait_for_timeout(200)
         # ---- 열 숨기기 (cols.js, 2026-10-21): 팝오버·우클릭·스텁·최소 1열·세션 기억 ----
         pg.evaluate("sessionStorage.clear(); switchTab('exec')"); pg.wait_for_timeout(400)
+        # ---- 사이드바 접기: 본문 폭은 펼쳤을 때와 같고, 남는 폭은 좌우로 나눈다 (2026-10-21) ----
+        geo = pg.evaluate("""(async()=>{const m=()=>{const r=document.querySelector('main').getBoundingClientRect(), c=document.querySelector('.col').getBoundingClientRect(); return {w:Math.round(r.width), l:Math.round(r.left-c.left), r:Math.round(c.right-r.right)}};
+          document.getElementById('side-collapse').click(); await new Promise(r=>setTimeout(r,200)); const a=m();
+          document.getElementById('side-expand').click(); await new Promise(r=>setTimeout(r,200)); const b=m();
+          return {collapsed:a, open:b, cls:document.body.className}})()""")
+        ck("사이드바 접기: 본문 폭 = 펼친 폭", geo["collapsed"]["w"] == geo["open"]["w"], geo)
+        ck("사이드바 접기: 본문 가운데 (좌우 여백 같음, 여백 > 0)", abs(geo["collapsed"]["l"] - geo["collapsed"]["r"]) <= 1 and geo["collapsed"]["l"] > 0, geo)
+        ck("사이드바 펼침: 본문 왼쪽 붙음", geo["open"]["l"] == 0 and "side-open" in geo["cls"], geo)
         ck("열: 상세 열 체크박스 없음, [조회 열 관리] 있음", not pg.query_selector("#exec-cols-all") and bool(pg.query_selector("[data-cols=exec]")))
         ck("열: 집행 표에 비고 열 없음 (적요 메모 툴팁)", pg.evaluate("!document.querySelector(\"#exec-table thead th[data-col='비고']\")"))
         ck("열: 옛 상세 열(관리번호 등)은 스텁", pg.evaluate("['관리번호','세세목','사용자'].every(k => document.querySelector(`#exec-table thead th[data-col='${k}']`).classList.contains('col-stub'))"))

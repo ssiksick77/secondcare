@@ -126,6 +126,7 @@ main { flex: 1; padding: 12px 20px 20px; width: 100%; margin: 0 auto; min-width:
 .side { position: fixed; top: var(--top-h); right: 0; bottom: 0; display: flex; flex-direction: row-reverse; background: var(--bg); border-left: 1px solid var(--rule); z-index: 30; }   /* 헤더·탭 줄 아래 고정, 레일은 오른쪽 끝. 왼쪽 기둥이 그 폭만큼 비워 둔다 */
 body.side-open .col { margin-right: calc(var(--side-w) + var(--rail-w) + 1px); }
 body.side-collapsed .col { margin-right: calc(var(--rail-w) + 1px); }
+body.side-collapsed .col > main { max-width: calc(100% - var(--side-w)); }   /* 접어도 본문 폭은 펼쳤을 때와 같고, 남는 폭은 좌우로 나눈다 */
 .side-rail { width: var(--rail-w); flex: none; display: flex; flex-direction: column; align-items: stretch; padding-top: 6px; background: var(--bg-table); border-left: 1px solid var(--rule); }
 body.side-collapsed .side-rail { border-left: 0; }
 .side-rail-btn { border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600; color: var(--ink-2); cursor: pointer; padding: 10px 0; writing-mode: vertical-rl; text-orientation: upright; letter-spacing: .08em; line-height: var(--rail-w); width: var(--rail-w); transition: background-color .12s ease-out, color .12s ease-out; }
@@ -136,7 +137,7 @@ body.side-collapsed .side-rail { border-left: 0; }
 body.side-collapsed .side-body { display: none; }
 .side-home { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .side-home .side-ph { margin: 0; line-height: 1.6; }
-@media (max-width: 1000px) { .side { display: none; } body.side-open .col, body.side-collapsed .col { margin-right: 0; } }
+@media (max-width: 1000px) { .side { display: none; } body.side-open .col, body.side-collapsed .col { margin-right: 0; } body.side-collapsed .col > main { max-width: none; } }
 @media (min-width: 1500px) { #side-collapse { display: none; } }   /* 넓은 화면에서는 패널을 접지 않는다 (app.js WIDE 와 같은 값) */
 .print-head { display: none; }
 
