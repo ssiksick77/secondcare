@@ -39,7 +39,7 @@ const COLS = {
   exec: [
     { k: "거래번호", w: 1 }, { k: "상태", t: "badge" }, { k: "관리번호", minor: true }, { k: "연결품의번호", hide: true }, { k: "원인발생일", t: "date", label: "발생일" }, { k: "지급청구일", t: "date", hide: true },
     { k: "지출완료일", t: "date", hide: true }, { k: "결의일", t: "date", hide: true }, { k: "재원", ctr: true }, { k: "예산목" }, { k: "세목" }, { k: "세세목", minor: true },
-    { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (원인발생일까지 신청된 예산변동 합 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "작성자", calc: r => authorName(r), title: "이 행을 저장한 로그인 계정의 이름" }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true, minor: true },
+    { k: "거래처", hide: true }, { k: "적요", t: "title", sub: "거래처" }, { k: "결제수단" }, { k: "금액", t: "num", amt: true }, { k: "예산목 잔액", t: "num", calc: r => runningBalance(r), title: "이 거래까지 반영한 재원·예산목 잔액 (원인발생일까지 신청된 예산변동 합 − 원인발생일 순 누적 집행). 품의대기는 제외" }, { k: "사용자", minor: true }, { k: "작성자", calc: r => authorName(r), title: "이 행을 저장한 로그인 계정의 이름" }, { k: "태그" }, { k: "증빙", t: "num", calc: r => evidCount(r), title: "등록된 증빙 수 (파일 없이 실물만 등록한 항목 포함)" }, { k: "비고", wrap: true, minor: true, hide: true },  // 화면에서는 적요 칸의 메모 표시·툴팁으로 보임 (CSV 에는 포함)
   ],
   req: [
     { k: "품의번호" }, { k: "상태", t: "badge" }, { k: "원인발생일", t: "date", hide: true }, { k: "지출예정일", t: "date", html: r => { const d = r["지출예정일"] || r["원인발생일"] || ""; return `<span title="${esc(d)}">${esc(mmdd(d))}</span>`; } }, { k: "재원", ctr: true },
