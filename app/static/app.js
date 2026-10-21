@@ -2530,11 +2530,11 @@ function sideCloseAll() { closeExecDrawer(); if (typeof closeReqDrawer === "func
     // detail: 열린 상세가 있으면 그대로, 없으면 기본 패널의 안내만 보인다
     setSide(true);
   }));
-  // 1500px 이상(--side-fixed-w)은 항상 펼침(접기 버튼 없음). 그 아래는 기억한 상태, 없으면 접힘
+  // 기억한 상태(ledger-side)가 있으면 그대로. 없으면 1500px 이상은 펼침, 그 아래는 접힘. 접기 버튼은 모든 폭에서 보인다 (2026-10-21)
   const WIDE = 1500;
   const apply = () => {
     let saved = null; try { saved = localStorage.getItem("ledger-side"); } catch { }
-    const open = window.innerWidth >= WIDE ? true : saved === "1";
+    const open = saved === null ? window.innerWidth >= WIDE : saved === "1";
     if (!SIDE.ready || open !== sideOpen()) { setSide(open, false); SIDE.auto = false; }   // 첫 실행은 무조건 적용 (처음에는 어느 클래스도 없다)
     SIDE.ready = true;
     syncSide();

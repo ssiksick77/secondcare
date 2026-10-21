@@ -138,7 +138,6 @@ body.side-collapsed .side-body { display: none; }
 .side-home { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .side-home .side-ph { margin: 0; line-height: 1.6; }
 @media (max-width: 1000px) { .side { display: none; } body.side-open .col, body.side-collapsed .col { margin-right: 0; } body.side-collapsed .col > main { max-width: none; } }
-@media (min-width: 1500px) { #side-collapse { display: none; } }   /* 넓은 화면에서는 패널을 접지 않는다 (app.js WIDE 와 같은 값) */
 .print-head { display: none; }
 
 .alert { padding: 8px 12px; border-radius: var(--radius); margin-bottom: 8px; border: 1px solid; font-size: 12px; }
