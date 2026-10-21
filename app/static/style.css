@@ -243,21 +243,6 @@ table.grid td.amt { border-left: 2px solid var(--margin); font-weight: 600; }
 #exec-table th:last-child, #exec-table td:last-child { border-right: 0; }
 /* 품의 표: 집행 표와 같은 최적화 (2026-10-20 사용자). 고정 열 폭, 세로 괘선, 마진선 없음, 본문 폭에 따른 열 접기 */
 #req-table { table-layout: fixed; }
-#req-table th[data-col="품의번호"] { width: 120px; }
-#req-table th[data-col="상태"] { width: 84px; }
-#req-table th[data-col="원인발생일"], #req-table th[data-col="지출예정일"] { width: 64px; }
-#req-table th[data-col="재원"] { width: 84px; }
-#req-table th[data-col="예산목"] { width: 112px; }
-#req-table th[data-col="세목"] { width: 84px; }
-#req-table th[data-col="세세목"] { width: 90px; }
-#req-table th[data-col="거래처"] { width: 100px; }
-#req-table th[data-col="결제수단"] { width: 84px; }
-#req-table th[data-col="금액"] { width: 104px; }
-#req-table th[data-col="태그"] { width: 72px; }
-#req-table th[data-col="품의자"] { width: 96px; }
-#req-table th[data-col="작성자"] { width: 80px; }
-#req-table th[data-col="비고"] { width: 120px; }
-#req-table th.actions { width: 150px; }   /* 집행·수정·삭제 */
 #req-table td.wrap { max-width: none; min-width: 0; }
 #req-table th.amt, #req-table td.amt { border-left: 0; }
 #req-table th, #req-table td { border-right: 1px solid var(--rule-2); }
@@ -272,19 +257,6 @@ table.grid td.amt { border-left: 2px solid var(--margin); font-weight: 600; }
 
 /* 적립 표: 집행·품의 표와 같은 최적화. 고정 열 폭, 세로 괘선, 마진선 없음, 본문 폭에 따른 열 접기 */
 #deposit-table { table-layout: fixed; }
-#deposit-table th[data-col="적립번호"] { width: 150px; }
-#deposit-table th[data-col="일자"] { width: 64px; }
-#deposit-table th[data-col="거래처"] { width: 110px; }
-#deposit-table th[data-col="구분"] { width: 60px; }
-#deposit-table th[data-col="상태"] { width: 96px; }
-#deposit-table th[data-col="금액"] { width: 104px; }
-#deposit-table th[data-col="사용자"] { width: 90px; }
-#deposit-table th[data-col="작성자"] { width: 80px; }
-#deposit-table th[data-col="증빙번호"] { width: 130px; }
-#deposit-table th[data-col="연결거래번호"] { width: 120px; }
-#deposit-table th[data-col="증빙"] { width: 44px; }
-#deposit-table th[data-col="비고"] { width: 120px; }
-#deposit-table th.actions { width: 110px; }
 #deposit-table td.wrap { max-width: none; min-width: 0; }
 #deposit-table th.amt, #deposit-table td.amt { border-left: 0; }
 #deposit-table th, #deposit-table td { border-right: 1px solid var(--rule-2); }
@@ -293,52 +265,12 @@ table.grid td.amt { border-left: 2px solid var(--margin); font-weight: 600; }
 
 /* 예산 표 두 개: 고정 열 폭, 세로 괘선, 마진선 없음 (2026-10-20 사용자). 열이 많아(예산목 11) 본문보다 넓으면 가로 스크롤 */
 #budget-summary, #budget-table { table-layout: fixed; }
-#budget-table th.num { width: 104px; }   /* 예산목·입금·합계는 같은 폭 (2026-10-20 사용자) */
-#budget-table th[data-col="변경회차"] { width: 60px; }
-#budget-table th[data-col="신청일자"] { width: 64px; }   /* MM/DD */
-#budget-table th[data-col="변경사유"] { width: 160px; }
-#budget-table th.actions { width: 110px; }
 #budget-table td.wrap { max-width: none; min-width: 0; }
-#budget-table { min-width: 0; }   /* 폭은 renderList 가 열 수 × 104 + 110 으로 지정 */
 #budget-summary th.amt, #budget-summary td.amt, #budget-table th.amt, #budget-table td.amt { border-left: 0; }
 #budget-summary th, #budget-summary td, #budget-table th, #budget-table td { border-right: 1px solid var(--rule); overflow: hidden; text-overflow: ellipsis; }
 #budget-summary th:last-child, #budget-summary td:last-child, #budget-table th:last-child, #budget-table td:last-child { border-right: 0; }   /* 사용 행(상태 2줄)과 적립 행 높이 통일 (2026-10-20 사용자) */
 /* 고정 폭 표: 넘치는 글자는 칸 안에서 말줄임 (세로선 밖으로 나가지 않게) */
 #exec-table td, #req-table td, #deposit-table td { overflow: hidden; text-overflow: ellipsis; }
-#deposit-table { min-width: 1438px; }   /* 모든 열 + 적요 160 */
-@container main (max-width: 1399px) {
-  #deposit-table [data-col="비고"], #deposit-table [data-col="연결거래번호"] { display: none; }
-  #deposit-table { min-width: 1198px; }
-}
-@container main (max-width: 1099px) {
-  #deposit-table [data-col="사용자"], #deposit-table [data-col="작성자"], #deposit-table [data-col="증빙번호"] { display: none; }
-  #deposit-table { min-width: 898px; }
-}
-@container main (max-width: 899px) {
-  #deposit-table [data-col="상태"], #deposit-table [data-col="증빙"] { display: none; }
-  #deposit-table { min-width: 758px; }
-}
-#req-table { min-width: 1564px; }   /* 모든 열 + 적요 160 */
-@container main (max-width: 1499px) {
-  #req-table [data-col="비고"], #req-table [data-col="세세목"], #req-table [data-col="결제수단"] { display: none; }
-  #req-table { min-width: 1270px; }
-}
-@container main (max-width: 1299px) {
-  #req-table [data-col="세목"], #req-table [data-col="품의자"], #req-table [data-col="작성자"] { display: none; }
-  #req-table { min-width: 1010px; }
-}
-@container main (max-width: 1099px) {
-  #req-table [data-col="태그"], #req-table [data-col="지출예정일"] { display: none; }
-  #req-table { min-width: 874px; }
-}
-@container main (max-width: 899px) {
-  #req-table [data-col="재원"], #req-table [data-col="거래처"] { display: none; }
-  #req-table { min-width: 690px; }
-}
-@container main (max-width: 759px) {
-  #req-table [data-col="예산목"] { display: none; }
-  #req-table { min-width: 578px; }
-}
 table.grid td.nowrap { white-space: nowrap; }
 table.grid td.wrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; min-width: 100px; }
 table.grid td.wrap:hover { white-space: normal; overflow: visible; }
@@ -389,8 +321,6 @@ table.grid th.sortable { cursor: pointer; user-select: none; }
 table.grid th.sortable:hover { color: var(--ink); }
 table.grid th .sort-ind { display: inline-block; width: 10px; height: 10px; margin-left: 4px; vertical-align: -1px; color: var(--ink); }
 table.grid th .sort-ind svg { width: 10px; height: 10px; display: block; }
-table.grid .col-minor { display: none; }
-table.grid.show-minor .col-minor { display: table-cell; }
 table.grid.clickable tbody tr { cursor: pointer; }
 /* 키보드 접근: 정렬 머리글·거래번호 버튼 */
 .sortbtn { all: unset; display: inline-flex; align-items: center; font: inherit; color: inherit; cursor: pointer; }
@@ -424,20 +354,27 @@ table.grid.clickable tbody tr { cursor: pointer; }
 /* ---------- 집행내역 ---------- */
 /* 열 폭 고정: 필터·상태 변경으로 행이 바뀌어도 열 폭 유지 (적요만 남는 폭을 차지) */
 #exec-table { table-layout: fixed; }
-#exec-table th[data-col="거래번호"] { width: 120px; }   /* YYYY-XXXX-NNN 기준 */
-#exec-table th[data-col="상태"] { width: 100px; }
-#exec-table th[data-col="원인발생일"] { width: 64px; }
-#exec-table th[data-col="재원"] { width: 84px; }
-#exec-table th[data-col="예산목"] { width: 112px; }
-#exec-table th[data-col="세목"] { width: 84px; }
-#exec-table th[data-col="세세목"], #exec-table th[data-col="관리번호"], #exec-table th[data-col="사용자"] { width: 90px; }
-#exec-table th[data-col="결제수단"] { width: 84px; }
-#exec-table th[data-col="금액"] { width: 104px; }
-#exec-table th[data-col="예산목 잔액"] { width: 104px; }
-#exec-table th[data-col="태그"] { width: 72px; }
-#exec-table th[data-col="작성자"] { width: 80px; }
-#exec-table th[data-col="증빙"] { width: 44px; }
-#exec-table th[data-col="비고"] { width: 140px; }
+/* ---------- 열 숨기기 (cols.js): 스텁 열 10px, 머리글 우클릭 메뉴, [조회 열 관리] 팝오버 ---------- */
+@media screen {
+  table.grid th.col-stub, table.grid td.col-stub { width: 10px; min-width: 10px; max-width: 10px; padding: 0; overflow: hidden; font-size: 0; color: transparent; cursor: pointer; }
+  table.grid th.col-stub > *, table.grid td.col-stub > * { display: none; }
+  table.grid th.col-stub { background: var(--bg-head); }
+  table.grid th.col-stub::after { content: ""; display: block; width: 2px; height: 12px; margin: 0 auto; background: var(--rule-hover); }
+  table.grid th.col-stub:hover::after { background: var(--ink); }
+  table.grid tbody td.col-stub { background: var(--bg-table); }
+}
+@media print { table.grid th.col-stub, table.grid td.col-stub { width: auto !important; min-width: 0; max-width: none; padding: 0 6px; font-size: inherit; color: inherit; } table.grid th.col-stub > *, table.grid td.col-stub > * { display: revert; } table.grid th.col-stub::after { display: none; } }
+.ctx-menu { position: fixed; z-index: 60; min-width: 160px; background: var(--bg); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow); padding: 4px 0; font-size: 12px; }
+.ctx-menu .ctx-title { padding: 4px 12px 6px; font-weight: 700; border-bottom: 1px solid var(--rule-2); margin-bottom: 4px; }
+.ctx-menu .ctx-note { padding: 4px 12px; color: var(--ink-3); }
+.ctx-menu button { all: unset; display: block; width: 100%; box-sizing: border-box; padding: 6px 12px; cursor: pointer; font: inherit; color: var(--ink); }
+.ctx-menu button:hover, .ctx-menu button:focus-visible { background: var(--bg-hover); outline: none; }
+.col-pop { position: fixed; z-index: 60; width: 300px; max-height: 70vh; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--rule); border-top: 1px solid var(--ink); border-radius: var(--radius); box-shadow: var(--shadow); font-size: 12px; }
+.col-pop-head { padding: 8px 12px 6px; border-bottom: 1px solid var(--rule-2); display: flex; flex-direction: column; gap: 2px; }
+.col-pop-list { overflow: auto; padding: 6px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
+.col-pop-list label { display: flex; align-items: center; gap: 6px; min-height: 24px; white-space: nowrap; }
+.col-pop-list label.fixed { color: var(--ink-3); }
+.col-pop-foot { display: flex; justify-content: flex-end; gap: 6px; padding: 6px 12px; border-top: 1px solid var(--rule-2); }
 #exec-table th.sel, #exec-table td.sel { width: 32px; text-align: center; padding: 0; }
 #exec-table td { overflow: hidden; text-overflow: ellipsis; }
 #exec-table tbody td { height: 36px; }   /* 적요+거래처, 상태+날짜 두 줄 */
@@ -480,26 +417,6 @@ table.grid td.st-cell .next.ph { visibility: hidden; border-color: transparent; 
 /* 집행내역 열 접기: 사이드 패널 상태가 아니라 본문(main) 폭 기준 (2026-10-20, 패널 상시화 뒤). 전체 열 = 약 1290px.
    1300 미만: 결제수단·예산목 잔액 → 1100 미만: 세목·태그 (+ 상세 열 사용자·비고) → 900 미만: 재원·증빙 → 760 미만: 예산목.
    적요가 180px 아래로 눌리지 않게 남은 고정 열 + 180 을 표 최소 폭으로, 넘치면 가로 스크롤 */
-@container main (max-width: 1299px) {
-  #exec-table [data-col="결제수단"], #exec-table [data-col="예산목 잔액"] { display: none; }
-  #exec-table { min-width: 1080px; }
-  #exec-table.show-minor { min-width: 1260px; }
-}
-@container main (max-width: 1099px) {
-  #exec-table [data-col="세목"], #exec-table [data-col="태그"], #exec-table [data-col="작성자"], #exec-table.show-minor [data-col="사용자"], #exec-table.show-minor [data-col="비고"] { display: none; }
-  #exec-table { min-width: 840px; }
-  #exec-table.show-minor { min-width: 1020px; }
-}
-@container main (max-width: 899px) {
-  #exec-table [data-col="재원"], #exec-table [data-col="증빙"] { display: none; }
-  #exec-table { min-width: 712px; }
-  #exec-table.show-minor { min-width: 892px; }
-}
-@container main (max-width: 759px) {
-  #exec-table [data-col="예산목"] { display: none; }
-  #exec-table { min-width: 600px; }
-  #exec-table.show-minor { min-width: 780px; }
-}
 
 /* ---------- 요약 띠 (카드 대신 괘선 한 줄) · 대시보드 ---------- */
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin-bottom: 12px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--rule); background: var(--bg); }
@@ -1134,7 +1051,7 @@ table.grid.edit td.num .cell-input { text-align: right; }
   #exec-table [data-col="재원"], #exec-table [data-col="예산목"], #exec-table [data-col="세목"], #exec-table [data-col="작성자"],
   #exec-table [data-col="태그"], #exec-table [data-col="증빙"], #exec-table [data-col="예산목 잔액"],
   #exec-table [data-col="결제수단"], #exec-table [data-col="결의일"],
-  #exec-table.show-minor [data-col="사용자"], #exec-table.show-minor [data-col="비고"] { display: table-cell; }
+  #exec-table [data-col="사용자"], #exec-table [data-col="비고"] { display: table-cell; }
   #exec-table, #request-table, #req-table, #deposit-table { min-width: 0; }
   #deposit-table [data-col="비고"], #deposit-table [data-col="연결거래번호"], #deposit-table [data-col="사용자"], #deposit-table [data-col="작성자"], #deposit-table [data-col="증빙번호"], #deposit-table [data-col="상태"], #deposit-table [data-col="증빙"] { display: table-cell; }
   #deposit-table td.amt, #deposit-table th.amt { border-left: 0; }

@@ -395,7 +395,7 @@ def main() -> int:
             s, r = sv.call("GET", "/api/me", cookie=ck_)
             ck("이름 저장 뒤: needs_name false, 이름", r.get("needs_name") is False and r.get("name") == "검사 담당", r)
             s, loc = sv.get_raw("/", cookie=ck_)
-            ck("이름 저장 뒤: / 200", s == 200, (s, loc))
+            ck("이름 저장 뒤: / → 302 /enter (라우터)", s == 302 and loc == "/enter", (s, loc))
             s, loc = sv.get_raw("/welcome", cookie=ck_)
             ck("이름 저장 뒤: /welcome → /enter", s == 302 and loc == "/enter", (s, loc))
             s, r = sv.call("GET", "/api/all", cookie=ck_)
