@@ -173,6 +173,17 @@ components:
 
 # Design System: SECONDCare (의료인공지능센터 연구비 관리 시스템)
 
+## Harness
+
+<!-- Read by ui-work. Keep the keys and the exact values. -->
+
+- KRDS: default
+  <!-- default: KRDS structure and accessibility are a reference; this file and Impeccable decide. The a11y check in scripts/check.sh is the floor.
+       strict: KRDS wins on structure, accessibility, and wording; the KRDS markup score is reported each round.
+       off: no KRDS skill runs; only the a11y check applies. Use for host-app extensions and single-screen tools. -->
+- Component library: none (vanilla HTML/JS/CSS, no CDN)
+- UI stack: plain HTML/JS/CSS, no framework, no build step; FastAPI serves it
+
 ## Overview
 
 **Creative North Star: "컬럼너 패드(회계 괘선지)"**
@@ -190,6 +201,9 @@ components:
 - 붉은색은 보완필요·음수·오류 전용. 파랑은 기능색, 초록은 완료.
 - 2px 모서리, 평면 바탕, 그림자는 띄우는 레이어(대화상자·드로어·토스트)에만.
 - 상태 전환 120~150ms ease-out, 색·배경만 움직인다.
+
+Visual direction (from CLAUDE.md, 2026-10): columnar ledger pad (회계 괘선지): one typeface (Pretendard GOV + system), ink-and-gray tone, 28px rule rows, navy margin line, double rule under totals, 2px corners, flat surfaces, color only for meaning (red alert, blue function, green done).
+Colors and fonts: as defined in the frontmatter of this file and `app/.impeccable/design.json`.
 
 ## Colors
 
@@ -368,3 +382,6 @@ components:
 - **Don't** 재원별 색, 둥근 채움 배지, 그라데이션 바탕, 일러스트·로고·사진을 넣지 않는다.
 - **Don't** 13/12px 외의 새 글자 크기나 두 번째 서체를 도입하지 않는다. 외부 CDN 폰트·아이콘 폰트 금지.
 - **Don't** 요약 띠를 떠 있는 흰 카드로 바꾸지 않는다. 괘선 한 줄로 유지한다.
+
+### Project rules (from CLAUDE.md):
+- KRDS is a reference only, not binding (see `app/PRODUCT.md`).

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs every check for this project, in order. Stops at the first failure.
-# Claude runs this after each change (see ../CLAUDE.md, "Work loop").
+# Claude runs this after each change (see DEV/CLAUDE.md, "Work loop").
 #
 # Each step is "run_step <label> <command>" so a label cannot be counted
 # without its command. A command that needs a pipe or quotes goes in a
@@ -10,6 +10,13 @@
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+# DEV root: walk up until a directory holds _template/ and .claude/skills/.
+# Write "$DEV/_tools/...", never "../_tools": the project may sit inside a group.
+DEV="$PWD"
+while [ "$DEV" != "/" ] && ! { [ -d "$DEV/_template" ] && [ -d "$DEV/.claude/skills" ]; }; do
+  DEV="$(dirname "$DEV")"
+done
 
 # run_step <label> <command...>
 # Prints the label, runs the command, and counts it only when the command ran.
@@ -32,7 +39,7 @@ run_step smoke smoke
 run_step test python -I tests/run.py
 
 # Project with a UI: KRDS conformance score. Fill the script name and the
-# threshold from dev/.claude/skills/krds-improve after it is installed.
+# threshold from $DEV/.claude/skills/krds-improve after it is installed.
 # run_step krds      <krds score script> --min-score 90
 
 # ------------------------------------------------------------------------

@@ -2,7 +2,9 @@
 
 Program names: code name `caih-rfm` (MCP server name, log name), short name "SECONDCare" (header, tab title), full name "의료인공지능센터 연구비 관리 시스템" (print head, official documents). Constants: `app/settings.py` (APP_SLUG, APP_NAME, APP_FULL_NAME) and `app/static/app.js` (APP_NAME, APP_FULL). "회계대장" stays as the name of the ledger screen (vs 인건비, 신청). The folder name and `LEDGER_*` env vars stay.
 
-The shared rules in `../CLAUDE.md` apply here. This file holds the facts of this project only.
+The shared rules in `DEV/CLAUDE.md` apply here; Claude Code reads every `CLAUDE.md` up the folder chain, including a group's. This file holds the facts of this project only.
+
+Harness: v4.1
 
 ## Terms (2026-10-21, user)
 
@@ -31,6 +33,16 @@ Do not call the 연구비 screen 회계대장 any more (old name; the folder nam
 ## Purpose
 
 A local, single-user web app for the research-fund accountant of the 분당서울대병원 의료인공지능센터. It manages spending (집행, 품의, 예산변동, 적립금, 인건비, 신청) across several funding sources in one Excel ledger, which stays the source of truth. Evidence files go to Google Drive. An optional AI helper only suggests, and an MCP server exposes the ledger to Claude.
+
+## Principles
+
+<!-- Three to five rules that do not change for the life of the project. brainstorm rejects an approach that breaks one; the work loop does not trade one away for convenience. Write each as a sentence that can be checked. -->
+
+- The ledger (xlsx or SQLite) is the source of truth. The app never rewrites it silently, and every save makes a backup first.
+- Money is an integer in won. No floats, anywhere.
+- The AI helper only suggests. It never writes to the ledger on its own.
+- Secrets and the live ledger never enter git.
+- Checks and manual tests run only against a QA copy, never the live ledger.
 
 ## Stack and structure
 
@@ -66,10 +78,20 @@ Write commit messages in short English. First line: `<type>: <summary>` under 50
 
 ## Design
 
-- Visual direction: columnar ledger pad (회계 괘선지) — see `app/DESIGN.md`: one typeface (Pretendard GOV + system), ink-and-gray tone, 28px rule rows, navy margin line, double rule under totals, 2px corners, flat surfaces, color only for meaning (red alert, blue function, green done)
-- Component library: none (vanilla HTML/JS/CSS, no CDN)
-- Colors and fonts: as defined in `app/DESIGN.md` and `app/.impeccable/design.json`
-- Project-specific UI rules: KRDS is a reference only, not binding (see `app/PRODUCT.md`)
+Visual rules live in `app/DESIGN.md` (the `Harness` section holds the KRDS mode and the UI stack).
+
+## Sensitive paths
+
+<!-- Files or directories where a mistake is expensive: money, stored data formats, auth, external interfaces, release config. The work loop asks the user before it edits one of these, even inside the task scope. One path per line with the reason. -->
+
+- `app/store.py` — ledger read/write, validation, money calculations
+- `app/db.py` — stored data format (SQLite); a change here needs a data migration
+- `app/import_xlsx.py`, `app/export_xlsx.py` — xlsx and SQLite conversion of the ledger
+- `app/auth.py` — auth
+- `app/drive.py` — external Google Drive API
+- `app/mcp_server.py` — external interface for Claude
+- `app/settings.py` — env and paths of the live ledger
+- `app/static/edit.js` — user edits that reach the ledger
 
 ## Do not
 
