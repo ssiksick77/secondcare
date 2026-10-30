@@ -46,7 +46,8 @@ def years() -> list[str]:
 
 
 def create_year(dst: Path, src: Path):
-    """새 연도 장부: 빈 스키마 + 기준 정보(재원·거래처·태그·인원·지급처)와 사용자 표를 src 에서 복사."""
+    """새 연도 장부: 빈 스키마 + 기준 정보(재원·거래처·태그·인원·지급처)와 사용자 표를 src 에서 복사.
+    기준급여는 종료월이 새 연도에 닿는 행만 복사한다 (계획표의 소요 계산 근거, 2026-10-30)."""
     con = connect(dst)
     try:
         create_schema(con)
@@ -54,6 +55,8 @@ def create_year(dst: Path, src: Path):
         for kind in MASTER_KINDS:
             cols = ", ".join(_q(c) for c in ["id", *tables()[kind][1], AUTHOR_COL])
             con.execute(f"INSERT INTO {_q(kind)} ({cols}) SELECT {cols} FROM src.{_q(kind)}")
+        scols = ", ".join(_q(c) for c in ["id", *tables()["salary"][1], AUTHOR_COL])
+        con.execute(f"INSERT INTO salary ({scols}) SELECT {scols} FROM src.salary WHERE {_q('종료월')} >= ?", (f"{path_year(dst)}-01",))
         ucols = ", ".join(c for c, _t in (("email", ""), ("name", ""), ("created_at", ""), *_USERS_NEW_COLS))
         con.execute(f"INSERT INTO users ({ucols}) SELECT {ucols} FROM src.users")
         con.commit()

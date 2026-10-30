@@ -483,6 +483,8 @@ def main() -> int:
             ck("연도: 2027 생성 후 전환", s == 200 and r["year"] == "2027" and "2027" in r["years"], (s, r))
             s, r = sv.call("GET", "/api/all", cookie=ck_)
             ck("연도: 새 장부는 재원 복사·집행 비움", len(r["funds"]) == n_funds and not r["exec"] and n_exec > 0 and r["meta"]["year"] == "2027", (len(r["funds"]), len(r["exec"]), r["meta"].get("year")))
+            want = [s for s in r0["salary"] if s["종료월"] >= "2027-01"]
+            ck("연도: 2027 에 걸친 기준급여만 복사", len(r["salary"]) == len(want) and not r["labor"], (len(r["salary"]), len(want), len(r["labor"])))
             s, r = sv.call("POST", "/api/year", {"year": "2027", "create": True}, cookie=ck_)
             ck("연도: 있는 연도 다시 만들기 400", s == 400, (s, r))
             s, r = sv.call("POST", "/api/year", {"year": "2028"}, cookie=ck_)

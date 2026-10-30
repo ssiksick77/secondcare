@@ -1258,7 +1258,7 @@ $("#dash-year").addEventListener("change", async e => {
   let year = sel.value, create = false;
   if (year === NEW_YEAR) {
     const next = String(Math.max(...DATA.meta.years.map(Number)) + 1);
-    year = await confirmDlg({ title: "새 연도 장부 만들기", body: "새 장부에는 지금 장부의 재원·거래처·태그·인원·지급처·사용자만 복사되고 집행·품의·예산·적립·급여 내역은 비어 있습니다.", verb: "만들기", input: { label: "연도", type: "number", value: next, required: true } });
+    year = await confirmDlg({ title: "새 연도 장부 만들기", body: "새 장부에는 지금 장부의 재원·거래처·태그·인원·지급처·사용자와 새 연도에 걸친 기준급여만 복사되고 집행·품의·예산·적립·지급 내역은 비어 있습니다.", verb: "만들기", input: { label: "연도", type: "number", value: next, required: true } });
     if (!year) return back();
     create = true;
   }
