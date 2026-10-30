@@ -11,12 +11,54 @@ from __future__ import annotations
 import contextlib
 import datetime as dt
 import os
+import re
 import sqlite3
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
 DB_ENV = "LEDGER_DB"
 DB_PATH = Path(os.environ.get(DB_ENV) or (APP_DIR.parent / "의료인공지능센터_지출장부_2026.sqlite"))
+CONFIG_PATH = DB_PATH  # 설정된 장부. 연도 전환(2026-10-30)은 DB_PATH 를 같은 폴더의 다른 연도 파일로 바꾼다
+YEAR_RE = re.compile(r"(?<!\d)20\d\d(?!\d)")
+# 새 연도 장부에 복사하는 기준 정보 (거래 표는 비움)
+MASTER_KINDS = ("funds", "vendor", "tags", "people", "payee")
+
+
+def path_year(p: Path) -> str:
+    """파일 이름의 연도. 연도가 없는 이름(검사용 ledger.sqlite 등)은 올해로 본다."""
+    m = YEAR_RE.search(p.stem)
+    return m[0] if m else str(dt.date.today().year)
+
+
+def year_path(year: str) -> Path:
+    """연도의 장부 파일: 설정된 이름의 연도 자리를 바꾼 것 (연도가 없는 이름은 _YYYY 를 붙임)."""
+    if year == path_year(CONFIG_PATH):
+        return CONFIG_PATH
+    if YEAR_RE.search(CONFIG_PATH.stem):
+        return CONFIG_PATH.with_name(YEAR_RE.sub(year, CONFIG_PATH.name, count=1))
+    return CONFIG_PATH.with_name(f"{CONFIG_PATH.stem}_{year}{CONFIG_PATH.suffix}")
+
+
+def years() -> list[str]:
+    """있는 연도 장부 목록 (최근 연도부터): 같은 폴더에서 year_path 가 가리키는 자리에 있는 파일만."""
+    found = {path_year(p) for p in CONFIG_PATH.parent.glob(f"*{CONFIG_PATH.suffix}")}
+    return sorted((y for y in found if year_path(y).exists()), reverse=True)
+
+
+def create_year(dst: Path, src: Path):
+    """새 연도 장부: 빈 스키마 + 기준 정보(재원·거래처·태그·인원·지급처)와 사용자 표를 src 에서 복사."""
+    con = connect(dst)
+    try:
+        create_schema(con)
+        con.execute("ATTACH DATABASE ? AS src", (str(src),))
+        for kind in MASTER_KINDS:
+            cols = ", ".join(_q(c) for c in ["id", *tables()[kind][1], AUTHOR_COL])
+            con.execute(f"INSERT INTO {_q(kind)} ({cols}) SELECT {cols} FROM src.{_q(kind)}")
+        ucols = ", ".join(c for c, _t in (("email", ""), ("name", ""), ("created_at", ""), *_USERS_NEW_COLS))
+        con.execute(f"INSERT INTO users ({ucols}) SELECT {ucols} FROM src.users")
+        con.commit()
+    finally:
+        con.close()
 
 # kind -> (시트 이름, 열 목록). store 의 상수와 같게 유지한다 (import 순환을 피하려 여기서 늦게 읽는다)
 AUTHOR_COL = "author"

@@ -177,6 +177,7 @@ async function api(method, url, body) {
   }
   return res.json();
 }
+const NEW_YEAR = "__new";  // 장부 연도 선택기의 "새 연도 만들기" 항목 값
 const isResearcher = () => document.body.classList.contains("request-mode") && !document.body.classList.contains("req-admin");
 
 async function load() {
@@ -220,18 +221,13 @@ function fillSelects() {
   $$("select[data-filter='예산목']").forEach(sel => setOptions(sel, ["", ...DATA.meta.budget_items], ["전체", ...DATA.meta.budget_items]));
   { const kinds = (DATA.meta.fund_types || []).filter(k => DATA.funds.some(f => f["종류"] === k)); setOptions($("#dash-kind"), ["", ...kinds], ["전체", ...kinds]); }
   fillDashFunds();
-  setOptions($("#dash-year"), ["", ...ys], ["전체", ...ys]);
+  // 장부 연도 선택기 (2026-10-30): 연도 파일 목록 + "새 연도 만들기". 값은 지금 보는 장부의 연도 (대시보드 집계 연도로도 쓴다)
+  setOptions($("#dash-year"), [...DATA.meta.years, NEW_YEAR], [...DATA.meta.years.map(y => y + "년"), "새 연도 만들기…"]);
+  $("#dash-year").value = DATA.meta.year;
   setOptions($("#rep-fund"), ["", ...funds], ["전체", ...funds]);
   setOptions($("#rep-year"), ["", ...ys], ["전체", ...ys]);
   if (typeof fillLaborSelects === "function") fillLaborSelects();
   if (typeof fillRequestSelects === "function") fillRequestSelects();
-  if (!$("#dash-year").dataset.init) {
-    // 올해 데이터가 없으면 데이터가 있는 가장 최근 연도
-    const thisYear = String(new Date().getFullYear());
-    const hasThis = [...DATA.exec, ...DATA.req].some(r => (r["원인발생일"] || "").startsWith(thisYear));
-    $("#dash-year").value = hasThis ? thisYear : (ys.find(y => y !== thisYear) || thisYear);
-    $("#dash-year").dataset.init = 1;
-  }
   // 옵션이 사라져 select 가 "전체"로 돌아간 경우 필터 상태도 맞춤
   $$("select[data-filter]").forEach(sel => { const k = sel.dataset.kind, f = sel.dataset.filter; if (FILTERS[k] && FILTERS[k][f] && FILTERS[k][f] !== sel.value) FILTERS[k][f] = sel.value; });
 }
@@ -1257,7 +1253,18 @@ document.addEventListener("click", e => {
   $(`#${kind}-table`)?.querySelectorAll("tbody tr")[LIST_LIMIT]?.querySelector("button, input")?.focus();
 });
 $("#dash-fund").addEventListener("change", renderDashboard);
-$("#dash-year").addEventListener("change", renderDashboard);
+$("#dash-year").addEventListener("change", async e => {
+  const sel = e.target, back = () => { sel.value = DATA.meta.year; };
+  let year = sel.value, create = false;
+  if (year === NEW_YEAR) {
+    const next = String(Math.max(...DATA.meta.years.map(Number)) + 1);
+    year = await confirmDlg({ title: "새 연도 장부 만들기", body: "새 장부에는 지금 장부의 재원·거래처·태그·인원·지급처·사용자만 복사되고 집행·품의·예산·적립·급여 내역은 비어 있습니다.", verb: "만들기", input: { label: "연도", type: "number", value: next, required: true } });
+    if (!year) return back();
+    create = true;
+  }
+  try { await api("POST", "/api/year", { year, create }); await load(); showAlert(`${DATA.meta.year}년 장부${create ? "를 만들어 열었습니다" : "를 봅니다"}.`, "ok"); }
+  catch (err) { back(); showAlert(err.message, "error"); }
+});
 $("#btn-reload").addEventListener("click", load);
 // 로그인 사용자 표시 · 로그아웃 (auth.py)
 let ME = {};  // /api/me: {email, name, is_master}
@@ -1272,7 +1279,7 @@ let STALE_CHECK = false;
 async function refreshIfStale() {
   if (document.visibilityState !== "visible" || !DATA || STALE_CHECK || document.querySelector("dialog[open], [aria-busy=true]")) return;
   STALE_CHECK = true;
-  try { const m = await api("GET", "/api/meta"); if (m.mtime === DATA.meta.mtime && m.suppliers && typeof requestSettingsSaved === "function" && JSON.stringify([m.suppliers, m.supplier_note]) !== JSON.stringify([DATA.meta.suppliers, DATA.meta.supplier_note])) requestSettingsSaved({ suppliers: m.suppliers, supplier_note: m.supplier_note }); if (m.mtime !== DATA.meta.mtime) { await load(); showAlert("다른 곳에서 바뀐 장부를 다시 불러왔습니다.", "ok"); } } catch { }
+  try { const m = await api("GET", "/api/meta"); if (m.mtime === DATA.meta.mtime && m.suppliers && typeof requestSettingsSaved === "function" && JSON.stringify([m.suppliers, m.supplier_note]) !== JSON.stringify([DATA.meta.suppliers, DATA.meta.supplier_note])) requestSettingsSaved({ suppliers: m.suppliers, supplier_note: m.supplier_note }); if (m.mtime !== DATA.meta.mtime || m.year !== DATA.meta.year) { await load(); showAlert("다른 곳에서 바뀐 장부를 다시 불러왔습니다.", "ok"); } } catch { }
   finally { STALE_CHECK = false; }
 }
 document.addEventListener("visibilitychange", refreshIfStale);

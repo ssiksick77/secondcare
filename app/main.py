@@ -292,8 +292,26 @@ def undo_last(body: dict | None = None):
 @app.get("/api/meta")
 def meta():
     """가벼운 상태 확인: 파일 수정 시각 (다른 창·MCP 변경 감지용) + 소모품 구매처 목록·이용 가능 여부·안내 (연구원 화면은 설정 API를 쓰지 않음)."""
-    return {"mtime": store.data_stamp(), "write_id": store.last_write_id(),
+    return {"mtime": store.data_stamp(), "write_id": store.last_write_id(), "year": store.ledger_year(),
             "exec_status_labels": store.EXEC_STATUS_LABEL, **store.supplier_meta()}
+
+
+@app.get("/api/year")
+def year_get():
+    """조회 장부 연도와 있는 연도 목록 (장부 파일 하나 = 한 해)."""
+    return {"year": store.ledger_year(), "years": store.ledger_years()}
+
+
+@app.post("/api/year")
+def year_set(body: dict, request: Request):
+    """조회 장부 연도 전환. body.create 가 참이면 그 연도 장부를 새로 만들고(기준 정보만 복사) 전환한다. 연구원은 못 바꾼다."""
+    user = getattr(request.state, "user", None) or {}
+    if user.get("role") == "researcher":
+        raise HTTPException(403, "장부 연도는 담당자 이상만 바꿀 수 있습니다.")
+    if body.get("create"):
+        store.create_year(body.get("year"))
+    store.set_year(body.get("year"))
+    return year_get()
 
 
 @app.middleware("http")

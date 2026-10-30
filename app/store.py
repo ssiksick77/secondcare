@@ -627,6 +627,48 @@ def data_stamp() -> str:
 
 # 직전 쓰기 기록: 되돌리기는 "그 이후 아무도 장부를 바꾸지 않았을 때"만 허용 (해시 비교)
 LAST_WRITE: dict | None = None
+
+
+# ---------- 연도별 장부 (2026-10-30): 장부 파일 하나 = 한 해. SQLite 만 전환·생성한다 ----------
+def ledger_year() -> str:
+    return db.path_year(db.DB_PATH if USE_DB else XLSX_PATH)
+
+
+def ledger_years() -> list[str]:
+    return db.years() if USE_DB else [ledger_year()]
+
+
+def _year_arg(year) -> str:
+    year = str(year or "").strip()
+    if not USE_DB:
+        raise ValueError("연도 장부 전환은 SQLite 장부에서만 됩니다.")
+    if not re.fullmatch(r"20\d\d", year):
+        raise ValueError("연도는 2000~2099 사이의 네 자리 숫자입니다.")
+    return year
+
+
+def set_year(year) -> str:
+    """조회 장부를 다른 연도 파일로 바꾼다 (서버 전체: 모든 창이 같은 연도를 본다). 되돌리기 기록은 지운다."""
+    global DATA_PATH, LAST_WRITE
+    year = _year_arg(year)
+    p = db.year_path(year)
+    if not p.exists():
+        raise NotFound(f"{year}년 장부가 없습니다.")
+    with _lock:
+        db.DB_PATH = DATA_PATH = p
+        LAST_WRITE = None
+    return year
+
+
+def create_year(year) -> str:
+    """새 연도 장부를 만든다: 지금 보는 장부의 기준 정보(재원·거래처·태그·인원·지급처·사용자)만 복사. 있으면 거부."""
+    year = _year_arg(year)
+    p = db.year_path(year)
+    if p.exists():
+        raise ValueError(f"{year}년 장부가 이미 있습니다.")
+    with _lock, _file_lock():
+        db.create_year(p, db.DB_PATH)
+    return year
 # 쓰기 작성자 (SQLite author 열): 요청별 ContextVar. main.py 미들웨어가 로그인 이메일을, mcp_server 가 "mcp" 를 넣는다.
 # 비어 있으면 가져온 행의 author 는 유지된다 (COALESCE)
 _AUTHOR: contextvars.ContextVar[str | None] = contextvars.ContextVar("ledger_author", default=None)
@@ -1017,6 +1059,7 @@ def _derive(data: dict, meta: dict) -> dict:
         "request_types": REQUEST_TYPES,
         "request_status": REQUEST_STATUS,
         **supplier_meta(),
+        "year": ledger_year(), "years": ledger_years(),
         **meta,
     }
     return data

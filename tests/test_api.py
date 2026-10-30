@@ -473,6 +473,26 @@ def main() -> int:
             ck("xlsx: 추가 400 (.env 안내)", s == 400 and ".env" in r.get("detail", ""), (s, r))
         s, r = sv.call("GET", "/api/me", cookie="ledger_session=abc.def")
         ck("위조 쿠키 → 401", s == 401, (s, r))
+        # ---- 연도 장부 (2026-10-30): 파일 하나 = 한 해. 전환·생성은 SQLite 만 ----
+        s, r = sv.call("GET", "/api/year", cookie=ck_)
+        ck("연도: 현재 연도가 목록에 있음", s == 200 and r["year"] in r["years"], (s, r))
+        if sv.mode == "db":
+            s, r0 = sv.call("GET", "/api/all", cookie=ck_)
+            n_funds, n_exec = len(r0["funds"]), len(r0["exec"])
+            s, r = sv.call("POST", "/api/year", {"year": "2027", "create": True}, cookie=ck_)
+            ck("연도: 2027 생성 후 전환", s == 200 and r["year"] == "2027" and "2027" in r["years"], (s, r))
+            s, r = sv.call("GET", "/api/all", cookie=ck_)
+            ck("연도: 새 장부는 재원 복사·집행 비움", len(r["funds"]) == n_funds and not r["exec"] and n_exec > 0 and r["meta"]["year"] == "2027", (len(r["funds"]), len(r["exec"]), r["meta"].get("year")))
+            s, r = sv.call("POST", "/api/year", {"year": "2027", "create": True}, cookie=ck_)
+            ck("연도: 있는 연도 다시 만들기 400", s == 400, (s, r))
+            s, r = sv.call("POST", "/api/year", {"year": "2028"}, cookie=ck_)
+            ck("연도: 없는 연도 404", s == 404, (s, r))
+            s, r = sv.call("POST", "/api/year", {"year": r0["meta"]["year"]}, cookie=ck_)
+            s, r = sv.call("GET", "/api/all", cookie=ck_)
+            ck("연도: 원래 연도로 복귀", s == 200 and len(r["exec"]) == n_exec, len(r.get("exec", [])))
+        else:
+            s, r = sv.call("POST", "/api/year", {"year": "2027", "create": True}, cookie=ck_)
+            ck("xlsx: 연도 생성 400", s == 400, (s, r))
     return ck.done("API")
 
 
