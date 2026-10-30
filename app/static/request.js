@@ -158,12 +158,12 @@ $("#req-prev-year").addEventListener("click", () => {
 function fillRequestSelects() {
   if (!DATA.request) return;
   const rows = DATA.request;
-  const years = new Set([String(new Date().getFullYear())]);
+  const years = new Set([DATA.meta.year]);
   rows.forEach(r => r["신청일"] && years.add(r["신청일"].slice(0, 4)));
   const ys = [...years].sort().reverse();
   const ysel = $("#request-year");
   setOptions(ysel, ["", ...ys], ["전체", ...ys]);
-  if (!ysel.dataset.init) { ysel.value = String(new Date().getFullYear()); ysel.dataset.init = 1; }
+  if (ysel.dataset.init !== DATA.meta.year) { ysel.value = DATA.meta.year; ysel.dataset.init = DATA.meta.year; }  // 장부 연도 = 기본 연도
   FILTERS.request.year = ysel.value;
   const uniq = k => [...new Set(rows.map(r => r[k]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "ko"));
   const names = uniq("신청인"), tasks = uniq("관련과제");

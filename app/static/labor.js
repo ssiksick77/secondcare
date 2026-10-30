@@ -138,12 +138,12 @@ setMode(pathMode(), false);
 
 // ---------- 렌더 ----------
 function fillLaborSelects() {
-  const years = new Set([String(new Date().getFullYear())]);
+  const years = new Set([DATA.meta.year]);
   DATA.labor.forEach(r => r["지급월"] && years.add(r["지급월"].slice(0, 4)));
   DATA.salary.forEach(r => years.add(r["시작월"].slice(0, 4)));
   const ys = [...years].sort().reverse();
   setOptions($("#labor-year"), ys, ys);
-  if (!$("#labor-year").dataset.init) { $("#labor-year").value = String(new Date().getFullYear()); $("#labor-year").dataset.init = 1; }
+  if ($("#labor-year").dataset.init !== DATA.meta.year) { $("#labor-year").value = DATA.meta.year; $("#labor-year").dataset.init = DATA.meta.year; }  // 장부 연도 = 기본 귀속년도
   const payees = payeeOptions();
   $$("select[data-filter='이름']").forEach(sel => {  // 숨긴 인원은 빼되, 이미 고른 이름은 남김
     const names = peopleNames(), cur = FILTERS[sel.dataset.kind]?.["이름"];

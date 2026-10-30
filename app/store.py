@@ -1537,7 +1537,7 @@ def _ledger_year(wb) -> str:
     if SHEET_BUDGET in wb.sheetnames:
         years += [str(r["신청일자"])[:4] for r in _rows(wb[SHEET_BUDGET], BUDGET_COLS, BUDGET_HEAD_ROW) if r.get("신청일자")]
     years = [y for y in years if y.isdigit()]
-    return min(years) if years else str(dt.date.today().year)
+    return min(years) if years else ledger_year()
 
 
 def _ensure_budget_dates(wb) -> bool:

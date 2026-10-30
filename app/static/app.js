@@ -210,7 +210,7 @@ function fillSelects() {
   const years = new Set();
   [...DATA.exec, ...DATA.req].forEach(r => r["원인발생일"] && years.add(r["원인발생일"].slice(0, 4)));
   DATA.deposit.forEach(r => r["일자"] && years.add(r["일자"].slice(0, 4)));
-  years.add(String(new Date().getFullYear()));
+  years.add(DATA.meta.year);
   const ys = [...years].sort().reverse();
 
   const vendors = [...new Set(DATA.deposit.map(r => r["거래처"]).filter(Boolean))].sort();
