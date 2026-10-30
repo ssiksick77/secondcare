@@ -1,16 +1,16 @@
 # progress
 
-Updated: 2026-10-21
+Updated: 2026-10-30
 
 ## Goal
 
-Make the 사이드바 collapsible on every screen width and center the main area when it is collapsed (2026-10-21, branch `claude/side-panel-collapse-center-align-b3078b`): the main area keeps the width it has with the panel open, and the freed width is split left and right. Checked by `scripts/check.sh` and the browser pane on the QA copy (port 8897).
+One ledger file per year with a year selector next to the title (2026-10-30, branch `claude/2027-database-year-selector-424777`): the header select switches every screen to the chosen year's SQLite file, and can create the next year with the master data only. Checked by `scripts/check.sh` and the browser pane on a QA copy.
 
 ## Done
 
-- 0f7ff38 `body.side-collapsed .col > main { max-width: calc(100% - var(--side-w)) }` in `style.css`; viewports under 1000px lift the cap; print already resets `max-width`. Browser pane at 1400px: main width 865 in both states, left gap 240 when collapsed. UI test viewport 1366 → 1900 (collapsed main was 831px, under the 900px column fold tier, so two column checks failed); three new checks (same width, centered, left-aligned when open). checks: pass (calc 32, api 168, db 56, ai 166, ui 126, ui-db 136).
-- fa68d67 Collapse button on every width: the `@media (min-width: 1500px)` rule that hid `#side-collapse` is removed; `apply()` in app.js uses the saved `ledger-side` state first, and only without one opens at 1500px and wider. DESIGN.md updated. Browser pane at 1800px: button visible, collapse centers main (left 240, width 1265), state kept after reload. UI +2 checks. checks: pass (calc 32, api 168, db 56, ai 166, ui 128, ui-db 138).
-- main fast-forwarded to fa68d67 (user asked on 2026-10-21).
+- 4618711 `db.py`: `CONFIG_PATH`, `path_year`, `year_path` (year digits in the file name; a name without a year is this year and gets `_YYYY`), `years()`, `create_year` (schema + funds, vendor, tags, people, payee, users copied with ATTACH). `store.py`: `ledger_year`, `ledger_years`, `set_year` (swaps `db.DB_PATH` and `DATA_PATH`, clears `LAST_WRITE`), `create_year`; `meta.year` / `meta.years` in `read_all`. `main.py`: `GET/POST /api/year` (body `year`, `create`; researcher role 403), `year` in `/api/meta`. Front: the header `#dash-year` select lists the year files plus "새 연도 만들기…" (confirm dialog with a year input), visible on every screen except the researcher view; the dashboard year filter now follows the ledger year; stale check compares `year` too. API test +5 per mode. checks: pass (all 2 steps).
+- Live 2027 ledger created next to the 2026 one with `db.create_year` (2026 file hash unchanged): funds 17, people 16, vendor 3, tags 2, payee 1, users 1; transaction tables empty.
+- main fast-forwarded to 4618711 (user asked on 2026-10-30).
 
 ## In progress
 
@@ -18,19 +18,22 @@ None.
 
 ## Open issues
 
-- A 1366px laptop with the panel collapsed now has an 831px main area, so the column fold tiers (`COL_FOLD` in `cols.js`) hide more columns than before. Accepted by the user's choice "same width as open". Revisit if users complain.
-- `.claude/launch.json` (QA preview `qa-pane`, port 8897, LEDGER_AUTH_BYPASS) is local and uncommitted; the QA ledger copy lives in `tests/.tmp/pane/`. The QA ledger `docs/qa_data_2026_01_09/qa_ledger.xlsx` is gitignored and was copied into this worktree from the main checkout.
-- Carried over: researcher accounts cannot change "기본 화면"; hidden people still appear in the 계획표 and 선급·미지급 tables; server role checks are not implemented (`role` stored and shown only, `extra.admin` trusted); no UI to change an account's role or name after adding.
+- The chosen year is server-wide and in memory: every logged-in user sees the same year, and a restart returns to the configured file (`LEDGER_DB`, 2026). In 2027 either change `LEDGER_DB` in `app/.env` or switch after each start (ideas.md).
+- `mcp_server.py` is a separate process and always reads the configured file; it has no year switch.
+- xlsx mode cannot switch or create years (`ledger_years` returns the one file).
+- Rows dated in earlier years inside the 2026 ledger no longer show on the dashboard, because the "전체" year option is gone (user chose to replace the select).
+- The live app on port 8791 must be restarted to get the selector.
+- The worktree lacks the gitignored QA ledger; it was copied by hand from the main checkout. The QA copy for the browser pane was `qa_2026.sqlite` in the scratchpad (port 8898, LEDGER_AUTH_BYPASS); `.claude/launch.json` was removed before the commit.
+- Carried over: researcher accounts cannot change "기본 화면"; hidden people still appear in the 계획표 and 선급·미지급 tables; server role checks are not implemented except the year switch; no UI to change an account's role or name after adding; the `api` group fails about once in six full runs on a Windows file-lock race (rerun passes); live ledger is SQLite since 2026-10-20, the xlsx is frozen.
 
 ## Decisions
 
-- Collapsed main width = open main width (user, 2026-10-21), not a fixed max width. Reason: the tables do not reflow when the panel toggles.
-- Carried over: 회계대장 path is `/fund`; home preference is per account in SQLite; `/` direct access stays the researcher view.
+- 2026-10-30 (user) New year ledger copies master data only (funds, vendors, tags, people, payees, users), not transactions or salaries; the existing header year select is replaced (no "전체" dashboard year); creation is an item in the selector, not a script. My calls: server-wide switch (single process, module-level paths), SQLite only, year must match `20\d\d`, a file name without a year counts as this year.
+- Carried over: 회계대장 path is `/fund`; home preference is per account in SQLite; collapsed main width = open main width.
 
 ## Next action
 
-Restart the live app (`app
-un.bat`) and collapse the panel once on the live ledger. Then the ideas list: panel purpose, MSRI card, code id rename, 인건비·신청 table columns, critique P4.
+Restart the live app (`appun.bat`), check that the header shows 2026년 and 2027년, and switch once. Then the ideas list: remember the chosen year across restarts, panel purpose, MSRI card, code id rename.
 
 ## Done before this task (kept for reference)
 

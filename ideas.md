@@ -59,3 +59,5 @@ Who reads what:
 - [later][idea] 2026-10-21: rename code identifiers to the terms in CLAUDE.md: `#side` → sidebar, `.drawer` → panel, `#main-tabs` → fund tabs, and consider `labor` → `payroll` (keep the /labor path) — user: later, together
 - [later][idea] 2026-10-21: column hide + stub system for the 인건비 and 신청 screen tables (first version covers the 연구비 screen only) — column-hide brainstorming
 - [later][idea] 2026-10-21: 연구비 critique P4 toolbar fixed layout (filters left, 합계·CSV·추가 right), 적립 top two tables 50vh height review, 상태 ✓ undo in the list — app/.impeccable/critique/2026-10-20T13-45-39Z__localhost-fund.md
+- [later][fix]  2026-10-30: remember the chosen ledger year across restarts (now in memory; LEDGER_DB decides the start year) — year selector task
+- [later][idea] 2026-10-30: per-user ledger year (cookie) instead of one server-wide year; MCP server year switch — year selector task
