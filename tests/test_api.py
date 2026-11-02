@@ -240,6 +240,9 @@ def main() -> int:
         rn_row, rn_no = r.get("_row"), r.get("거래번호")
         up2 = requests.post(f"{sv.base}/api/evidence/{quote(rn_no)}", data={"kind": "영수증"}, files={"files": ("a.png", b"\x89PNG x", "image/png")}).json()
         ck("집행 증빙 파일명: 재원_종류_금액_YYMMDD", up2["items"][0]["파일명"] == "QA01_영수증_4000_260308.png", up2.get("items"))
+        rec = sv.rec("exec", rn_row); rec["증빙완료"] = "Y"
+        s, r = sv.call("PUT", f"/api/exec/{rn_row}", {"rec": rec})
+        ck("집행 증빙완료 표시 저장 (Y)", s == 200 and r.get("증빙완료") == "Y", (s, r))
         rec = sv.rec("exec", rn_row); rec["금액"] = 4500; rec["적요"] = "이름 검사 (적요 변경)"
         s, r = sv.call("PUT", f"/api/exec/{rn_row}", {"rec": rec})
         s2, ev = sv.call("GET", f"/api/evidence/{quote(rn_no)}")

@@ -82,7 +82,7 @@ LABOR_STATUS = ["예정", "확정"]
 LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(공통)", "기타": "외부인건비(공통)"}  # 기타는 외부인건비로 (2026-10-20 사용자 결정)
 MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
 EXEC_COLS = ["거래번호", "관리번호", "연결품의번호", "원인발생일", "지급청구일", "지출완료일", "결의일", "재원", "예산목", "세목", "결제수단",
-             "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록"]
+             "세세목", "거래처", "적요", "금액", "사용자", "태그", "비고", "상태", "증빙폴더", "증빙목록", "증빙완료"]  # 증빙완료 = "Y": 담당자가 드로어 [증빙 완료]로 표시 (2026-11-02). 대시보드 "증빙 없음"의 기준
 EXEC_STATUS = ["발생", "청구", "보완", "완료", "결의", "취소"]  # 날짜에서 계산, '보완'·'취소'만 수동. 순서: 발생→요구→(보완)→완료→결의 (2026-10-14). 취소(2026-10-19)는 모든 집계에서 뺀다
 # 화면 표시명 (app.js STATUS_LABEL 과 같음): 저장값 '완료'(지출완료일) = 승인, '결의'(결의일) = 완료. 저장값은 바꾸지 않고 API 에 '상태표시'로 함께 내보냄
 EXEC_STATUS_LABEL = {"발생": "발생", "청구": "청구", "보완": "보완", "완료": "승인", "결의": "완료", "취소": "취소"}
@@ -499,7 +499,7 @@ def _ensure_structure(wb) -> bool:
 
     for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10), (SHEET_PEOPLE, "숨김", 8), (SHEET_EVID, "실물", 6),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
-                                   (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12)):
+                                   (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12), (SHEET_EXEC, "증빙완료", 8)):
         ws = wb[sheet]
         heads = _headers(ws)
         if col_name not in heads:
@@ -1812,6 +1812,7 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
         return
     if kind == "exec":
         rec["상태"] = exec_status(rec)  # 날짜 우선, '보완'만 유지
+        rec["증빙완료"] = "Y" if _yes(rec.get("증빙완료")) else ""
     for c in cols:
         if c in NUM_COLS and rec.get(c) not in (None, ""):
             _to_num(rec[c], strict=True, label=c)

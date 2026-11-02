@@ -863,7 +863,7 @@ $("#dlg-form").addEventListener("submit", async e => {
     if (counts && changed && av != null && av - rec["금액"] < 0) warns.push(`${rec["재원"]} ${rec["예산목"]} 가용잔액 ${fmt(av)}원을 넘습니다 (저장 후 ${fmt(av - rec["금액"])}원).`);
     if (warns.length && !await confirmDlg({ title: "저장 전 확인", body: warns.join("\n\n"), verb: "그래도 저장" })) return;
   }
-  if (kind === "exec" && row) { const cur = DATA.exec.find(x => x._row === Number(row)); if (cur) ["상태", "증빙폴더", "증빙목록"].forEach(k => { rec[k] = cur[k]; }); }
+  if (kind === "exec" && row) { const cur = DATA.exec.find(x => x._row === Number(row)); if (cur) ["상태", "증빙폴더", "증빙목록", "증빙완료"].forEach(k => { rec[k] = cur[k]; }); }
   if (kind === "request" && typeof requestPrepare === "function") { const err = requestPrepare(rec, row ? Number(row) : null); if (err) { showFormError(err); return; } }
   let putExtra = null;  // 신청: 승인된 건을 고칠 때 담당자가 고른 처리 (승인 유지 → {keep_approval: true})
   if (kind === "request" && row && typeof requestConfirmSave === "function") { const r = await requestConfirmSave(rec, Number(row)); if (r === null) return; putExtra = r || null; }
@@ -1734,7 +1734,8 @@ function gotoOrigin(row) {
   else { switchTab("req"); setSearch("req", o.no); }
 }
 function isExcludedExec(r) { return !DATA.funds.some(f => f["재원코드"] === r["재원"]) || !DATA.meta.budget_items.includes(r["예산목"]); }
-function hasEvidence(r) { return !!(r["증빙목록"]) || (DATA.evidence || []).some(e => e["거래번호"] === r["거래번호"]); }
+// 증빙 없음 = 담당자가 드로어 [증빙 완료]를 누르지 않은 집행 (파일 수와 무관, 2026-11-02)
+function hasEvidence(r) { return r["증빙완료"] === "Y"; }
 
 function renderExecTiles() {
   const rows = DATA.exec.filter(r => {  // 빠른 필터를 제외한 현재 필터 기준
@@ -2026,7 +2027,7 @@ async function renderExecDrawer(fetchEvid) {
         ${XD_INLINE.map(([k, t]) => iv(k, t)).join("")}
       </div>
     </section>
-    ${evidSectionsHtml({ number: r["거래번호"], evid, drive, dateDefault: r["원인발생일"], folderHint: `증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])}`, folderUrl: r["증빙폴더"] })}
+    ${evidSectionsHtml({ number: r["거래번호"], evid, drive, dateDefault: r["원인발생일"], folderHint: `증빙관리/${esc((r["원인발생일"] || "").slice(0, 4))}/${esc(r["재원"])}/${esc(r["거래번호"])}`, folderUrl: r["증빙폴더"], done: r["증빙완료"] === "Y", row: r._row })}
     <section class="xd-sec xd-foot">${(() => { const ev = evid.length; const dis = locked || ev; const vOk = !!r["지출완료일"] && st !== "취소"; return `<button type="button" class="btn btn-sm" data-act="voucher" data-row="${r._row}"${vOk ? "" : " disabled"} title="${st === "취소" ? "취소된 집행" : vOk ? "지출결의서 미리보기 · A4 인쇄" : VOUCHER_OFF}">결의서</button>${st === "취소"
       ? `<button type="button" class="btn btn-sm" data-act="xact" data-action="uncancel" data-row="${r._row}" title="취소를 해제하고 날짜대로 상태를 되돌림">취소 해제</button>`
       : `<button type="button" class="btn btn-sm" data-act="xact" data-action="cancel" data-row="${r._row}"${locked ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : "이 집행을 취소 (금액은 집계에서 빠지고 행은 남음, 해제 가능)"}">취소</button>`}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="exec" data-row="${r._row}"${dis ? " disabled" : ""} title="${locked ? `${o.kind} 연결 행: 원본 화면에서 처리` : ev ? "증빙을 먼저 지워야 삭제할 수 있습니다" : "이 집행을 삭제 (되돌리기 가능)"}">이 집행 삭제</button>${dis ? `<span class="toolbar-note">${locked ? `${o.kind} 연결 행이라 원본 화면에서 처리합니다` : `증빙 ${ev}개를 먼저 지우면 삭제할 수 있습니다`}</span>` : ""}`; })()}</section>`;
@@ -2108,14 +2109,14 @@ async function renderDepDrawer(fetchEvid) {
   body.scrollTop = scroll;
 }
 // 증빙 절 3개(목록 · 실물만 항목 추가 · 업로드): 집행 드로어와 적립금 드로어가 같이 쓴다.
-// c = { number(거래번호|적립번호), evid, drive, dateDefault(파일명 날짜 기본값), folderHint(끌어놓기 칸 안내), folderUrl(폴더 열기, 없으면 생략) }
+// c = { number(거래번호|적립번호), evid, drive, dateDefault(파일명 날짜 기본값), folderHint(끌어놓기 칸 안내), folderUrl(폴더 열기, 없으면 생략), done·row(집행만: 증빙완료 표시와 [증빙 완료] 버튼) }
 function evidSectionsHtml(c) {
   const evid = c.evid || [], drive = c.drive || {};
   const kinds = [...new Set(evid.map(e => e["증빙종류"]).filter(Boolean))];
   const nFile = evid.filter(evHasFile).length;
   return `
     <section class="xd-sec">
-      <h3>증빙 <span class="toolbar-note">${evid.length}개${nFile < evid.length ? ` · 파일 ${nFile}개` : ""}</span><span class="sp"></span>${c.folderUrl ? `<a class="btn btn-sm" href="${esc(c.folderUrl)}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
+      <h3>증빙 <span class="toolbar-note">${evid.length}개${nFile < evid.length ? ` · 파일 ${nFile}개` : ""}</span>${c.done ? '<span class="badge 완료">증빙 완료</span>' : ""}<span class="sp"></span>${c.row != null ? `<button type="button" class="btn btn-sm${c.done ? "" : " btn-primary"}" data-evdone="${c.row}" data-on="${c.done ? "" : "Y"}" title="${c.done ? "증빙 완료 표시를 지웁니다 (대시보드 '증빙 없음'에 다시 셈)" : "이 집행의 증빙 정리가 끝났다고 표시합니다 (증빙 0건이어도 가능). 대시보드 '증빙 없음'에서 빠집니다"}">${c.done ? "완료 취소" : "증빙 완료"}</button>` : ""}${c.folderUrl ? `<a class="btn btn-sm" href="${esc(c.folderUrl)}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
       ${!drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않았습니다. 오른쪽 위 설정(톱니)에서 연결하면 업로드할 수 있습니다.${drive.error ? " (" + esc(drive.error) + ")" : ""}</p>` : ""}
       ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th class="xd-th-cell"><span class="sr-only">미리보기</span></th><th>증빙</th><th class="evid-phys" title="실물 증빙 보관 여부">실물</th><th>비고</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>
         ${evid.map(evidRowHtml).join("")}
@@ -2248,6 +2249,15 @@ function bindEvidForm(c) {
       showAlert(`${r.copied.length}건 복사${ok ? ": " + ok : ""}${r.errors.length ? ` · 실패 ${r.errors.length}건: ${r.errors.join("; ")}` : ""}`, r.errors.length ? "warn" : "ok");
       await load(); await c.rerender();
     } catch (err) { showAlert("복사 실패: " + err.message, "error"); b.disabled = false; }
+  }));
+  $$("#xd-body [data-evdone]").forEach(b => b.addEventListener("click", async () => {
+    const r = DATA.exec.find(x => x._row === Number(b.dataset.evdone)); if (!r) return;
+    b.disabled = true;
+    try {
+      const rec = { ...r, 증빙완료: b.dataset.on }; delete rec._row;
+      await api("PUT", `/api/exec/${r._row}`, { rec, expect: expectOf("exec", r) });
+      await load();
+    } catch (err) { showAlert(err.message, "error"); b.disabled = false; }
   }));
   $$("#xd-body [data-evphys]").forEach(cb => cb.addEventListener("change", async () => {
     const row = Number(cb.dataset.evphys); const e = (XD.evid || []).find(x => x._row === row);
