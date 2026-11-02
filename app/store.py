@@ -100,7 +100,7 @@ VENDOR_CODE_RE = re.compile(r"^[0-9A-Za-z가-힣]{2,6}$")  # 적립번호 구분
 DEP_STAGE_COLS = ["발주일", "결제일", "수령일"]  # 사용 행의 단계 (2026-10-19 사용자 결정, 집행 단계 방식). 적립 행은 단계 없음
 DEP_STATUS = ["대기", "발주", "결제", "수령"]  # 날짜에서 계산. 적립 행은 빈 값
 TAG_COLS = ["태그명", "분류", "설명"]
-EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고"]
+EVID_COLS = ["거래번호", "증빙번호", "증빙종류", "파일명", "원본파일명", "드라이브파일ID", "크기", "업로드일", "비고", "실물"]  # 실물 = "Y" 면 실물 증빙 보관 (2026-11-02)
 FIXLOG_COLS = ["거래번호", "일시", "구분", "사유"]  # 구분: 표시 / 해제. 일시: YYYY-MM-DD HH:MM
 MEMO_COLS = ["종류", "대상", "내용", "작성일", "비고"]  # 종류: 재원(대상=재원코드) / 거래처(대상=거래처명) / 비세목(대상=예산목·세목·세세목 이름) / 일반(대상 비움). AI 는 read_memo 로 읽는다
 MEMO_KINDS = ["재원", "거래처", "비세목", "일반"]
@@ -462,7 +462,7 @@ def _ensure_structure(wb) -> bool:
         for i, c in enumerate(EVID_COLS, 1):
             cell = ws.cell(1, i, c)
             cell.font, cell.fill = head_font, head_fill
-        for col, w in zip("ABCDEFGHI", (18, 22, 14, 44, 30, 36, 10, 12, 20)):
+        for col, w in zip("ABCDEFGHIJ", (18, 22, 14, 44, 30, 36, 10, 12, 20, 6)):
             ws.column_dimensions[col].width = w
         ws.freeze_panes = "A2"
         changed = True
@@ -497,7 +497,7 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10), (SHEET_PEOPLE, "숨김", 8),
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10), (SHEET_PEOPLE, "숨김", 8), (SHEET_EVID, "실물", 6),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
                                    (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12)):
         ws = wb[sheet]
@@ -1798,6 +1798,7 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
     if kind == "evidence":
         if not str(rec.get("거래번호") or "").strip():
             raise ValueError("거래번호는 필수입니다.")  # 파일명은 선택 (비면 실물만 항목)
+        rec["실물"] = "Y" if _yes(rec.get("실물")) else ""  # 화면 체크(true/false)·API Y/N 모두 받음
         return
     if kind == "ratt":
         if not str(rec.get("신청번호") or "").strip() or not str(rec.get("파일명") or "").strip():
@@ -2220,12 +2221,12 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
         if kind == "request":
             _validate(kind, rec, existing)
             reapproval = _prepare_request_update(wb, existing, rec, _yes((extra or {}).get("keep_approval")))
-        if kind in ("order", "ratt"):
-            # 주문·첨부 행은 비고(주문은 배송일도)만 화면에서 수정
-            free = ("비고", "배송일") if kind == "order" else ("비고",)
+        if kind in ("order", "ratt", "evidence"):
+            # 주문·첨부·증빙 행은 비고(주문은 배송일, 증빙은 실물도)만 화면에서 수정
+            free = {"order": ("비고", "배송일"), "ratt": ("비고",), "evidence": ("비고", "실물")}[kind]
             for c in cols:
                 if c in rec and c not in free and _norm_cmp(c, rec[c]) != _norm_cmp(c, existing.get(c)):
-                    raise ValueError(f"{'주문' if kind == 'order' else '첨부'} 행의 {c}은(는) 여기서 바꿀 수 없습니다. "
+                    raise ValueError(f"{'주문' if kind == 'order' else '첨부' if kind == 'ratt' else '증빙'} 행의 {c}은(는) 여기서 바꿀 수 없습니다. "
                                      + ("주문을 취소한 뒤 다시 만드세요." if kind == "order" else "파일을 지우고 다시 올리세요."))
             rec = {**existing, **{c: rec[c] for c in free if c in rec}}
             rec.pop("_row", None)

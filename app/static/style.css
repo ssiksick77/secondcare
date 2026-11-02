@@ -563,6 +563,7 @@ textarea.xd-edit { resize: vertical; margin: 2px 0; }
 .evid-name .toolbar-note { word-break: keep-all; overflow-wrap: anywhere; }   /* 원본 이름 · 크기 · 날짜는 공백에서 줄바꿈 */
 .evid-table td.xd-th-cell, .evid-table th.xd-th-cell { width: 60px; padding: 2px 6px; }
 .evid-table td.evid-id { white-space: nowrap; }
+.evid-table td.evid-phys, .evid-table th.evid-phys { width: 36px; text-align: center; }
 .evid-table .evid-kind, .evid-table .evid-no { display: block; }
 .evid-table .evid-no { color: var(--ink-2); }   /* 증빙번호: 종류 아래 회색 (표 글자 12px) */
 .evid-table td.evid-acts { white-space: nowrap; text-align: right; }

@@ -2117,7 +2117,7 @@ function evidSectionsHtml(c) {
     <section class="xd-sec">
       <h3>증빙 <span class="toolbar-note">${evid.length}개${nFile < evid.length ? ` · 파일 ${nFile}개` : ""}</span><span class="sp"></span>${c.folderUrl ? `<a class="btn btn-sm" href="${esc(c.folderUrl)}" target="_blank" rel="noopener">폴더 열기</a>` : ""}</h3>
       ${!drive.connected ? `<p class="toolbar-note warn">구글 드라이브가 연결되지 않았습니다. 오른쪽 위 설정(톱니)에서 연결하면 업로드할 수 있습니다.${drive.error ? " (" + esc(drive.error) + ")" : ""}</p>` : ""}
-      ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th class="xd-th-cell"><span class="sr-only">미리보기</span></th><th>증빙</th><th>파일</th><th>비고</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>
+      ${evid.length ? `<div class="table-wrap"><table class="grid compact evid-table"><thead><tr><th class="xd-th-cell"><span class="sr-only">미리보기</span></th><th>증빙</th><th class="evid-phys" title="실물 증빙 보관 여부">실물</th><th>비고</th><th><span class="sr-only">작업</span></th></tr></thead><tbody>
         ${evid.map(evidRowHtml).join("")}
       </tbody></table></div>` : '<p class="toolbar-note">등록된 증빙이 없습니다.</p>'}
       <div class="evid-list"><span class="toolbar-note">증빙목록</span><code>${esc(kinds.join(", ") || "(없음)")}</code>${kinds.length ? `<button type="button" class="btn btn-sm" id="evid-copy">복사</button>` : ""}</div>
@@ -2148,13 +2148,15 @@ function evidRowHtml(e) {
   const has = evHasFile(e), n = e["파일명"] || "", id = e["드라이브파일ID"];
   const thumb = !has ? "" : XD_IMG.test(n) && id ? `<img class="xd-thumb" loading="lazy" alt="" src="/api/evidence/thumb/${encodeURIComponent(id)}" data-ext="${esc(fileExt(n))}">` : `<span class="xd-chip" aria-hidden="true">${esc(fileExt(n))}</span>`;
   const meta = [e["크기"] ? Math.max(1, Math.round(e["크기"] / 1024)).toLocaleString() + " KB" : "", e["업로드일"] ? mmdd(e["업로드일"]) : ""].filter(Boolean).join(" · ");
-  const file = has ? `${e.missing ? `<span class="evid-nofile" title="드라이브에서 지워졌거나 휴지통에 있습니다. 장부 기록만 남아 있으니 [삭제]로 정리하거나 드라이브에서 복구하세요">${esc(n)} · 드라이브에 없음</span>` : e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener" title="새 창에서 열기">${esc(n)}</a>` : esc(n)}${meta ? `<div class="toolbar-note">${esc(meta)}</div>` : ""}` : `<span class="evid-nofile">파일 없음</span>`;
+  // 파일명은 증빙종류의 툴팁으로 (2026-11-02). 파일이 있으면 종류 글자가 드라이브 링크
+  const tip = has ? [n, meta, e.missing ? "드라이브에 없음 (지워졌거나 휴지통). 장부 기록만 남아 있으니 [삭제]로 정리하거나 드라이브에서 복구하세요" : ""].filter(Boolean).join(" · ") : "파일 없음";
+  const kindTxt = has && e.url && !e.missing ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e["증빙종류"])}</a>` : esc(e["증빙종류"]);
   const conn = !!XD.drive?.connected;
   const attach = has
     ? `<button type="button" class="btn btn-sm" data-evattach="${e._row}" data-replace="1"${conn ? "" : " disabled"} title="${conn ? "파일을 새 파일로 바꿉니다 (증빙번호·종류·비고 유지, 옛 파일은 드라이브 휴지통)" : "구글 드라이브를 연결하면 교체할 수 있습니다"}">교체</button>`
     : `<button type="button" class="btn btn-sm" data-evattach="${e._row}"${conn ? "" : " disabled"} title="${conn ? "이 항목에 파일 1개를 올려 붙입니다" : "구글 드라이브를 연결하면 첨부할 수 있습니다"}">파일 첨부</button>`;
   const label = has ? n : `${e["증빙번호"]} ${e["증빙종류"]}`;
-  return `<tr${has ? "" : ' class="evid-row-nofile"'}><td class="xd-th-cell">${thumb}</td><td class="evid-id"><span class="evid-kind">${esc(e["증빙종류"])}</span><span class="evid-no">${esc(e["증빙번호"])}</span></td><td class="evid-name">${file}</td><td class="evid-note">${esc(e["비고"])}</td><td class="evid-acts"><button type="button" class="btn btn-sm" data-evmount="${e._row}" title="이 증빙의 첨부 양식 인쇄">양식</button>${has ? `<button type="button" class="btn btn-sm" data-evcopy="${e._row}"${conn ? "" : " disabled"} title="이 파일을 다른 거래의 증빙으로 복사 (그 거래 폴더에, 그 거래 기준 이름으로)">복사</button>` : ""}${attach}<button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(label)}" data-file="${has ? 1 : ""}" title="${has ? "장부에서 삭제하고 드라이브 휴지통으로 이동" : "장부에서 이 항목을 삭제"}">삭제</button></td></tr>`;
+  return `<tr${has ? "" : ' class="evid-row-nofile"'}><td class="xd-th-cell">${thumb}</td><td class="evid-id"><span class="evid-kind${e.missing ? " evid-nofile" : ""}" title="${esc(tip)}">${kindTxt}</span><span class="evid-no">${esc(e["증빙번호"])}</span></td><td class="evid-phys"><input type="checkbox" data-evphys="${e._row}" aria-label="실물 증빙 보관"${e["실물"] === "Y" ? " checked" : ""}></td><td class="evid-note">${esc(e["비고"])}</td><td class="evid-acts"><button type="button" class="btn btn-sm" data-evmount="${e._row}" title="이 증빙의 첨부 양식 인쇄">양식</button>${has ? `<button type="button" class="btn btn-sm" data-evcopy="${e._row}"${conn ? "" : " disabled"} title="이 파일을 다른 거래의 증빙으로 복사 (그 거래 폴더에, 그 거래 기준 이름으로)">복사</button>` : ""}${attach}<button type="button" class="btn btn-sm btn-danger" data-evdel="${e._row}" data-name="${esc(label)}" data-file="${has ? 1 : ""}" title="${has ? "장부에서 삭제하고 드라이브 휴지통으로 이동" : "장부에서 이 항목을 삭제"}">삭제</button></td></tr>`;
 }
 function bindXdBody() {
   const body = $("#xd-body");
@@ -2246,6 +2248,13 @@ function bindEvidForm(c) {
       showAlert(`${r.copied.length}건 복사${ok ? ": " + ok : ""}${r.errors.length ? ` · 실패 ${r.errors.length}건: ${r.errors.join("; ")}` : ""}`, r.errors.length ? "warn" : "ok");
       await load(); await c.rerender();
     } catch (err) { showAlert("복사 실패: " + err.message, "error"); b.disabled = false; }
+  }));
+  $$("#xd-body [data-evphys]").forEach(cb => cb.addEventListener("change", async () => {
+    const row = Number(cb.dataset.evphys); const e = (XD.evid || []).find(x => x._row === row);
+    try {
+      await api("PUT", `/api/evidence/${row}`, { rec: { 실물: cb.checked ? "Y" : "" }, expect: e ? { 거래번호: e["거래번호"], 증빙번호: e["증빙번호"], 파일명: e["파일명"] } : undefined });
+      if (e) e["실물"] = cb.checked ? "Y" : "";
+    } catch (err) { cb.checked = !cb.checked; showAlert(err.message, "error"); }
   }));
   $$("#xd-body [data-evdel]").forEach(b => b.addEventListener("click", async () => {
     const body = b.dataset.file ? `'${b.dataset.name}' 을 장부에서 지우고 드라이브 휴지통으로 옮깁니다.` : `'${b.dataset.name}' 항목을 장부에서 지웁니다(파일 없음).`;
