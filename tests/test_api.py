@@ -171,6 +171,8 @@ def main() -> int:
         ck("적립금 수정: 적립번호는 불변", s == 200 and r.get("적립번호") == dep_no, (s, r))
         s, r = sv.call("POST", f"/api/evidence/{quote(dep_no)}/entry", {"증빙종류": "영수증", "비고": "실물"})
         ck("적립 증빙 항목(실물만) 추가", s == 200 and r.get("증빙번호") == f"{dep_no}-1", (s, r))
+        s, r = sv.call("PUT", f"/api/evidence/{r['_row']}", {"rec": {"실물": "Y"}})
+        ck("증빙 실물 체크 저장 (부분 레코드)", s == 200 and r.get("실물") == "Y" and r.get("증빙종류") == "영수증", (s, r))
         s, r = sv.call("POST", f"/api/evidence/{quote('검사-사용-2099-001')}/entry", {"증빙종류": "영수증"})
         ck("없는 적립번호 → 404", s == 404, (s, r))
         import requests

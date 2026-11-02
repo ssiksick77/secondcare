@@ -2206,7 +2206,7 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
         ws = wb[sheet]
         if not _row_in_range(ws, row, head_row):
             raise NotFound("행을 찾을 수 없습니다. 목록을 새로고침하세요.")
-        if kind != "request":
+        if kind not in ("request", "evidence"):  # 증빙은 비고·실물만 오므로 기존 행과 합친 뒤 검사
             _validate(kind, rec)
         if kind == "memo":
             _validate_memo_ref(wb, rec)
@@ -2230,6 +2230,8 @@ def update(kind: str, row: int, rec: dict, expect: dict | None = None, extra: di
                                      + ("주문을 취소한 뒤 다시 만드세요." if kind == "order" else "파일을 지우고 다시 올리세요."))
             rec = {**existing, **{c: rec[c] for c in free if c in rec}}
             rec.pop("_row", None)
+            if kind == "evidence":
+                _validate(kind, rec)
         if kind == "exec":
             rec.pop(EXEC_LINK_COL, None)  # 시스템 열: 기존 값 유지 (_write_row 는 rec 에 없는 열을 건드리지 않음)
         if kind == "exec" and (existing["거래번호"] in _labor_refs(wb) or existing["거래번호"] in _number_refs(wb, "거래번호")):
