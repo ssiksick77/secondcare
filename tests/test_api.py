@@ -497,6 +497,14 @@ def main() -> int:
             s, r = sv.call("POST", "/api/year", {"year": r0["meta"]["year"]}, cookie=ck_)
             s, r = sv.call("GET", "/api/all", cookie=ck_)
             ck("연도: 원래 연도로 복귀", s == 200 and len(r["exec"]) == n_exec, len(r.get("exec", [])))
+            # 옛 스키마의 연도 파일(열이 빠짐)로 전환해도 읽힌다: 전환 때 빠진 열을 덧붙인다 (2026-11-03 회귀)
+            import sqlite3
+            p27 = sv.store_env["LEDGER_DB"][:-len(".sqlite")] + "_2027.sqlite"  # db.year_path: 연도가 없는 이름은 _YYYY 를 붙임
+            con = sqlite3.connect(p27); con.execute('ALTER TABLE "exec" DROP COLUMN "증빙완료"'); con.commit(); con.close()
+            s, r = sv.call("POST", "/api/year", {"year": "2027"}, cookie=ck_)
+            s, r = sv.call("GET", "/api/all", cookie=ck_)
+            ck("연도: 열이 빠진 옛 연도 파일로 전환 → 열 보강 후 읽힘", s == 200 and r["meta"]["year"] == "2027", (s, str(r)[:200]))
+            s, r = sv.call("POST", "/api/year", {"year": r0["meta"]["year"]}, cookie=ck_)
         else:
             s, r = sv.call("POST", "/api/year", {"year": "2027", "create": True}, cookie=ck_)
             ck("xlsx: 연도 생성 400", s == 400, (s, r))

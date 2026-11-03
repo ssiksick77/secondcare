@@ -655,6 +655,8 @@ def set_year(year) -> str:
     if not p.exists():
         raise NotFound(f"{year}년 장부가 없습니다.")
     with _lock:
+        with db.session(p) as con:
+            db.create_schema(con)  # 다른 연도 파일도 새 열을 받는다. 빠진 열을 SELECT 하면 sqlite 는 글자 상수로 읽어 IndexError 가 난다 (2026-11-03)
         db.DB_PATH = DATA_PATH = p
         LAST_WRITE = None
     return year
