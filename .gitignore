@@ -26,3 +26,4 @@ tests/__pycache__/
 .impeccable/cache/
 app/.impeccable/cache/
 .claude/session-base.txt
+app/tray.log

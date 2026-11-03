@@ -8,3 +8,5 @@ openai==3.29.0
 mcp==2.3.0
 google-api-python-client==2.201.0
 google-auth-oauthlib==1.5.0
+pystray==0.19.5
+pillow==12.3.0
