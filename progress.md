@@ -28,12 +28,14 @@ None.
 
 ## Decisions
 
+- 2026-11-03 What broke: a new ledger column (증빙완료) broke every read after a switch to the 2027 file, because `set_year` did not add missing columns and SQLite reads an unknown quoted column as a string literal. What now catches it: the api-db test drops a column from the 2027 file, switches to it, and expects a 200 read.
 - 2026-10-30 (user) New year ledger copies master data only (funds, vendors, tags, people, payees, users), not transactions or salaries; the existing header year select is replaced (no "전체" dashboard year); creation is an item in the selector, not a script. My calls: server-wide switch (single process, module-level paths), SQLite only, year must match `20\d\d`, a file name without a year counts as this year.
 - Carried over: 회계대장 path is `/fund`; home preference is per account in SQLite; collapsed main width = open main width.
 
 ## Next action
 
-Restart the live app (`appun.bat`), check that the header shows 2026년 and 2027년, and switch once. Then the ideas list: remember the chosen year across restarts, panel purpose, MSRI card, code id rename.
+Restart the live app (`app
+un.bat`), check that the header shows 2026년 and 2027년, and switch once. Then the ideas list: remember the chosen year across restarts, panel purpose, MSRI card, code id rename.
 
 ## Done before this task (kept for reference)
 
