@@ -1,13 +1,14 @@
 # progress
 
-Updated: 2026-10-30
+Updated: 2026-11-04
 
 ## Goal
 
-One ledger file per year with a year selector next to the title (2026-10-30, branch `claude/2027-database-year-selector-424777`): the header select switches every screen to the chosen year's SQLite file, and can create the next year with the master data only. Checked by `scripts/check.sh` and the browser pane on a QA copy.
+Prepare SECONDCare to run on a Linux server in Docker (2026-11-04, branch `claude/second-care-linux-migration-842511`): the image runs `app/main.py` with all mutable files (ledger, backups, .env, Google token, chats) in one host folder mounted at `/data`, no port is opened on the shared host, and a Tailscale sidecar container (userspace mode, `tailscale serve`) gives the users HTTPS access. Checked by `scripts/check.sh` on Windows and a `docker compose up` on the QA copy; nothing runs on the server yet.
 
 ## Done
 
+- 57939b7 `deploy/Dockerfile` (python:3.12-slim, tray packages left out, `backup/` and the Google files are symlinks into `/data`), `deploy/docker-compose.yml` (tailscale sidecar: `TS_USERSPACE`, `tag:secondcare`, `serve.json` 443 → 127.0.0.1:8791; the app shares its network, no host port; data in `~/secondcare/data`), `.dockerignore`, `main.py` `_pause()` (no `input()` without a terminal). `docs/서버_이전_2026-11-04.md`: survey table, files, server steps, node sharing, ACL, user guide in 5 steps. checks: pass (all 2 steps).
 - 4618711 `db.py`: `CONFIG_PATH`, `path_year`, `year_path` (year digits in the file name; a name without a year is this year and gets `_YYYY`), `years()`, `create_year` (schema + funds, vendor, tags, people, payee, users copied with ATTACH). `store.py`: `ledger_year`, `ledger_years`, `set_year` (swaps `db.DB_PATH` and `DATA_PATH`, clears `LAST_WRITE`), `create_year`; `meta.year` / `meta.years` in `read_all`. `main.py`: `GET/POST /api/year` (body `year`, `create`; researcher role 403), `year` in `/api/meta`. Front: the header `#dash-year` select lists the year files plus "새 연도 만들기…" (confirm dialog with a year input), visible on every screen except the researcher view; the dashboard year filter now follows the ledger year; stale check compares `year` too. API test +5 per mode. checks: pass (all 2 steps).
 - Live 2027 ledger created next to the 2026 one with `db.create_year` (2026 file hash unchanged): funds 17, people 16, vendor 3, tags 2, payee 1, users 1; transaction tables empty.
 - main fast-forwarded to 4618711 (user asked on 2026-10-30).
@@ -34,8 +35,7 @@ None.
 
 ## Next action
 
-Restart the live app (`app
-un.bat`), check that the header shows 2026년 and 2027년, and switch once. Then the ideas list: remember the chosen year across restarts, panel purpose, MSRI card, code id rename.
+On the server: follow docs/서버_이전_2026-11-04.md section 3 (Docker access, `~/secondcare/data`, Tailscale ACL and tags, auth key, `docker compose up`). Not done on this PC: `docker compose up` was never run (no Docker here); `serve.json` and the sidecar env names are from the Tailscale docs, not tested. Open: outside backup of `~/secondcare/data`, MCP server on the server, the harness symlinks are missing in this worktree (shown as deleted `.claude/*`; do not commit).
 
 ## Done before this task (kept for reference)
 
