@@ -172,7 +172,8 @@ def finish_login(code: str, state: str, state_cookie: str | None) -> dict:
     flow.fetch_token(code=code)
     from google.oauth2 import id_token as gid
     from google.auth.transport.requests import Request
-    info = gid.verify_oauth2_token(flow.credentials.id_token, Request(), client_info()["client_id"])
+    # 서버 시계가 몇 초 늦으면 "Token used too early" 로 막힌다 (2026-11-04 리눅스 서버). 30초까지 허용
+    info = gid.verify_oauth2_token(flow.credentials.id_token, Request(), client_info()["client_id"], clock_skew_in_seconds=30)
     email = (info.get("email") or "").lower()
     if not email or not info.get("email_verified", True):
         raise AuthError("구글 계정의 이메일을 확인할 수 없습니다.")
