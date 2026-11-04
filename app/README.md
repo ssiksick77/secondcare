@@ -347,7 +347,7 @@ claude mcp add caih-rfm -s user -- python "<프로젝트 상위 폴더>/CAIH_회
 
 다중 사용자 전환을 위해 장부를 xlsx 파일에서 SQLite 로 옮기는 중입니다. 아직 기본값은 xlsx 입니다.
 
-- `.env`에 `LEDGER_DB=<장부.sqlite>` 를 적으면 앱·MCP 가 그 파일을 읽고 씁니다. 이때 xlsx 는 더 이상 갱신되지 않습니다.
+- `.env`에 `LEDGER_DB=<장부.sqlite>` 를 적으면 앱·MCP 가 그 파일을 읽고 씁니다 (비우면 `app` 상위 폴더의 `secondcare_aic_2026.sqlite`; 연도별 파일 이름은 `secondcare_aic_<yyyy>.sqlite`). 이때 xlsx 는 더 이상 갱신되지 않습니다.
 - 가져오기(1회): `python import_xlsx.py <장부.xlsx> <장부.sqlite>` — 구조 보정을 끝까지 적용해 넣고, 모든 행의 작성자(author)를 안윤아 계정으로 채웁니다.
 - 내보내기(읽기 전용 사본): `python export_xlsx.py <장부.sqlite> <사본.xlsx>` — 이전 장부와 같은 시트·열 구조로 만듭니다. 사본을 고쳐도 SQLite 에는 반영되지 않습니다.
 - 백업·되돌리기는 같은 방식으로 동작하며 `app/backup/*.sqlite` 에 저장 직전 상태를 남깁니다.

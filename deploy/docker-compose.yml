@@ -36,6 +36,6 @@ services:
     depends_on:
       - tailscale
     environment:
-      LEDGER_DB: /data/의료인공지능센터_지출장부_2026.sqlite
+      LEDGER_DB: /data/secondcare_aic_2026.sqlite
     volumes:
       - ${HOME}/secondcare/data:/data

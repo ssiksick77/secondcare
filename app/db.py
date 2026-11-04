@@ -17,7 +17,7 @@ from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
 DB_ENV = "LEDGER_DB"
-DB_PATH = Path(os.environ.get(DB_ENV) or (APP_DIR.parent / "의료인공지능센터_지출장부_2026.sqlite"))
+DB_PATH = Path(os.environ.get(DB_ENV) or (APP_DIR.parent / "secondcare_aic_2026.sqlite"))
 CONFIG_PATH = DB_PATH  # 설정된 장부. 연도 전환(2026-10-30)은 DB_PATH 를 같은 폴더의 다른 연도 파일로 바꾼다
 YEAR_RE = re.compile(r"(?<!\d)20\d\d(?!\d)")
 # 새 연도 장부에 복사하는 기준 정보 (거래 표는 비움)
