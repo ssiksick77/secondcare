@@ -1,8 +1,0 @@
-'150,000': blur->'150,000' invalid=None title="'=' 로 시작하면 계산식 입력 가능 (예: =12000*3)" | err=None confirm=None dlgOpen=0 | saved=[('2026-QA10-001', 150000)] n 147->148
-'=12000*3+500': blur->'36,500' invalid=None title="'=' 로 시작하면 계산식 입력 가능 (예: =12000*3)" | err=None confirm=None dlgOpen=0 | saved=[('2026-QA10-002', 36500)] n 148->149
-'=1/0': blur->'=1/0' invalid=true title='수식을 계산할 수 없습니다. 숫자와 + - * / ( ) 만 쓸 수 있습니다.' | err='/ 확인 필요: 금액(수식 계산 불가)' confirm=None dlgOpen=1 | saved=[] n 149->149
-'abc': blur->'abc' invalid=true title='숫자 또는 =수식만 입력할 수 있습니다' | err='/ 확인 필요: 금액(숫자 아님)' confirm=None dlgOpen=1 | saved=[] n 149->149
-'1e3': blur->'1e3' invalid=true title='숫자 또는 =수식만 입력할 수 있습니다' | err='/ 확인 필요: 금액(숫자 아님)' confirm=None dlgOpen=1 | saved=[] n 149->149
-'350만': blur->'3,500,000' invalid=None title="'=' 로 시작하면 계산식 입력 가능 (예: =12000*3)" | err=None confirm=None dlgOpen=0 | saved=[('2026-QA10-003', 3500000)] n 149->150
-'=2**10': blur->'1,024' invalid=None title="'=' 로 시작하면 계산식 입력 가능 (예: =12000*3)" | err=None confirm=None dlgOpen=0 | saved=[('2026-QA10-004', 1024)] n 150->151
-'1.5': blur->'1.5' invalid=None title="'=' 로 시작하면 계산식 입력 가능 (예: =12000*3)" | err=None confirm=None dlgOpen=0 | saved=[('2026-QA10-005', 1.5)] n 151->152
