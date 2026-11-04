@@ -2,9 +2,10 @@
 # From the repository root:
 #   docker compose -f deploy/docker-compose.yml up -d --build
 # Before the first start (docs/서버_이전_2026-11-04.md):
-#   mkdir -m 700 -p ~/secondcare/data ~/secondcare/tailscale
-#   fill ~/secondcare/data: <ledger>.sqlite, .env, google_client_secret.json, google_token.json
-#   echo TS_AUTHKEY=tskey-auth-... > deploy/.env   (gitignored)
+#   deploy/.env (gitignored):  SECONDCARE_HOME=/data/<user>/secondcare   TS_AUTHKEY=tskey-auth-...
+#   (SECONDCARE_HOME defaults to ~/secondcare; the repo may sit at $SECONDCARE_HOME/repo)
+#   mkdir -m 700 -p $SECONDCARE_HOME/data $SECONDCARE_HOME/tailscale
+#   fill $SECONDCARE_HOME/data: <ledger>.sqlite, .env, google_client_secret.json, google_token.json
 # No port reaches the host: the app shares the tailscale container's network
 # namespace and `tailscale serve` (serve.json) publishes 127.0.0.1:8791 to the
 # tailnet as https://secondcare.<tailnet>.ts.net. Users get the node by
@@ -23,7 +24,7 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_SERVE_CONFIG: /config/serve.json
     volumes:
-      - ${HOME}/secondcare/tailscale:/var/lib/tailscale
+      - ${SECONDCARE_HOME:-${HOME}/secondcare}/tailscale:/var/lib/tailscale
       - ./serve.json:/config/serve.json:ro
 
   secondcare:
@@ -38,4 +39,4 @@ services:
     environment:
       LEDGER_DB: /data/secondcare_aic_2026.sqlite
     volumes:
-      - ${HOME}/secondcare/data:/data
+      - ${SECONDCARE_HOME:-${HOME}/secondcare}/data:/data
