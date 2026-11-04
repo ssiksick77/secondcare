@@ -27,3 +27,4 @@ tests/__pycache__/
 app/.impeccable/cache/
 .claude/session-base.txt
 app/tray.log
+deploy/.env

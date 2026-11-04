@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -1034,24 +1035,30 @@ def _kind(kind: str):
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
+def _pause():
+    """콘솔(run.bat)에서는 창이 바로 닫히지 않게 기다린다. 서버(도커·systemd)에는 stdin 이 없다."""
+    if sys.stdin and sys.stdin.isatty():
+        input("아무 키나 누르면 종료합니다...")
+
+
 if __name__ == "__main__":
     if not store.DATA_PATH.exists():
         print(f"[오류] 장부 파일을 찾을 수 없습니다: {store.DATA_PATH}\n"
               "  → 파일을 app 폴더의 상위 폴더에 두거나 .env 의 LEDGER_XLSX 에 경로를 지정하세요.")
-        input("아무 키나 누르면 종료합니다...")
+        _pause()
         raise SystemExit(1)
     try:
         _names = store.sheet_names()
         missing = [s for s in (store.SHEET_BUDGET, store.SHEET_EXEC, store.SHEET_REQ) if s not in _names]
         if missing:
             print(f"[오류] 장부에 필수 시트가 없습니다: {', '.join(missing)}\n  → 센터 지출장부 양식 파일인지 확인하세요.")
-            input("아무 키나 누르면 종료합니다...")
+            _pause()
             raise SystemExit(1)
     except SystemExit:
         raise
     except Exception as e:
         print(f"[오류] 장부 파일을 열 수 없습니다: {e}")
-        input("아무 키나 누르면 종료합니다...")
+        _pause()
         raise SystemExit(1)
     try:
         before = set(_names)
