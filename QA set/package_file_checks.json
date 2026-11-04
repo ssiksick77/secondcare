@@ -1,0 +1,72 @@
+﻿[
+    {
+        "File":  "basic_inputs.json",
+        "SHA256":  "DE60DB221133F35A8AE36A35ED2CBCE3A72326173F7B1B9AB5C9E1A24090CED4",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "valid_boundary_inputs.json",
+        "SHA256":  "2E24A5B36C4849958922CADDE2F8040C9FD4E0409810762B3AB848001AC3F462",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "invalid_cases_NOT_SUBMITTED.json",
+        "SHA256":  "AC61AC725C4145BDD2DC46C671B83DB18EE22BB911D04F04DC58B1C881C1D307",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "warning_cases_NOT_SUBMITTED.json",
+        "SHA256":  "B34A8DF81965A62C0865AEB8EBA24061A7979059FA1EA3166A1D6F36B23FB106",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "app_readback.json",
+        "SHA256":  "3B07A297E291C2053936EB4295132A044E53A7837A103B3A0FB62702C512E345",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "api_input_log.json",
+        "SHA256":  "CEEF7B1AE178A5061B40731B9AEF2D0DF81D558D3C2F4EFD086FF4BF524DE6EF",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "record_ids.json",
+        "SHA256":  "295C0D62014724F7385D0B20B3F50481D61B77DB771D3DD343172B3A66558132",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "schema.json",
+        "SHA256":  "A63A1DC41A2CE3117D49F541263BD41D199B54F8E3642BC96C7FF89615004746",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "expected_totals.json",
+        "SHA256":  "ABC69C4208AD2A6412B4089DAB15D8C457596FFCC25A23916F30610D06B58F68",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "validation.json",
+        "SHA256":  "0271D56C09A3159B2782EA914E7407834DDA8465C174823FBB0D2D444B8E4715",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "installed.json",
+        "SHA256":  "EBAF64AB109847E3228D8F1042107A18EDCCB30C3B26FE21AC1061BBC352BB90",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "delivery_checks.json",
+        "SHA256":  "2FEEFDACA06A969A27DDE13B8AD075254708868B1B9F517B54BDE8B6C7C45456",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "synthetic_baseline.xlsx",
+        "SHA256":  "8FABDC865602BF5AA35D9B8F878CC66DA700F43E80D7CF15B383345B44912100",
+        "MatchesSource":  true
+    },
+    {
+        "File":  "거래내역_검토표.md",
+        "SHA256":  "AB750B6A43C0A80DCF188FDC99246BC8D9322C0E928372219A4A8B883BA298BE",
+        "MatchesSource":  true
+    }
+]

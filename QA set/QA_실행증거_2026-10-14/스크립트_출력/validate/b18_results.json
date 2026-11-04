@@ -1,0 +1,232 @@
+{
+ "ev_before_QA01-001": {
+  "status": 200,
+  "body": {
+   "items": [],
+   "drive": {
+    "mock": true,
+    "configured": true,
+    "connected": true,
+    "expired": false,
+    "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+    "root": "증빙관리"
+   }
+  }
+ },
+ "upload_QA01-001_png": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "거래번호": "2026-QA01-001",
+     "증빙종류": "영수증",
+     "파일명": "QA01_[가상 QA26JANSEP-V1] E001 반복 1월 1차_영수증_11000_260105.png",
+     "원본파일명": "qa_receipt_1x1.png",
+     "드라이브파일ID": "mock:증빙관리/2026/QA01/2026-QA01-001/QA01_[가상 QA26JANSEP-V1] E001 반복 1월 1차_영수증_11000_260105.png",
+     "크기": 70,
+     "업로드일": "2026-10-14",
+     "비고": "QA validate B-18 upload",
+     "증빙번호": "2026-QA01-001-1",
+     "_row": 2,
+     "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png",
+     "has_file": true
+    }
+   ],
+   "folder": {
+    "id": "증빙관리/2026/QA01/2026-QA01-001",
+    "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001"
+   },
+   "attached": false
+  }
+ },
+ "ev_after_QA01-001": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "_row": 2,
+     "거래번호": "2026-QA01-001",
+     "증빙번호": "2026-QA01-001-1",
+     "증빙종류": "영수증",
+     "파일명": "QA01_[가상 QA26JANSEP-V1] E001 반복 1월 1차_영수증_11000_260105.png",
+     "원본파일명": "qa_receipt_1x1.png",
+     "드라이브파일ID": "mock:증빙관리/2026/QA01/2026-QA01-001/QA01_[가상 QA26JANSEP-V1] E001 반복 1월 1차_영수증_11000_260105.png",
+     "크기": 70,
+     "업로드일": "2026-10-14",
+     "비고": "QA validate B-18 upload",
+     "has_file": true,
+     "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png"
+    }
+   ],
+   "drive": {
+    "mock": true,
+    "configured": true,
+    "connected": true,
+    "expired": false,
+    "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+    "root": "증빙관리"
+   }
+  }
+ },
+ "ev_QA02-001 (other fund, should be empty)": {
+  "status": 200,
+  "body": {
+   "items": [],
+   "drive": {
+    "mock": true,
+    "configured": true,
+    "connected": true,
+    "expired": false,
+    "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+    "root": "증빙관리"
+   }
+  }
+ },
+ "all_evidence_rows": [
+  {
+   "_row": 2,
+   "거래번호": "2026-QA01-001",
+   "증빙번호": "2026-QA01-001-1",
+   "증빙종류": "영수증",
+   "파일명": "QA01_[가상 QA26JANSEP-V1] E001 반복 1월 1차_영수증_11000_260105.png",
+   "원본파일명": "qa_receipt_1x1.png",
+   "드라이브파일ID": "mock:증빙관리/2026/QA01/2026-QA01-001/QA01_[가상 QA26JANSEP-V1] E001 반복 1월 1차_영수증_11000_260105.png",
+   "크기": 70,
+   "업로드일": "2026-10-14",
+   "비고": "QA validate B-18 upload",
+   "has_file": true
+  }
+ ],
+ "entry_QA01-002": {
+  "status": 200,
+  "body": {
+   "거래번호": "2026-QA01-002",
+   "증빙종류": "영수증",
+   "비고": "QA B-18 실물만",
+   "파일명": "",
+   "원본파일명": "",
+   "드라이브파일ID": "",
+   "크기": "",
+   "업로드일": "",
+   "증빙번호": "2026-QA01-002-1",
+   "_row": 3,
+   "has_file": false
+  }
+ },
+ "ev_QA01-002_after_entry": {
+  "items": [
+   {
+    "_row": 3,
+    "거래번호": "2026-QA01-002",
+    "증빙번호": "2026-QA01-002-1",
+    "증빙종류": "영수증",
+    "파일명": "",
+    "원본파일명": "",
+    "드라이브파일ID": "",
+    "크기": 0,
+    "업로드일": null,
+    "비고": "QA B-18 실물만",
+    "has_file": false,
+    "url": ""
+   }
+  ],
+  "drive": {
+   "mock": true,
+   "configured": true,
+   "connected": true,
+   "expired": false,
+   "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+   "root": "증빙관리"
+  }
+ },
+ "attach_to_entry_row": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "_row": 3,
+     "거래번호": "2026-QA01-002",
+     "증빙번호": "2026-QA01-002-1",
+     "증빙종류": "영수증",
+     "파일명": "QA01_[가상 QA26JANSEP-V1] E002 반복 1월 2차_영수증_11500_260115.pdf",
+     "원본파일명": "qa_receipt.pdf",
+     "드라이브파일ID": "mock:증빙관리/2026/QA01/2026-QA01-002/QA01_[가상 QA26JANSEP-V1] E002 반복 1월 2차_영수증_11500_260115.pdf",
+     "크기": 211,
+     "업로드일": "2026-10-14",
+     "비고": "QA B-18 실물만",
+     "has_file": true,
+     "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E002%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%202%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11500_260115.pdf"
+    }
+   ],
+   "folder": {
+    "id": "증빙관리/2026/QA01/2026-QA01-002",
+    "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002"
+   },
+   "attached": true
+  }
+ },
+ "attach_dup_same_row (expect 409)": {
+  "status": 409,
+  "body": {
+   "detail": "증빙 2026-QA01-002-1 에는 이미 파일이 있습니다. 새 파일은 [업로드]로 따로 올리세요."
+  }
+ },
+ "ev_QA01-002_after_attach": {
+  "items": [
+   {
+    "_row": 3,
+    "거래번호": "2026-QA01-002",
+    "증빙번호": "2026-QA01-002-1",
+    "증빙종류": "영수증",
+    "파일명": "QA01_[가상 QA26JANSEP-V1] E002 반복 1월 2차_영수증_11500_260115.pdf",
+    "원본파일명": "qa_receipt.pdf",
+    "드라이브파일ID": "mock:증빙관리/2026/QA01/2026-QA01-002/QA01_[가상 QA26JANSEP-V1] E002 반복 1월 2차_영수증_11500_260115.pdf",
+    "크기": 211,
+    "업로드일": "2026-10-14",
+    "비고": "QA B-18 실물만",
+    "has_file": true,
+    "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E002%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%202%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11500_260115.pdf"
+   }
+  ],
+  "drive": {
+   "mock": true,
+   "configured": true,
+   "connected": true,
+   "expired": false,
+   "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+   "root": "증빙관리"
+  }
+ },
+ "ev_QA01-001_rows": {
+  "items": [
+   {
+    "_row": 2,
+    "거래번호": "2026-QA01-001",
+    "증빙번호": "2026-QA01-001-1",
+    "증빙종류": "영수증",
+    "파일명": "QA01_[가상 QA26JANSEP-V1] E001 반복 1월 1차_영수증_11000_260105.png",
+    "원본파일명": "qa_receipt_1x1.png",
+    "드라이브파일ID": "mock:증빙관리/2026/QA01/2026-QA01-001/QA01_[가상 QA26JANSEP-V1] E001 반복 1월 1차_영수증_11000_260105.png",
+    "크기": 70,
+    "업로드일": "2026-10-14",
+    "비고": "QA validate B-18 upload",
+    "has_file": true,
+    "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png"
+   }
+  ],
+  "drive": {
+   "mock": true,
+   "configured": true,
+   "connected": true,
+   "expired": false,
+   "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+   "root": "증빙관리"
+  }
+ },
+ "delete_evidence_row_QA01-001": {
+  "status": 200,
+  "body": {
+   "ok": true
+  }
+ }
+}

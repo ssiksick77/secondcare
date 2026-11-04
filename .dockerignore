@@ -1,0 +1,12 @@
+*
+!app/
+app/.env
+app/google_*.json
+app/google_token.expired
+app/drive_folders.json
+app/backup/
+app/drive_mock/
+app/__pycache__/
+app/.impeccable/
+app/*.sqlite*
+app/*.log

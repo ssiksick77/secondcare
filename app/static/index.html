@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SECONDCare</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<a class="skip" href="#main">본문 바로가기</a>
+
+<header class="top">
+  <h1><a class="app-name app-home" href="/enter?menu=1" title="시작 화면 (연구비 · 인건비 · 신청)">SECONDCare</a><small class="app-full">의료인공지능센터 연구비 관리 시스템</small></h1>
+  <label class="top-year" title="조회 장부 연도 (장부 파일 하나 = 한 해). 모든 화면이 이 연도의 장부를 봅니다">장부 <select id="dash-year"></select></label>
+  <div class="top-status" id="file-status" aria-live="polite"></div>
+  <button type="button" class="btn btn-ghost" id="btn-reload">새로고침</button>
+  <span class="top-sep" aria-hidden="true"></span>
+  <button type="button" class="btn btn-ghost btn-mode" id="btn-mode" title="인건비 관리 화면으로 전환">인건비</button>
+  <button type="button" class="btn btn-ghost btn-mode" id="btn-request" title="지출 신청 화면으로 전환 (담당자)">신청</button>
+  <span class="top-sep" aria-hidden="true"></span>
+  <span class="top-user" id="top-user" title="로그인 계정"></span>
+  <button type="button" class="btn btn-ghost" id="btn-logout">로그아웃</button>
+<button type="button" class="btn btn-ghost btn-icon" id="btn-settings" aria-label="설정" title="설정 (구글 드라이브 연결 · AI)">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+  </svg>
+</button>
+  <button type="button" class="btn btn-primary" id="btn-ai" aria-controls="ai-drawer" aria-expanded="false" hidden>김연구 호출하기</button>
+</header>
+
+<nav class="tabs main" id="main-tabs" aria-label="주요 메뉴">
+  <ul role="tablist">
+    <li><button role="tab" id="tab-dash" aria-controls="panel-dash" aria-selected="true">대시보드</button></li>
+    <li><button role="tab" id="tab-exec" aria-controls="panel-exec" aria-selected="false">집행</button></li>
+    <li><button role="tab" id="tab-req" aria-controls="panel-req" aria-selected="false">품의</button></li>
+    <li><button role="tab" id="tab-budget" aria-controls="panel-budget" aria-selected="false">예산</button></li>
+    <li><button role="tab" id="tab-deposit" aria-controls="panel-deposit" aria-selected="false">적립</button></li>
+    <li><button role="tab" id="tab-tags" aria-controls="panel-tags" aria-selected="false">태그</button></li>
+    <li><button role="tab" id="tab-funds" aria-controls="panel-funds" aria-selected="false">재원</button></li>
+  </ul>
+</nav>
+
+<nav class="tabs labor" id="labor-tabs" aria-label="인건비 메뉴" hidden>
+  <span class="tabs-label">인건비 관리</span>
+  <ul role="tablist">
+    <li><button role="tab" id="ltab-plan" aria-controls="lpanel-plan" aria-selected="true">계획표</button></li>
+    <li><button role="tab" id="ltab-ledger" aria-controls="lpanel-ledger" aria-selected="false">지급 원장</button></li>
+    <li><button role="tab" id="ltab-people" aria-controls="lpanel-people" aria-selected="false">인원</button></li>
+    <li><button role="tab" id="ltab-payee" aria-controls="lpanel-payee" aria-selected="false">지급처</button></li>
+  </ul>
+  <label class="tabs-year">연도 <select id="labor-year"></select></label>
+</nav>
+
+<nav class="tabs request" id="request-tabs" aria-label="신청 메뉴" hidden>
+  <span class="tabs-label">지출 신청</span>
+  <ul role="tablist">
+    <li><button role="tab" id="rtab-장비" data-rtype="장비" aria-controls="rpanel" aria-selected="true">장비</button></li>
+    <li><button role="tab" id="rtab-소모품" data-rtype="소모품" aria-controls="rpanel" aria-selected="false">소모품</button></li>
+    <li><button role="tab" id="rtab-학회" data-rtype="학회" aria-controls="rpanel" aria-selected="false">학회</button></li>
+    <li><button role="tab" id="rtab-기타" data-rtype="기타" aria-controls="rpanel" aria-selected="false">기타</button></li>
+  </ul>
+  <span class="req-role req-admin-only" title="연구비 화면에서 들어와 승인·반려·품의 전환·주문을 처리할 수 있습니다">담당자</span>
+  <button type="button" class="lnk req-prev-year" id="req-prev-year" hidden title="이전 연도에 아직 '신청' 상태로 남은 건을 봅니다"></button>
+  <label class="tabs-year">연도 <select id="request-year"></select></label>
+</nav>
+
+<div class="shell">
+<div class="col">
+<main id="main" tabindex="-1">
+  <div class="print-head" id="print-head" aria-hidden="true"></div>
+  <div id="alert" class="alert" role="alert" hidden></div>
+
+  <!-- 인건비: 계획표 -->
+  <section id="lpanel-plan" role="tabpanel" aria-labelledby="ltab-plan" hidden>
+    <h2 style="margin-top:0">지급처별 인건비 현황 <span class="muted" style="font-weight:400">(지급월 기준)</span></h2>
+    <div class="table-wrap"><table class="grid compact" id="labor-funds"></table></div>
+    <div class="toolbar">
+      <span class="toolbar-note" id="labor-plan-note"></span>
+      <button type="button" class="btn" data-labor="copy" title="전달 귀속 지급 건을 다음 달 예정으로 복사">전월 계획 복사</button>
+      <button type="button" class="btn" data-labor="bulk" title="인원·기간·지급처별 배분액으로 여러 달 예정 건을 한 번에 생성">기간 일괄 생성</button>
+      <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
+    </div>
+    <p class="toolbar-note defs plan-legend"><span class="lg ok">소요 일치</span> <span class="lg short">부족</span> <span class="lg over">초과</span> <span class="lg none">미배정</span> <span class="lg off">재직 아님</span> <span class="lg done">확정 포함</span> · 칸을 클릭하면 그 달 배분을 편집합니다.</p>
+    <div class="table-wrap"><table class="grid plan" id="labor-plan"></table></div>
+  </section>
+
+  <!-- 인건비: 지급 원장 -->
+  <section id="lpanel-ledger" role="tabpanel" aria-labelledby="ltab-ledger" hidden>
+    <div class="toolbar">
+      <label>연도 <select data-filter="year" data-kind="labor"><option value="">전체</option></select></label>
+      <label>지급월 <select data-filter="month" data-kind="labor"><option value="">전체</option></select></label>
+      <label>이름 <select data-filter="이름" data-kind="labor"><option value="">전체</option></select></label>
+      <label>지급처 <select data-filter="지급처" data-kind="labor"><option value="">전체</option></select></label>
+      <label>상태 <select data-filter="상태" data-kind="labor"><option value="">전체</option><option>예정</option><option>확정</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="labor" placeholder="이름, 지급처, 비고"></label>
+      <span class="toolbar-sum" id="labor-sum"></span>
+      <button type="button" class="btn" data-csv="labor" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
+      <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
+    </div>
+    <p class="toolbar-note" style="margin:0 0 8px">확정하면 집행내역에 건별 1행(재원 = 지급처, 예산목 = 인원의 구분: 내부 → 내부인건비, 외부·기타 → 외부인건비)이 생기고 지급 건은 잠깁니다. 수정은 확정 취소 후, 취소·삭제 시 연결 집행도 함께 지워집니다.</p>
+    <div class="table-wrap"><table class="grid" id="labor-table"></table></div>
+  </section>
+
+  <!-- 인건비: 인원 -->
+  <section id="lpanel-people" role="tabpanel" aria-labelledby="ltab-people" hidden>
+    <div class="people-split">
+      <div class="people-col">
+        <h2>인원</h2>
+        <p class="toolbar-note defs">이름을 누르면 오른쪽에 그 사람의 기준급여 내역이 보입니다. 구분은 확정 시 예산목을 정합니다 (내부 → 내부인건비, 외부·기타 → 외부인건비). 입사·퇴사 기간 밖 귀속월에는 지급 건을 만들 수 없습니다.</p>
+        <div class="toolbar">
+          <label class="chk"><input type="checkbox" data-filter="showHidden" data-kind="people"> 숨긴 인원 보기</label>
+          <button type="button" class="btn btn-primary" data-add="people">인원 추가</button>
+        </div>
+        <div class="table-wrap"><table class="grid" id="people-table"></table></div>
+      </div>
+      <div class="people-col">
+        <h2>기준급여 변동 내역<span id="salary-who"></span></h2>
+        <p class="toolbar-note defs">월지급액과 적용 기간. 계획표의 소요 비교와 선급·미지급 발생액 계산에 쓰입니다. 같은 사람의 기간은 겹칠 수 없습니다.</p>
+        <div class="toolbar">
+          <button type="button" class="btn btn-primary" data-add="salary">기준급여 추가</button>
+        </div>
+        <div class="table-wrap" aria-live="polite"><table class="grid compact" id="salary-table"></table></div>
+      </div>
+    </div>
+    <h2>선급 · 미지급 현황</h2>
+    <p class="toolbar-note defs" id="labor-prepaid-note"></p>
+    <div class="table-wrap"><table class="grid compact" id="labor-prepaid"></table></div>
+    <h2>선급 · 미지급 조정 내역</h2>
+    <div class="toolbar">
+      <span class="toolbar-note">자동 계산으로 설명되지 않는 건(전년도 가지급, 정산 등)을 + 선급 / − 미지급으로 기록합니다.</span>
+      <button type="button" class="btn btn-primary" data-add="ladj">조정 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid compact" id="ladj-table"></table></div>
+  </section>
+
+  <!-- 인건비: 지급처 -->
+  <section id="lpanel-payee" role="tabpanel" aria-labelledby="ltab-payee" hidden>
+    <div class="toolbar">
+      <span class="toolbar-note">장부의 재원은 그대로 지급처로 쓸 수 있습니다 (인건비 예산은 예산변동의 내부·외부인건비 합계, 또는 재원 탭의 인건비예산 열). 여기에는 장부 밖 지급처(AI사업단, 연구지원-교수 등)만 등록합니다.</span>
+      <button type="button" class="btn btn-primary" data-add="payee">외부 지급처 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="payee-table"></table></div>
+  </section>
+
+  <!-- 신청: 하위 탭(구분)마다 같은 목록을 걸러 보여 줌 -->
+  <section id="rpanel" role="tabpanel" aria-labelledby="rtab-장비" hidden>
+    <div id="rview-list">
+      <div class="toolbar">
+        <!-- 소모품 보기 전환 (담당자): 신청 목록 | 주문 표. 지금 보기의 툴바 맨 왼쪽으로 옮겨 다님 (request.js syncReqSub) -->
+        <div class="subtabs req-seg req-admin-only" id="req-seg" role="tablist" aria-label="소모품 보기" hidden>
+          <button type="button" role="tab" id="rsub-list" data-rsub="신청" aria-controls="rview-list" aria-selected="true">신청</button>
+          <button type="button" role="tab" id="rsub-order" data-rsub="주문" aria-controls="rview-order" aria-selected="false">주문</button>
+        </div>
+        <label>상태 <select data-filter="상태" data-kind="request"><option value="">전체</option><option>신청</option><option>승인</option><option>반려</option><option>품의전환</option><option>완료</option></select></label>
+        <label>신청인 <select data-filter="신청인" data-kind="request"><option value="">전체</option></select></label>
+        <label>관련과제 <select data-filter="관련과제" data-kind="request"><option value="">전체</option></select></label>
+        <label id="rq-sup-filter" hidden>구매처 <select data-filter="구매처" data-kind="request"><option value="">전체</option></select></label>
+        <label>검색 <input type="search" data-filter="q" data-kind="request" placeholder="품목, 규격, 사유, 번호"></label>
+        <div class="toolbar-end">
+          <span class="toolbar-sum" id="request-sum"></span>
+          <button type="button" class="btn req-admin-only" data-csv="request" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
+          <button type="button" class="btn btn-primary" data-add="request">신청 추가</button>
+        </div>
+      </div>
+      <div class="req-selbar req-admin-only" id="req-selbar" role="group" aria-label="선택한 신청 처리">
+        <span class="req-sel-n" id="req-sel-n" aria-live="polite" tabindex="-1">선택 없음</span>
+        <button type="button" class="btn btn-sm" data-rq="approve" disabled hidden>승인</button>
+        <button type="button" class="btn btn-sm" data-rq="reject" disabled hidden>반려</button>
+        <button type="button" class="btn btn-sm" data-rq="convert" disabled hidden title="승인된 신청을 품의 1건으로">품의 전환</button>
+        <button type="button" class="btn btn-sm" data-rq="order" id="rq-order-btn" disabled hidden title="승인된 소모품 신청을 주문 1건으로 묶음">주문 생성</button>
+        <button type="button" class="btn btn-sm btn-danger" data-rq="delete" disabled hidden>삭제</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-rq="clear" disabled hidden>선택 해제</button>
+        <span class="toolbar-note warn" id="req-sel-why" aria-live="polite" hidden></span>
+        <span class="toolbar-note" id="req-sel-help">신청을 체크하면 승인·반려·품의 전환을 한꺼번에 할 수 있습니다. 행을 누르면 상세 패널이 열립니다.</span>
+      </div>
+      <p class="toolbar-note req-researcher-note">① [신청 추가]로 품목·금액·사유를 적습니다. ② 행을 눌러 견적서를 첨부합니다. 담당자가 승인하면 구매 품의로 넘어가고, 집행이 끝나면 완료됩니다. 승인 전에만 수정·삭제할 수 있습니다.<span id="req-researcher-sup" hidden> 소모품은 승인 뒤 담당자가 같은 구매처 신청을 모아 주문하고, 배송되면 완료됩니다.</span></p>
+      <p class="toolbar-note req-sup-info" id="req-sup-info" hidden></p>
+      <div class="table-wrap"><table class="grid clickable" id="request-table"></table></div>
+    </div>
+    <!-- 소모품 › 주문 (담당자 전용) -->
+    <div id="rview-order" class="req-admin-only" hidden>
+      <div class="toolbar">
+        <label>구매처 <select id="ord-f-vendor"><option value="">전체</option></select></label>
+        <label>상태 <select id="ord-f-state"><option value="">전체</option><option value="open">배송 전</option><option value="done">배송 완료</option></select></label>
+        <label>검색 <input type="search" id="ord-f-q" placeholder="주문번호, 신청번호"></label>
+        <div class="toolbar-end"><span class="toolbar-sum" id="order-sum" aria-live="polite"></span></div>
+      </div>
+      <p class="toolbar-note req-order-note">배송일을 등록하면 해당 신청은 완료가 됩니다 (품의 전환은 그 뒤에도 가능). 배송 전 주문만 취소할 수 있습니다(신청은 주문에서 빠지고 적립금 사용 기록은 삭제). 신청번호를 누르면 신청 보기에서 그 신청의 상세 패널이 열립니다.</p>
+      <div class="table-wrap"><table class="grid" id="order-table"></table></div>
+    </div>
+  </section>
+
+  <!-- 대시보드 -->
+  <section id="panel-dash" role="tabpanel" aria-labelledby="tab-dash">
+    <div class="toolbar">
+      <div class="subtabs" role="tablist" aria-label="대시보드 보기">
+        <button type="button" role="tab" id="sub-budget" aria-selected="true" aria-controls="dash-budget">예산</button>
+        <button type="button" role="tab" id="sub-tags" aria-selected="false" aria-controls="dash-tags">태그</button>
+      </div>
+      <label>종류 <select id="dash-kind" title="재원 종류 (1차 필터)"><option value="">전체</option></select></label>
+      <label>재원 <select id="dash-fund" title="개별 재원 (2차 필터)"><option value="">전체</option></select></label>
+      <span class="toolbar-note" id="dash-note"></span>
+      <button type="button" class="btn" data-cols="dash" title="집행 현황 표의 보이는 열 고르기">조회 열 관리</button>
+      <button type="button" class="btn" id="dash-csv" title="아래 표를 CSV 파일로 저장">CSV 저장</button>
+      <button type="button" class="btn" id="dash-print" title="브라우저 인쇄 (대시보드만)">인쇄</button>
+    </div>
+    <div id="dash-budget" role="tabpanel" aria-labelledby="sub-budget">
+    <h2 class="sr-only">예산목별 가용잔액</h2>
+    <div class="cards items" id="dash-cards" role="list"></div>
+    <details class="defs-box"><summary>집계 기준</summary><p class="toolbar-note defs" id="dash-defs"></p></details>
+    <div class="two-col wide">
+      <div>
+        <h2>월별 집행 추이</h2>
+        <div id="dash-chart" class="chart"></div>
+      </div>
+      <div>
+        <h2>거래처별 적립금 잔액</h2>
+        <div class="table-wrap"><table class="grid compact" id="dash-deposit"></table></div>
+      </div>
+    </div>
+    <h2>재원별 · 예산목별 집행 현황</h2>
+    <div class="table-wrap"><table class="grid" id="dash-table"></table></div>
+    </div>
+    <div id="dash-tags" role="tabpanel" aria-labelledby="sub-tags" hidden>
+      <p class="toolbar-note" id="tag-note" style="margin:0 0 8px"></p>
+      <div class="cards" id="tag-cards"></div>
+      <p class="toolbar-note defs" id="tag-recon"></p>
+      <h2>태그(내부 계정)별 집행</h2>
+      <div class="table-wrap"><table class="grid" id="tag-table"></table></div>
+      <h2>태그 × 월별</h2>
+      <div class="table-wrap"><table class="grid" id="tag-month"></table></div>
+    </div>
+  </section>
+
+  <!-- 집행내역 -->
+  <section id="panel-exec" role="tabpanel" aria-labelledby="tab-exec" hidden>
+    <div class="cards quick" id="exec-tiles" role="group" aria-label="빠른 필터"></div>
+    <div class="toolbar">
+      <label>재원 <select data-filter="재원" data-kind="exec"><option value="">전체</option></select></label>
+      <label>연도 <select data-filter="year" data-kind="exec"><option value="">전체</option></select></label>
+      <label>월 <select data-filter="month" data-kind="exec"><option value="">전체</option></select></label>
+      <label>예산목 <select data-filter="예산목" data-kind="exec"><option value="">전체</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="exec" placeholder="거래처, 적요, 번호, 태그"></label>
+      <label class="chk"><input type="checkbox" data-filter="unpaid" data-kind="exec"> 미승인만</label>
+      <span class="toolbar-sum" id="exec-sum"></span>
+      <button type="button" class="btn" data-cols="exec" title="보이는 열 고르기 (머리글 우클릭으로도 숨길 수 있습니다)">조회 열 관리</button>
+      <button type="button" class="btn" data-csv="exec" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
+      <button type="button" class="btn" id="btn-edit-mode" title="현재 필터의 집행을 팝업 격자에서 엑셀처럼 한꺼번에 편집">편집 모드</button>
+      <button type="button" class="btn" id="btn-del-mode" title="체크한 집행을 한 번에 삭제">삭제</button>
+      <span id="exec-del-bar" class="del-bar" hidden><span class="toolbar-note">삭제할 행을 체크하세요 (행 클릭으로도 선택)</span><button type="button" class="btn btn-danger-solid btn-sm" id="exec-del-run" disabled>선택 삭제</button><button type="button" class="btn btn-ghost btn-sm" id="exec-del-cancel">취소</button></span>
+      <button type="button" class="btn" id="btn-evid-sync" title="드라이브와 증빙을 맞춤: 바뀐 이름 반영, 드라이브에서 지운 파일의 증빙 삭제, 번호가 바뀐 폴더 이름 수정">드라이브 동기화</button>
+      <button type="button" class="btn btn-primary" data-add="exec">집행 추가</button>
+    </div>
+    <p class="toolbar-note" style="margin:0 0 6px">행을 클릭하면 상세·증빙 패널, 두 번 클릭하면 수정 창이 열립니다. 삭제는 [삭제]를 누른 뒤 체크해서 진행합니다.</p>
+    <div class="table-wrap"><table class="grid clickable" id="exec-table"></table></div>
+  </section>
+
+  <!-- 품의내역 -->
+  <section id="panel-req" role="tabpanel" aria-labelledby="tab-req" hidden>
+    <div class="toolbar">
+      <label>재원 <select data-filter="재원" data-kind="req"><option value="">전체</option></select></label>
+      <label>연도 <select data-filter="year" data-kind="req"><option value="">전체</option></select></label>
+      <label>상태 <select data-filter="상태" data-kind="req"><option value="">전체</option><option>대기</option><option>집행완료</option><option>취소</option></select></label>
+      <label>월 <select data-filter="month" data-kind="req"><option value="">전체</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="req" placeholder="거래처, 적요, 번호, 태그"></label>
+      <span class="toolbar-sum" id="req-sum"></span>
+      <button type="button" class="btn" data-cols="req" title="보이는 열 고르기 (머리글 우클릭으로도 숨길 수 있습니다)">조회 열 관리</button>
+      <button type="button" class="btn" data-csv="req" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
+      <button type="button" class="btn btn-primary" data-add="req">품의 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="req-table"></table></div>
+  </section>
+
+  <!-- 예산 -->
+  <section id="panel-budget" role="tabpanel" aria-labelledby="tab-budget" hidden>
+    <h2 style="margin-top:0">재원별 예산현액 요약</h2>
+    <div class="table-wrap"><table class="grid" id="budget-summary"></table></div>
+    <h2>변경 내역</h2>
+    <div class="toolbar">
+      <label>재원 <select data-filter="재원" data-kind="budget"><option value="">선택</option></select></label>
+      <span class="toolbar-note">변경회차: <b>이월</b>(이월금) · <b>당초</b>(당초액) · 숫자(변경 회차)</span>
+      <button type="button" class="btn" data-cols="budget" title="보이는 열 고르기 (머리글 우클릭으로도 숨길 수 있습니다)">조회 열 관리</button>
+      <button type="button" class="btn btn-primary" data-add="budget">예산 행 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="budget-table"></table></div>
+  </section>
+
+  <!-- 적립금 -->
+  <section id="panel-deposit" role="tabpanel" aria-labelledby="tab-deposit" hidden>
+    <!-- 위: 거래처 관리(왼쪽) | 거래처별 적립금 잔액(오른쪽). 두 표의 바닥을 맞추고 남는 높이는 빈 괘선 행 (2026-10-20 사용자) -->
+    <div class="two-col dep-split">
+      <div>
+        <h2 class="h2-row" style="margin-top:0">거래처 관리<span class="sp"></span><button type="button" class="btn btn-sm btn-primary" data-add="vendor" title="적립금 거래처와 코드를 등록합니다">거래처 추가</button></h2>
+        <div class="table-wrap"><table class="grid" id="vendor-table"></table></div>
+      </div>
+      <div>
+        <h2 class="h2-row" style="margin-top:0">거래처별 적립금 잔액</h2>
+        <div class="table-wrap"><table class="grid" id="deposit-summary"></table></div>
+      </div>
+    </div>
+    <p class="toolbar-note" style="margin:6px 0 0">거래처 코드는 적립번호 앞자리(코드-적립|사용-연도-번호)와 주문번호 앞자리에 쓰이며, 번호에 한 번 쓰이면 바꿀 수 없습니다. 등록되지 않은 거래처로 적립금을 저장하면 이름 앞 글자로 코드를 자동 등록합니다.</p>
+    <h2>적립 · 사용 내역</h2>
+    <div class="toolbar">
+      <label>거래처 <select data-filter="거래처" data-kind="deposit"><option value="">전체</option></select></label>
+      <label>구분 <select data-filter="구분" data-kind="deposit"><option value="">전체</option><option>적립</option><option>사용</option></select></label>
+      <label>상태 <select data-filter="상태" data-kind="deposit" title="사용 행의 단계"><option value="">전체</option><option>대기</option><option>발주</option><option>결제</option><option>수령</option></select></label>
+      <label>연도 <select data-filter="year" data-kind="deposit"><option value="">전체</option></select></label>
+      <label>검색 <input type="search" data-filter="q" data-kind="deposit" placeholder="적요, 사용자, 증빙번호"></label>
+      <span class="toolbar-note">적립 시 '집행내역에 기록'을 켜면 선결제 금액이 집행내역에 한 건 추가되어 예산에서 차감됩니다. 사용은 적립금 잔액만 줄입니다.</span>
+      <button type="button" class="btn" data-cols="deposit" title="보이는 열 고르기 (머리글 우클릭으로도 숨길 수 있습니다)">조회 열 관리</button>
+      <button type="button" class="btn btn-primary" data-add="deposit">적립/사용 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid clickable" id="deposit-table" title="행을 누르면 상세·증빙 패널"></table></div>
+  </section>
+
+  <!-- 태그 -->
+  <section id="panel-tags" role="tabpanel" aria-labelledby="tab-tags" hidden>
+    <div class="toolbar">
+      <span class="toolbar-note">태그는 센터 내부 계정입니다. 집행·품의·적립금 사용 건에 이 목록의 태그 1개를 붙이고, 대시보드 [태그] 탭에서 집계합니다. 태그명을 바꾸면 기존 행의 태그도 함께 바뀝니다.</span>
+      <button type="button" class="btn btn-primary" data-add="tags">태그 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="tags-table"></table></div>
+  </section>
+
+  <!-- 거래처 (적립금 거래처 코드) -->
+  <!-- 재원 -->
+  <section id="panel-funds" role="tabpanel" aria-labelledby="tab-funds" hidden>
+    <div class="toolbar">
+      <span class="toolbar-note">재원코드는 거래번호·품의번호(YYYY-코드-000)에 사용됩니다. 짧게, '-' 없이 입력하세요.</span>
+      <button type="button" class="btn btn-primary" data-add="funds">재원 추가</button>
+    </div>
+    <div class="table-wrap"><table class="grid" id="funds-table"></table></div>
+  </section>
+</main>
+
+</div>
+
+<!-- 사이드 패널: 전체 높이 오른쪽 기둥. 기본 자리표시 + 상세·AI 드로어가 이 안에서 바뀐다 -->
+<aside id="side" class="side" aria-label="사이드 패널">
+  <div class="side-rail" id="side-rail">
+    <button type="button" class="side-rail-btn" id="side-expand" aria-controls="side-body" aria-expanded="true" title="사이드 패널 펼치기"><span>펼치기</span></button>
+    <button type="button" class="side-rail-btn" data-side="home" title="기본 패널"><span>기본</span></button>
+    <button type="button" class="side-rail-btn" data-side="detail" title="선택한 건의 상세 (행을 클릭하면 열립니다)"><span>상세</span></button>
+    <button type="button" class="side-rail-btn" data-side="ai" id="side-ai" title="행정보조 김연구 (AI 도우미)" hidden><span>AI</span></button>
+  </div>
+  <div class="side-body" id="side-body">
+    <section id="side-home" class="side-home" aria-labelledby="side-home-title">
+      <div class="drawer-head"><strong id="side-home-title">사이드 패널</strong><span class="drawer-model"></span><button type="button" class="btn btn-sm btn-ghost" id="side-collapse" aria-controls="side-body" title="사이드 패널 접기">접기 ›</button></div>
+      <div class="drawer-body"><p class="toolbar-note side-ph">용도 미정. 집행·품의·적립금 행을 클릭하면 상세가, [김연구 호출하기]를 누르면 AI 도우미가 여기에 열립니다.</p></div>
+    </section>
+<aside id="exec-drawer" class="drawer" role="dialog" aria-labelledby="xd-title" aria-modal="false" tabindex="-1" hidden>
+  <div class="drawer-head xd-head">
+    <div class="xd-headtxt">
+      <strong id="xd-title">집행 상세</strong>
+      <span class="drawer-model" id="xd-sub"></span>
+    </div>
+    <div class="xd-nav" role="group" aria-label="집행 건 이동 (↑↓ 키)">
+      <button type="button" class="btn btn-sm btn-icon" id="xd-prev" aria-label="이전 건" title="이전 건 (↑)"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 7.5L6 4l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <span class="xd-pos" id="xd-pos" aria-live="polite"></span>
+      <button type="button" class="btn btn-sm btn-icon" id="xd-next" aria-label="다음 건" title="다음 건 (↓)"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <button type="button" class="btn btn-sm btn-x" id="xd-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="drawer-body" id="xd-body"></div>
+</aside>
+
+<aside id="req-drawer" class="drawer" role="dialog" aria-labelledby="rd-title" aria-modal="false" tabindex="-1" hidden>
+  <div class="drawer-head xd-head">
+    <div class="xd-headtxt">
+      <h2 id="rd-title" class="rd-title">신청 상세</h2>
+      <span class="drawer-model" id="rd-sub"></span>
+    </div>
+    <div class="xd-nav" role="group" aria-label="신청 건 이동 (↑↓ 키)">
+      <button type="button" class="btn btn-sm btn-icon" id="rd-prev" aria-label="이전 건" title="이전 건 (↑)"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 7.5L6 4l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <span class="xd-pos" id="rd-pos" aria-live="polite"></span>
+      <button type="button" class="btn btn-sm btn-icon" id="rd-next" aria-label="다음 건" title="다음 건 (↓)"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <button type="button" class="btn btn-sm btn-x" id="rd-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="drawer-body" id="rd-body"></div>
+</aside>
+
+<aside id="ai-drawer" class="drawer" aria-label="행정보조 김연구 (AI 도우미)" hidden>
+  <div class="drawer-head">
+    <strong>행정보조 김연구</strong>
+    <span class="drawer-model" id="ai-model"></span>
+    <button type="button" class="btn btn-sm btn-x" id="ai-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="ai-rooms" role="group" aria-label="대화 목록">
+    <select id="ai-room" aria-label="대화 선택"></select>
+    <button type="button" class="btn btn-sm btn-primary" id="ai-room-new" title="새 대화를 시작합니다 (첫 질문 때 방이 생깁니다)">새 대화</button>
+    <button type="button" class="btn btn-sm" id="ai-room-rename" title="대화 이름 변경">이름</button>
+    <button type="button" class="btn btn-sm" id="ai-room-keep" title="보관한 대화는 자동 삭제되지 않습니다">보관</button>
+    <button type="button" class="btn btn-sm btn-ghost" id="ai-room-del" title="대화 삭제 (되돌릴 수 없음)">삭제</button>
+  </div>
+  <details id="report-box" class="ai-report" hidden>
+    <summary>보고서 초안 생성</summary>
+    <div class="ai-report-body">
+      <div class="fields three">
+        <label>재원<select id="rep-fund"><option value="">전체</option></select></label>
+        <label>연도<select id="rep-year"></select></label>
+        <label>월<select id="rep-month"><option value="">전체</option></select></label>
+        <label>종류<select id="rep-style"><option value="monthly">월별 집행 보고</option><option value="project">과제별 현황 보고</option><option value="summary">센터 전체 요약</option></select></label>
+      </div>
+      <div class="ai-report-actions">
+        <span class="toolbar-note">생성에 수십 초가 걸릴 수 있습니다.</span>
+        <button type="button" class="btn btn-sm" id="rep-copy" hidden>복사</button>
+        <button type="button" class="btn btn-sm btn-primary" id="rep-run">생성</button>
+      </div>
+      <p class="toolbar-note" id="rep-caveat" hidden>AI 초안입니다. 수치는 대시보드 표와 대조한 뒤 사용하세요.</p>
+      <div id="rep-out" class="report-out md" hidden></div>
+    </div>
+  </details>
+  <div class="drawer-body" id="ai-log" aria-live="polite">
+    <div class="ai-hint">
+      <p style="margin:0 0 6px"><b>조회</b> 예: <button type="button" class="chip-ex">QA01 연구활동비 지금 얼마 쓸 수 있어?</button> <button type="button" class="chip-ex">모니터 전에 샀을 때 얼마였지?</button> <button type="button" class="chip-ex">회의비는 어떤 증빙 필요해?</button> <button type="button" class="chip-ex">오늘 달러 환율?</button></p>
+      <p style="margin:0 0 6px"><b>입력 제안</b> 예: <button type="button" class="chip-ex">5/20 ABC식당 회의 식대 85,000원 집행 기록해줘</button> <button type="button" class="chip-ex">품의 2026-AI01-001 집행으로 전환해줘</button></p>
+      <p style="margin:0 0 6px">제안은 카드로 표시되고 "검토 후 저장"을 눌러야 장부에 반영됩니다. 금액·날짜는 꼭 확인하세요.</p>
+      <p style="margin:0 0 6px">김연구는 재원 목록 요약만 보고, 나머지는 필요한 범위를 도구로 조회합니다 (답변 아래 '조회' 줄). 규정·특이사항은 설정의 메모를 참고하며, 대화 중 메모 제안도 승인해야 저장됩니다.</p>
+      <p style="margin:0 0 6px">대화는 사용자별로 서버에 저장되고 본인만 볼 수 있습니다. 보관하지 않은 대화는 마지막 메시지 7일 뒤 자동 삭제됩니다. 주제가 바뀌면 "새 대화"로 나누세요.</p>
+      <p class="ai-notice" style="margin:0" id="ai-notice">이용 안내: 부적절한 사용이 감지된 대화는 마스터 계정으로 전송될 수 있습니다.</p>
+    </div>
+  </div>
+  <form class="drawer-foot" id="ai-form">
+    <textarea id="ai-input" rows="2" placeholder="질문이나 입력 요청 (Enter 전송, Shift+Enter 줄바꿈)" aria-label="질문"></textarea>
+    <button type="submit" class="btn btn-primary" id="ai-send">전송</button>
+  </form>
+</aside>
+  </div>
+</aside>
+</div><!-- /.shell -->
+
+<!-- 입력 폼 대화상자 -->
+<dialog id="dlg" aria-labelledby="dlg-title">
+  <form id="dlg-form" method="dialog" novalidate>
+    <h2 id="dlg-title"></h2>
+    <div id="dlg-ai" class="dlg-ai" hidden>
+      <button type="button" class="btn btn-sm" id="dlg-receipt-btn">영수증에서 채우기</button><input type="file" id="dlg-receipt" accept="image/*,application/pdf" hidden aria-hidden="true">
+      <button type="button" class="btn btn-sm" id="dlg-suggest">AI 추천·검증</button>
+      <span id="dlg-ai-msg" class="dlg-ai-msg" aria-live="polite"></span>
+    </div>
+    <div id="dlg-fields" class="fields"></div>
+    <p id="dlg-error" class="field-error" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <span class="toolbar-note" id="dlg-keys">Enter: 다음 칸 · Ctrl+Enter: 저장</span>
+      <button type="button" class="btn btn-ghost" id="dlg-cancel">취소</button>
+      <button type="button" class="btn" id="dlg-save-more" title="저장하고 같은 종류의 다음 건을 바로 입력 (재원·예산목·날짜 유지)">저장 후 계속</button>
+      <button type="submit" class="btn btn-primary" id="dlg-save">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 집행내역 편집 모드 (팝업 격자) -->
+<dialog id="dlg-edit" class="dlg-edit" aria-labelledby="edit-title">
+  <div class="edit-head">
+    <h2 id="edit-title">집행내역 편집 모드</h2>
+    <span class="toolbar-note" id="edit-note"></span>
+    <span class="edit-count" id="edit-count">변경 없음</span>
+    <button type="button" class="btn btn-sm" id="edit-add" title="맨 아래 빈 행으로 이동">새 행</button>
+    <button type="button" class="btn btn-sm" id="edit-del" title="선택 범위의 행을 삭제 표시/해제">행 삭제 표시</button>
+    <button type="button" class="btn btn-sm btn-primary" id="edit-save" disabled>저장</button>
+    <button type="button" class="btn btn-sm btn-x" id="edit-close" aria-label="닫기"><svg viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="edit-wrap"><table class="grid edit" id="edit-grid" role="grid" aria-labelledby="edit-title"></table></div>
+  <p class="toolbar-note edit-legend"><span class="lg chg">수정됨</span> <span class="lg new">새 행</span> <span class="lg del">삭제 표시</span> <span class="lg ro">편집 불가(자동·연결 행 잠금)</span> <span class="lg err">오류</span> · 저장은 전부 성공 또는 전부 취소이며, 저장 직후 알림의 [되돌리기]로 복구할 수 있습니다.</p>
+</dialog>
+
+<!-- 공용 확인 대화상자 (네이티브 confirm 대체) -->
+<dialog id="dlg-confirm" aria-labelledby="confirm-title" class="dlg-small">
+  <form id="dlg-confirm-form" method="dialog" novalidate>
+    <h2 id="confirm-title"></h2>
+    <div id="confirm-body" class="confirm-body"></div>
+    <label class="fld" id="confirm-input-wrap" hidden><span id="confirm-input-label"></span><input id="confirm-input" type="text" aria-describedby="confirm-input-err"><span class="field-error" id="confirm-input-err" hidden></span></label>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="confirm-cancel">취소</button><button type="button" class="btn" id="confirm-alt" hidden></button><button type="submit" class="btn btn-primary" id="confirm-ok">확인</button></div>
+  </form>
+</dialog>
+
+<!-- 인건비: 지급 확정 (지급일) -->
+<dialog id="dlg-pay" aria-labelledby="pay-title" class="dlg-small">
+  <form id="dlg-pay-form" method="dialog" novalidate>
+    <h2 id="pay-title">지급 확정</h2>
+    <p id="pay-label" class="dlg-strong"></p>
+    <label class="fld">지급일<input type="date" id="pay-date" required></label>
+    <p class="toolbar-note" id="pay-note"></p>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="dlg-pay-cancel">취소</button><button type="submit" class="btn btn-primary">확정</button></div>
+  </form>
+</dialog>
+
+<!-- 인건비: 계획표 셀 편집 -->
+<dialog id="dlg-cell" aria-labelledby="cell-title" class="dlg-cell">
+  <form method="dialog">
+    <h2 id="cell-title"></h2>
+    <p class="toolbar-note" id="cell-note"></p>
+    <div class="table-wrap"><table class="grid compact" id="cell-table"></table></div>
+    <div class="dlg-actions"><button type="button" class="btn" data-cell="add">이 달 배분 추가</button><span class="sp"></span><button type="button" class="btn btn-ghost" data-cell="close">닫기</button></div>
+  </form>
+</dialog>
+
+<!-- 인건비: 기간 일괄 생성 -->
+<dialog id="dlg-bulk" aria-labelledby="bulk-title">
+  <form id="dlg-bulk-form" method="dialog" novalidate>
+    <h2 id="bulk-title">기간 일괄 생성</h2>
+    <div class="fields">
+      <label class="fld">인원<select id="bulk-name" required></select></label>
+      <label class="fld">귀속 시작월<input type="month" id="bulk-from" required></label>
+      <label class="fld">귀속 종료월<input type="month" id="bulk-to" required></label>
+      <label class="fld">지급월<select id="bulk-offset"><option value="0">귀속월과 같은 달</option><option value="1">귀속월 다음 달</option></select></label>
+      <label class="fld mid">비고<input type="text" id="bulk-memo"></label>
+    </div>
+    <p class="lab" style="margin:10px 0 4px;font-size:12px;font-weight:600">지급처별 월 배분액</p>
+    <div id="bulk-rows" class="bulk-rows"></div>
+    <button type="button" class="btn btn-sm" data-bulk="add">배분 행 추가</button>
+    <p class="toolbar-note" id="bulk-preview" style="margin:10px 0 0"></p>
+    <div class="dlg-actions"><span class="toolbar-note">달마다 지급처별 '예정' 건을 만듭니다. 이미 있는 건은 건너뜁니다.</span><button type="button" class="btn btn-ghost" data-bulk="cancel">취소</button><button type="submit" class="btn btn-primary" id="bulk-save">생성</button></div>
+  </form>
+</dialog>
+
+<!-- 신청: 소모품 주문 생성 -->
+<dialog id="dlg-order" aria-labelledby="order-title">
+  <form id="dlg-order-form" method="dialog" novalidate>
+    <h2 id="order-title">주문 생성</h2>
+    <div class="table-wrap"><table class="grid compact" id="order-lines"></table></div>
+    <div class="fields ord-fields">
+      <label for="ord-date"><span class="lab">주문일</span><input type="date" id="ord-date" required></label>
+      <label for="ord-vendor"><span class="lab">구매처</span><select id="ord-vendor" aria-describedby="ord-vendor-warn"></select></label>
+      <label for="ord-pay"><span class="lab">결제금액 <small>(할인·배송비 반영한 실제 결제액)</small></span><input type="text" id="ord-pay" inputmode="numeric" class="num-input"></label>
+      <p class="wide toolbar-note warn ord-vendor-warn" id="ord-vendor-warn" hidden></p>
+      <label class="chk wide" for="ord-dep"><input type="checkbox" id="ord-dep" checked> 적립금으로 결제 (적립금 탭에 '사용' 1건을 함께 기록)</label>
+      <label for="ord-user"><span class="lab">사용자 <small>(적립금 기록용, 선택)</small></span><input type="text" id="ord-user" list="dl-사용자" autocomplete="off"></label>
+      <label class="mid" for="ord-memo"><span class="lab">비고</span><input type="text" id="ord-memo"></label>
+    </div>
+    <p class="toolbar-note ord-note" id="ord-note" aria-live="polite"></p>
+    <p class="field-error" id="ord-error" role="alert" hidden></p>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="ord-cancel">취소</button><button type="submit" class="btn btn-primary" id="ord-save">주문 생성</button></div>
+  </form>
+</dialog>
+
+<!-- 신청: 발주서 (인쇄용) -->
+<dialog id="dlg-order-sheet" class="dlg-sheet" aria-labelledby="sheet-title">
+  <form method="dialog">
+    <div id="order-sheet" class="order-sheet"></div>
+    <p class="toolbar-note" id="sheet-note" hidden></p>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="sheet-close">닫기</button><button type="button" class="btn btn-primary" id="sheet-print">인쇄</button></div>
+  </form>
+</dialog>
+
+<!-- 집행: 지출결의서 (집행 1건 = 1장, 지출완료일 등록 후). 미리보기 + A4 세로 인쇄 -->
+<dialog id="dlg-voucher" class="dlg-sheet dlg-voucher" aria-labelledby="voucher-title">
+  <form method="dialog">
+    <div class="vc-preview" id="voucher-sheet" role="region" aria-label="지출결의서 미리보기" tabindex="0"></div>
+    <p class="toolbar-note" id="voucher-note" hidden></p>
+    <div class="dlg-actions"><span class="sp"></span><button type="button" class="btn btn-ghost" id="voucher-close">닫기</button><button type="button" class="btn btn-primary" id="voucher-print">인쇄</button></div>
+  </form>
+</dialog>
+
+<!-- 집행: 증빙 첨부 양식 (증빙 1건 = 1장, 집행 단계와 무관). 미리보기 + A4 세로 인쇄 -->
+<dialog id="dlg-mount" class="dlg-sheet dlg-mount" aria-labelledby="mount-title">
+  <form method="dialog">
+    <h2 class="mt-head" id="mount-title">증빙 첨부 양식<span id="mount-no"></span></h2>
+    <div class="vc-preview" id="mount-sheet" role="region" aria-label="증빙 첨부 양식 미리보기" tabindex="0"></div>
+    <div class="dlg-actions"><button type="button" class="btn btn-sm" id="mount-prev" hidden>이전</button><span class="toolbar-note mt-pos" id="mount-pos" aria-live="polite" hidden></span><button type="button" class="btn btn-sm" id="mount-next" hidden>다음</button><span class="sp"></span><button type="button" class="btn btn-ghost" id="mount-close">닫기</button><button type="button" class="btn btn-primary" id="mount-print">인쇄</button></div>
+  </form>
+</dialog>
+
+<!-- 신청: 학회 여비 계산기 (conf.js). 신청 폼 [여비 계산기] 또는 상세 패널 [산출 내역 보기](보기 전용)로 연다 -->
+<dialog id="dlg-conf" aria-labelledby="conf-title" aria-describedby="conf-basis" class="dlg-conf">
+  <form id="conf-form" method="dialog" novalidate>
+    <div class="cf-head">
+      <h2 id="conf-title">학회 여비 계산기</h2>
+      <p class="toolbar-note" id="conf-basis"></p>
+    </div>
+    <div class="cf-body">
+      <div class="cards cf-sum" id="conf-sum"></div>
+      <div id="conf-in"></div>
+      <div id="conf-out"></div>
+    </div>
+    <div class="dlg-actions cf-foot">
+      <button type="button" class="btn" id="conf-reset" hidden>계산 초기화</button>
+      <span class="toolbar-note">Enter: 다음 칸 · Ctrl+Enter: 금액에 적용</span>
+      <span class="sp"></span>
+      <button type="button" class="btn" id="conf-print" title="A4 산출 내역 인쇄 (기본 정보 · 산출 내역 · 안내 · 서류 체크리스트)">인쇄</button>
+      <button type="button" class="btn btn-ghost" id="conf-close">취소</button>
+      <button type="submit" class="btn btn-primary" id="conf-apply">금액에 적용</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 관리 패널 -->
+
+<dialog id="dlg-settings" aria-labelledby="settings-title">
+  <form id="settings-form" method="dialog" novalidate>
+    <h2 id="settings-title">설정</h2>
+    <fieldset class="wide s-group" id="s-drive" style="margin:0 0 14px">
+      <legend>구글 드라이브 (증빙 저장 · 증빙 업로드에 필요)</legend>
+      <p class="toolbar-note" id="drive-status" style="margin:4px 0 8px"></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button type="button" class="btn btn-sm" id="drive-secret-btn">OAuth 클라이언트 JSON 업로드</button>
+        <input type="file" id="drive-secret" accept="application/json,.json" hidden aria-hidden="true">
+        <button type="button" class="btn btn-sm btn-primary" id="drive-connect">드라이브 연결 (브라우저 로그인)</button>
+        <button type="button" class="btn btn-sm" id="drive-disconnect">연결 해제</button>
+        <span class="toolbar-note" id="drive-why"></span>
+      </div>
+      <p class="toolbar-note" style="margin:8px 0 0">버튼을 누르면 바로 적용됩니다(아래 저장 버튼과 무관). 앱이 만든 '증빙관리' 폴더만 접근합니다. 발급 절차: <a href="/readme#drive" target="_blank" rel="noopener">사용 안내 열기</a></p>
+    </fieldset>
+    <fieldset class="wide s-group" id="s-request" style="margin:0 0 14px">
+      <legend>신청 · 발주서 (소모품 구매처 · 발주서 머리글)</legend>
+      <div class="fields">
+        <label class="wide" for="s-rq-sup">소모품 구매처 목록 <small>(쉼표로 구분 · 비우면 알파미금역점, 드림디포)</small><input id="s-rq-sup" name="REQUEST_SUPPLIERS" type="text" autocomplete="off" placeholder="알파미금역점,드림디포"></label>
+        <div class="wide s-sup-checks" id="s-rq-sup-checks" role="group" aria-labelledby="s-rq-sup-lab"></div>
+        <input type="hidden" id="s-rq-sup-off" name="REQUEST_SUPPLIERS_OFF">
+        <label class="wide" for="s-rq-sup-note">연구원 안내 <small>(소모품 신청 화면에 표시 · 예: 드림디포는 10월 말까지 이용 불가 · 비우면 이용 불가 구매처가 자동으로 표시됩니다)</small><input id="s-rq-sup-note" name="REQUEST_SUPPLIER_NOTE" type="text" autocomplete="off" maxlength="200"></label>
+        <label for="s-rq-buyer">발주 기관 <small>(발주서에 우리 기관으로 표시)</small><input id="s-rq-buyer" name="REQUEST_BUYER" type="text" autocomplete="off" placeholder="예: 의료인공지능센터"></label>
+        <label class="mid" for="s-rq-ship">배송지<input id="s-rq-ship" name="REQUEST_SHIP_TO" type="text" autocomplete="off" placeholder="주소 · 호실"></label>
+        <label class="wide" for="s-rq-contact">담당자 <small>(이름 · 연락처 · 결의서에는 괄호 앞 이름만)</small><input id="s-rq-contact" name="REQUEST_CONTACT" type="text" autocomplete="off" placeholder="예: 안윤아 (031-000-0000)"></label>
+        <label class="wide" for="s-org">기관명 (결의서·발주서 머리글) <small>(비우면 분당서울대학교병원 의료인공지능센터)</small><input id="s-org" name="LEDGER_ORG" type="text" autocomplete="off" maxlength="80"></label>
+      </div>
+    </fieldset>
+    <fieldset class="wide s-group" id="s-home" style="margin:0 0 14px">
+      <legend>기본 화면 (로그인 뒤 바로 들어갈 화면)</legend>
+      <div class="fields">
+        <label for="s-home-sel">기본 화면 <small>(바꾸면 바로 저장 · 메뉴로 돌아가려면 상단 '메뉴' 버튼)</small>
+          <select id="s-home-sel"><option value="">메뉴 (선택 화면)</option><option value="fund">연구비</option><option value="labor">인건비</option><option value="request">신청</option></select></label>
+        <span class="toolbar-note" id="s-home-msg" role="status"></span>
+      </div>
+    </fieldset>
+    <fieldset class="wide s-group" id="s-users" style="margin:0 0 14px" hidden>
+      <legend>로그인 허용 계정 (마스터 전용)</legend>
+      <p class="toolbar-note" style="margin:4px 0 8px">여기에 적은 구글 계정만 로그인할 수 있습니다. 마스터 계정은 <code>app/.env</code>의 <code>LEDGER_ALLOWED_EMAILS</code>에 있어 여기서 지울 수 없습니다. 권한: 관리자 = 열람·결재, 담당자 = 장부 입력·신청 처리, 연구원 = 본인 신청 (서버 검사는 다음 단계). 이름을 비우면 그 사람이 처음 로그인할 때 직접 적습니다. 추가·삭제는 바로 적용됩니다(아래 저장 버튼과 무관).</p>
+      <div id="users-list" class="memo-list" aria-live="polite"></div>
+      <div class="users-add" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+        <label for="users-email" style="flex:1 1 220px;margin:0;display:flex;flex-direction:column;gap:2px">추가할 계정 <small>(구글 이메일)</small><input id="users-email" type="email" autocomplete="off" inputmode="email" placeholder="name@example.com"></label>
+        <label for="users-role" style="flex:0 1 130px;margin:0;display:flex;flex-direction:column;gap:2px">권한 <small>(필수)</small><select id="users-role" required><option value="">선택</option><option value="staff">담당자</option><option value="manager">관리자</option><option value="researcher">연구원</option></select></label>
+        <label for="users-name" style="flex:0 1 150px;margin:0;display:flex;flex-direction:column;gap:2px">이름 <small>(선택)</small><input id="users-name" type="text" autocomplete="off" maxlength="20" placeholder="홍길동"></label>
+        <button type="button" class="btn btn-sm" id="users-add">추가</button>
+      </div>
+      <p class="toolbar-note" id="users-msg" aria-live="polite" style="margin:6px 0 0"></p>
+    </fieldset>
+    <fieldset class="wide s-group" id="s-memo" style="margin:0 0 14px">
+      <legend>메모 (AI 도우미가 참고하는 장부 밖 지식)</legend>
+      <p class="toolbar-note" style="margin:4px 0 8px">재원·거래처별 특이사항, 비세목(예산목·세목·세세목) 규칙, 일반 규정(예: 어떤 결제에 어떤 증빙이 필요한가)을 적어 두면 AI 도우미가 답할 때와 폼의 추천·검증에서 참고합니다. 비세목 메모는 입력 행의 예산목·세목·세세목 중 하나와 대상이 같을 때 적용됩니다. 장부의 '메모' 시트에 저장되며, AI 가 대화 중 제안한 메모도 승인해야 저장됩니다.</p>
+      <div id="memo-list" class="memo-list"></div>
+      <div style="margin-top:8px"><button type="button" class="btn btn-sm" id="memo-add">메모 추가</button></div>
+    </fieldset>
+    <p class="toolbar-note" style="margin:0 0 8px"><b>AI 도우미 (선택 · 유료)</b> — 장부 데이터가 선택한 AI 서버로 전송되며 사용량에 따라 과금됩니다. 저장하면 <code>app/.env</code>에 기록되고 즉시 적용됩니다. 키는 이 PC에만 저장됩니다.</p>
+    <div class="fields">
+      <label class="wide" for="s-provider">AI 제공자
+        <select id="s-provider" name="LEDGER_PROVIDER">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI 호환 (OpenAI, Ollama, vLLM 등)</option>
+        </select>
+      </label>
+
+      <fieldset class="wide s-group" data-provider="anthropic">
+        <legend>Anthropic</legend>
+        <div class="fields">
+          <label class="mid" for="s-ak">API 키 <small id="s-ak-hint"></small> <small>(발급: <a href="https://console.anthropic.com/" target="_blank" rel="noopener">console.anthropic.com</a>)</small>
+            <input id="s-ak" name="ANTHROPIC_API_KEY" type="password" autocomplete="off" placeholder="sk-ant-… 형태의 키 붙여넣기">
+          </label>
+          <label for="s-amodel">모델
+            <input id="s-amodel" name="LEDGER_MODEL" type="text" list="dl-amodels" autocomplete="off">
+            <datalist id="dl-amodels"><option value="claude-sonnet-5-5"><option value="claude-opus-5-5"><option value="claude-haiku-5-5"></datalist>
+          </label>
+          <label for="s-effort">응답 품질 <small>(비용·속도 순)</small>
+            <select id="s-effort" name="LEDGER_EFFORT"><option value="low">빠름 (low)</option><option value="medium">보통 (medium, 권장)</option><option value="high">정확 (high)</option></select>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="wide s-group" data-provider="openai">
+        <legend>OpenAI 호환</legend>
+        <div class="fields">
+          <p class="toolbar-note wide" style="margin:0;grid-column:span 3;color:var(--warn)">OpenAI 호환 경로의 제약: 모델이 도구 호출(function calling)과 JSON 스키마 출력을 지원해야 거래 제안·영수증·추천이 동작합니다. 영수증 PDF는 OpenAI 공식 API에서만, 로컬 서버는 이미지만. 장부가 크면 로컬 모델의 컨텍스트(num_ctx)를 키우세요. 추론 수준은 추론 모델(o-시리즈 등)에서만 켜고, 그 외에는 '미전송'으로 두세요.</p>
+          <label class="mid" for="s-ok">API 키 <small id="s-ok-hint"></small>
+            <input id="s-ok" name="OPENAI_API_KEY" type="password" autocomplete="off" placeholder="sk-… 붙여넣기 (로컬 서버는 비워도 됨)">
+          </label>
+          <label for="s-omodel">모델
+            <input id="s-omodel" name="OPENAI_MODEL" type="text" list="dl-omodels" autocomplete="off">
+            <datalist id="dl-omodels"><option value="gpt-4.1"><option value="gpt-4.1-mini"><option value="gpt-5"><option value="o4-mini"></datalist>
+          </label>
+          <label class="mid" for="s-obase">엔드포인트 (Base URL) <small>(비우면 api.openai.com. 예: http://localhost:11434/v1)</small>
+            <input id="s-obase" name="OPENAI_BASE_URL" type="url" autocomplete="off" placeholder="https://api.openai.com/v1">
+          </label>
+          <label for="s-oreason">추론 수준 <small>(추론 모델에서만)</small>
+            <select id="s-oreason" name="OPENAI_REASONING_EFFORT"><option value="">미전송</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option></select>
+          </label>
+        </div>
+      </fieldset>
+    </div>
+    <p id="settings-msg" class="dlg-ai-msg" aria-live="polite" style="margin:10px 0 0"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="s-clear-key">현재 제공자 키 삭제</button>
+      <span class="sp"></span>
+      <button type="button" class="btn" id="s-test" title="입력한 값으로 짧은 호출을 보내 확인하고, 성공하면 저장합니다">연결 확인 후 저장</button>
+      <button type="button" class="btn btn-ghost" id="s-cancel">닫기</button>
+      <button type="submit" class="btn btn-primary" id="s-save" title="신청·발주서와 AI 설정 저장">설정 저장</button>
+    </div>
+  </form>
+</dialog>
+
+<datalist id="dl-거래처"></datalist>
+<datalist id="dl-사용자"></datalist>
+<datalist id="dl-태그"></datalist>
+<datalist id="dl-세목"></datalist>
+<datalist id="dl-세세목"></datalist>
+<datalist id="dl-대상"></datalist>
+
+<script src="/static/app.js"></script>
+<script src="/static/labor.js"></script>
+<script src="/static/edit.js"></script>
+<script src="/static/request.js"></script>
+<script src="/static/conf.js"></script>
+<script src="/static/cols.js"></script>
+<div id="print-sheet" class="print-root" aria-hidden="true"></div>
+<div id="print-conf" class="print-root" aria-hidden="true"></div>
+<div id="print-voucher" class="print-root" aria-hidden="true"></div>
+<div id="print-mount" class="print-root" aria-hidden="true"></div>
+<div id="print-report" class="print-root" aria-hidden="true"></div>
+</body>
+</html>

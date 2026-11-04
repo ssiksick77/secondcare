@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>이름 입력 · SECONDCare</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+<a class="skip" href="#main">본문 바로가기</a>
+
+<header class="top">
+  <h1><span class="app-name">SECONDCare</span><small class="app-full">의료인공지능센터 연구비 관리 시스템</small></h1>
+</header>
+
+<main id="main" class="login-main">
+  <form class="login-card" id="name-form" aria-labelledby="name-title" novalidate>
+    <h2 id="name-title">처음 오셨습니다</h2>
+    <p class="login-hint">장부와 지출결의서에 표시할 이름을 입력하세요. 한 번만 묻습니다.</p>
+    <div class="alert error login-alert" id="name-alert" role="alert" aria-live="assertive" hidden></div>
+    <p class="login-note" id="name-email"></p>
+    <label for="name-input" class="login-label">이름</label>
+    <input id="name-input" name="name" type="text" class="login-input" maxlength="20" autocomplete="name" required aria-describedby="name-help">
+    <p class="login-note" id="name-help">1~20자. 결재란의 담당 칸에 이 이름이 들어갑니다.</p>
+    <button type="submit" class="btn btn-primary login-btn" id="btn-save">저장하고 시작</button>
+  </form>
+</main>
+
+<footer class="login-foot">
+  <small>분당서울대학교병원 의료인공지능센터 · 연구비 지출장부</small>
+</footer>
+
+<script>
+(async function () {
+  var input = document.getElementById("name-input"), alertBox = document.getElementById("name-alert");
+  function fail(msg) { alertBox.textContent = msg; alertBox.hidden = false; input.focus(); }
+  try {
+    var me = await (await fetch("/api/me")).json();
+    document.getElementById("name-email").textContent = "로그인 계정: " + (me.email || "");
+    if (!me.needs_name) { location.href = "/"; return; }
+    input.value = me.name || "";
+  } catch (e) { }
+  input.focus(); input.select();
+  document.getElementById("name-form").addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    var name = input.value.trim();
+    if (!name) { fail("이름을 입력하세요."); return; }
+    var btn = document.getElementById("btn-save"); btn.disabled = true;
+    try {
+      var res = await fetch("/api/me/name", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name }) });
+      if (!res.ok) { var d = {}; try { d = await res.json(); } catch (e) { } fail(d.detail || "저장하지 못했습니다."); btn.disabled = false; return; }
+      location.href = "/";
+    } catch (e) { fail("서버에 연결할 수 없습니다."); btn.disabled = false; }
+  });
+})();
+</script>
+</body>
+</html>

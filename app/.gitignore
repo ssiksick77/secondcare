@@ -1,0 +1,8 @@
+backup/
+__pycache__/
+.env
+google_client_secret.json
+google_token.json
+google_token.expired
+drive_folders.json
+drive_mock/

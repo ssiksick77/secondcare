@@ -1,0 +1,4888 @@
+{
+  "run_id": "QA26JANSEP_V1",
+  "as_of": "2026-09-30",
+  "period": [
+    "2026-01-01",
+    "2026-09-30"
+  ],
+  "counts": {
+    "funds": 10,
+    "budget": 11,
+    "exec": 149,
+    "req": 9,
+    "deposit": 6,
+    "tags": 3,
+    "evidence": 6,
+    "people": 2,
+    "salary": 2,
+    "payee": 0,
+    "labor": 18,
+    "ladj": 0,
+    "request": 17,
+    "order": 2,
+    "ratt": 2
+  },
+  "exec_states": {
+    "발생": 36,
+    "청구": 26,
+    "보완": 25,
+    "완료": 25,
+    "결의": 37
+  },
+  "request_states": {
+    "승인": 4,
+    "완료": 4,
+    "반려": 1,
+    "신청": 8
+  },
+  "checks": [
+    {
+      "check": "at_least_100_exec",
+      "passed": true
+    },
+    {
+      "check": "ten_funds",
+      "passed": true
+    },
+    {
+      "check": "exec_count",
+      "passed": true
+    },
+    {
+      "check": "funds_unique",
+      "passed": true
+    },
+    {
+      "check": "exec_unique",
+      "passed": true
+    },
+    {
+      "check": "req_unique",
+      "passed": true
+    },
+    {
+      "check": "request_unique",
+      "passed": true
+    },
+    {
+      "check": "order_unique",
+      "passed": true
+    },
+    {
+      "check": "fund_references",
+      "passed": true
+    },
+    {
+      "check": "linked_exec_references",
+      "passed": true
+    },
+    {
+      "check": "request_links",
+      "passed": true
+    },
+    {
+      "check": "QA01_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA02_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA03_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA04_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA05_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA06_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA07_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA08_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA09_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA10_independent_totals",
+      "passed": true
+    },
+    {
+      "check": "QA01_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA01_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA02_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA03_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA04_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA05_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA06_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA07_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA08_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_내부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_외부인건비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_연구시설.장비비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_연구활동비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_연구재료비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_연구수당_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_위탁연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_국제공동연구개발비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_연구개발부담비_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_간접비(공통)_spent",
+      "passed": true
+    },
+    {
+      "check": "QA09_발생이자_spent",
+      "passed": true
+    },
+    {
+      "check": "funds:2:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:2:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:3:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:3:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:4:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:4:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:5:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:5:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:6:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:6:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:7:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:7:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:8:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:8:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:9:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:9:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:10:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:10:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:11:시작일:period",
+      "passed": true
+    },
+    {
+      "check": "funds:11:종료일:period",
+      "passed": true
+    },
+    {
+      "check": "budget:9:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:10:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:11:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:12:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:13:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:14:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:15:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:16:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:17:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:18:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "budget:19:신청일자:period",
+      "passed": true
+    },
+    {
+      "check": "exec:2:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:3:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:3:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:4:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:4:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:5:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:5:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:5:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:6:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:6:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:6:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:6:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:7:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:8:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:8:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:9:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:9:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:10:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:10:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:10:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:11:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:11:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:11:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:11:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:12:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:13:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:13:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:14:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:14:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:15:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:15:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:15:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:16:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:16:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:16:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:16:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:17:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:18:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:18:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:19:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:19:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:20:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:20:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:20:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:21:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:21:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:21:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:21:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:22:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:23:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:23:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:24:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:24:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:25:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:25:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:25:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:26:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:26:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:26:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:26:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:27:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:28:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:28:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:29:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:29:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:30:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:30:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:30:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:31:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:31:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:31:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:31:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:32:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:33:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:33:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:34:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:34:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:35:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:35:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:35:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:36:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:36:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:36:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:36:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:37:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:38:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:38:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:39:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:39:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:40:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:40:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:40:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:41:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:41:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:41:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:41:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:42:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:43:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:43:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:44:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:44:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:45:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:45:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:45:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:46:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:46:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:46:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:46:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:47:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:48:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:48:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:49:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:49:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:50:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:50:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:50:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:51:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:51:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:51:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:51:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:52:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:53:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:53:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:54:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:54:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:55:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:55:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:55:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:56:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:56:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:56:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:56:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:57:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:58:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:58:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:59:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:59:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:60:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:60:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:60:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:61:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:61:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:61:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:61:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:62:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:63:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:63:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:64:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:64:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:65:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:65:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:65:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:66:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:66:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:66:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:66:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:67:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:68:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:68:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:69:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:69:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:70:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:70:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:70:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:71:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:71:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:71:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:71:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:72:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:73:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:73:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:74:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:74:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:75:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:75:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:75:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:76:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:76:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:76:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:76:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:77:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:78:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:78:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:79:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:79:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:80:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:80:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:80:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:81:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:81:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:81:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:81:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:82:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:83:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:83:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:84:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:84:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:85:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:85:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:85:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:86:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:86:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:86:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:86:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:87:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:88:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:88:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:89:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:89:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:90:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:90:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:90:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:91:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:91:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:91:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:91:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:92:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:93:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:93:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:94:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:94:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:95:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:95:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:95:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:96:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:96:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:96:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:96:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:97:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:98:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:98:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:99:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:99:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:100:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:100:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:100:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:101:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:101:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:101:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:101:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:102:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:103:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:103:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:104:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:104:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:105:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:105:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:105:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:106:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:106:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:106:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:106:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:107:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:108:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:108:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:109:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:109:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:110:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:110:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:110:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:111:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:111:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:111:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:111:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:112:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:113:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:113:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:114:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:114:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:115:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:115:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:115:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:116:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:116:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:116:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:116:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:117:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:118:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:118:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:119:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:119:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:120:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:120:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:120:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:121:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:121:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:121:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:121:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:122:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:123:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:123:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:124:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:124:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:125:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:125:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:125:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:126:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:126:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:126:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:126:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:127:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:128:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:129:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:130:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:131:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:132:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:133:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:133:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:133:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:133:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:134:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:134:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:134:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:134:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:135:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:135:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:135:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:135:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:136:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:136:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:136:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:136:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:137:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:137:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:137:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:137:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:138:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:138:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:138:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:138:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:139:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:139:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:139:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:139:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:140:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:140:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:140:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:140:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:141:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:141:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:141:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:141:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:142:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:142:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:142:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:142:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:143:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:143:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:143:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:143:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:144:결의일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:144:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:144:지급청구일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:144:지출완료일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:145:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:146:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:147:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "exec:148:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "req:2:지출예정일:period",
+      "passed": true
+    },
+    {
+      "check": "req:2:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "req:3:지출예정일:period",
+      "passed": true
+    },
+    {
+      "check": "req:3:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "req:4:지출예정일:period",
+      "passed": true
+    },
+    {
+      "check": "req:4:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "req:5:지출예정일:period",
+      "passed": true
+    },
+    {
+      "check": "req:5:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "req:6:지출예정일:period",
+      "passed": true
+    },
+    {
+      "check": "req:6:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "req:7:지출예정일:period",
+      "passed": true
+    },
+    {
+      "check": "req:7:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "req:8:지출예정일:period",
+      "passed": true
+    },
+    {
+      "check": "req:8:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "req:9:원인발생일:period",
+      "passed": true
+    },
+    {
+      "check": "deposit:2:일자:period",
+      "passed": true
+    },
+    {
+      "check": "deposit:3:일자:period",
+      "passed": true
+    },
+    {
+      "check": "deposit:4:일자:period",
+      "passed": true
+    },
+    {
+      "check": "deposit:5:일자:period",
+      "passed": true
+    },
+    {
+      "check": "deposit:6:일자:period",
+      "passed": true
+    },
+    {
+      "check": "deposit:7:일자:period",
+      "passed": true
+    },
+    {
+      "check": "people:2:입사일:period",
+      "passed": true
+    },
+    {
+      "check": "people:3:입사일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:2:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:3:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:4:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:5:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:6:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:7:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:11:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:12:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:13:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:14:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:15:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "labor:16:지급일:period",
+      "passed": true
+    },
+    {
+      "check": "request:2:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:2:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:3:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:3:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:4:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:4:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:5:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:5:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:6:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:6:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:7:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:7:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:8:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:8:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:9:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:9:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:10:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:10:결재일:period",
+      "passed": true
+    },
+    {
+      "check": "request:11:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:12:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:13:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:14:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:15:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:16:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "request:17:신청일:period",
+      "passed": true
+    },
+    {
+      "check": "order:2:주문일:period",
+      "passed": true
+    },
+    {
+      "check": "order:3:주문일:period",
+      "passed": true
+    },
+    {
+      "check": "order:3:배송일:period",
+      "passed": true
+    },
+    {
+      "check": "exec_date_order",
+      "passed": true
+    },
+    {
+      "check": "QA08_exact_exhaustion",
+      "passed": true
+    },
+    {
+      "check": "QA10_empty",
+      "passed": true
+    },
+    {
+      "check": "no_formulas",
+      "passed": true
+    },
+    {
+      "check": "original_untouched",
+      "passed": true
+    },
+    {
+      "check": "deposit_balances",
+      "passed": true
+    },
+    {
+      "check": "evidence_number_schema_migration_and_all_record_validation",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "api_calls": 231,
+  "invalid_submitted": 0,
+  "warning_submitted": 0,
+  "baseline_sha256": "b43c36708e60ab4b9c95ab4a211e92b23f7a39947571b2b6ccf44c2393fac422",
+  "target_path": "<home>\\CAIH_회계장부_2026\\의료인공지능센터_지출장부_2026.xlsx",
+  "original_sha256": "699bb9da0ead83649e32824ef8f1da73f342c58ee984d012d949b40797a3c7b8",
+  "source_sha256": {
+    "store.py": "bf5d0c0f1bf9f6c2656cb9f1f545fe0ad6bf5366dfc4d20ea9fd962bfb0bdcbe",
+    "main.py": "dd896a4a5f28296853e91468b737b67eba2311f17afd411f50b594ede0e339d4",
+    "static/app.js": "2e98f77c7d161fba507f8e55a83a0d39779894987176872dce470b25458a5bcc"
+  },
+  "source_change_review": "Concurrent store.py change adds evidence identifiers; evidence is empty in fixture. Migrated isolated baseline with app init_file; exact readback equality and all record validation confirmed.",
+  "previous_source_sha256": {
+    "store.py": "2d9858c07d0377a185b48b7ac0453c6f6a309f9bfb2b4b6ec402a223602e05b7",
+    "main.py": "e451af28c1424ecd6551fc3261026b78993f9ec637fe8e01877745051c4f6b8e",
+    "static/app.js": "89afd09019cc8b4730cf9bafd156a19d24eeb075c7ffbd48b48fb1913cb207b1"
+  },
+  "v1_counts": {
+    "funds": 10,
+    "budget": 11,
+    "exec": 147,
+    "req": 8,
+    "deposit": 6,
+    "tags": 3,
+    "evidence": 0,
+    "people": 2,
+    "salary": 2,
+    "payee": 0,
+    "labor": 18,
+    "ladj": 0,
+    "request": 16,
+    "order": 2,
+    "ratt": 0
+  },
+  "exec_state_labels": {
+    "발생": 36,
+    "청구": 26,
+    "보완": 25,
+    "승인": 25,
+    "완료": 37
+  },
+  "supplement_v11": {
+    "run_id": "QA26JANSEP_V1.1",
+    "script": "supplement_v11.py",
+    "checks": [
+      {
+        "check": "at_least_100_exec",
+        "passed": true
+      },
+      {
+        "check": "ten_funds",
+        "passed": true
+      },
+      {
+        "check": "exec_count",
+        "passed": true
+      },
+      {
+        "check": "funds_unique",
+        "passed": true
+      },
+      {
+        "check": "exec_unique",
+        "passed": true
+      },
+      {
+        "check": "req_unique",
+        "passed": true
+      },
+      {
+        "check": "request_unique",
+        "passed": true
+      },
+      {
+        "check": "order_unique",
+        "passed": true
+      },
+      {
+        "check": "fund_references",
+        "passed": true
+      },
+      {
+        "check": "linked_exec_references",
+        "passed": true
+      },
+      {
+        "check": "request_links",
+        "passed": true
+      },
+      {
+        "check": "QA01_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA02_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA03_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA04_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA05_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA06_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA07_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA08_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA09_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA10_independent_totals",
+        "passed": true
+      },
+      {
+        "check": "QA01_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA01_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA02_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA03_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA04_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA05_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA06_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA07_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA08_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_내부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_외부인건비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_연구시설.장비비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_연구활동비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_연구재료비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_연구수당_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_위탁연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_국제공동연구개발비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_연구개발부담비_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_간접비(공통)_spent",
+        "passed": true
+      },
+      {
+        "check": "QA09_발생이자_spent",
+        "passed": true
+      },
+      {
+        "check": "funds:2:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:2:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:3:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:3:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:4:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:4:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:5:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:5:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:6:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:6:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:7:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:7:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:8:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:8:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:9:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:9:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:10:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:10:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:11:시작일:period",
+        "passed": true
+      },
+      {
+        "check": "funds:11:종료일:period",
+        "passed": true
+      },
+      {
+        "check": "budget:9:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:10:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:11:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:12:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:13:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:14:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:15:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:16:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:17:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:18:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "budget:19:신청일자:period",
+        "passed": true
+      },
+      {
+        "check": "exec:2:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:3:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:3:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:4:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:4:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:5:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:5:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:5:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:6:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:6:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:6:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:6:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:7:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:8:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:8:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:9:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:9:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:10:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:10:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:10:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:11:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:11:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:11:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:11:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:12:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:13:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:13:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:14:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:14:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:15:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:15:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:15:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:16:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:16:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:16:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:16:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:17:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:18:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:18:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:19:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:19:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:20:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:20:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:20:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:21:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:21:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:21:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:21:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:22:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:23:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:23:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:24:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:24:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:25:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:25:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:25:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:26:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:26:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:26:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:26:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:27:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:28:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:28:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:29:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:29:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:30:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:30:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:30:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:31:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:31:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:31:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:31:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:32:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:33:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:33:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:34:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:34:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:35:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:35:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:35:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:36:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:36:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:36:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:36:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:37:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:38:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:38:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:39:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:39:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:40:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:40:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:40:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:41:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:41:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:41:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:41:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:42:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:43:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:43:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:44:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:44:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:45:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:45:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:45:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:46:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:46:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:46:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:46:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:47:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:48:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:48:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:49:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:49:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:50:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:50:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:50:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:51:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:51:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:51:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:51:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:52:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:53:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:53:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:54:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:54:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:55:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:55:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:55:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:56:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:56:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:56:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:56:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:57:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:58:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:58:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:59:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:59:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:60:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:60:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:60:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:61:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:61:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:61:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:61:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:62:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:63:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:63:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:64:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:64:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:65:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:65:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:65:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:66:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:66:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:66:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:66:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:67:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:68:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:68:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:69:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:69:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:70:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:70:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:70:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:71:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:71:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:71:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:71:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:72:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:73:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:73:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:74:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:74:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:75:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:75:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:75:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:76:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:76:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:76:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:76:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:77:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:78:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:78:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:79:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:79:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:80:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:80:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:80:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:81:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:81:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:81:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:81:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:82:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:83:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:83:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:84:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:84:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:85:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:85:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:85:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:86:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:86:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:86:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:86:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:87:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:88:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:88:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:89:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:89:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:90:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:90:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:90:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:91:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:91:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:91:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:91:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:92:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:93:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:93:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:94:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:94:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:95:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:95:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:95:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:96:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:96:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:96:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:96:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:97:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:98:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:98:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:99:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:99:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:100:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:100:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:100:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:101:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:101:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:101:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:101:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:102:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:103:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:103:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:104:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:104:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:105:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:105:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:105:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:106:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:106:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:106:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:106:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:107:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:108:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:108:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:109:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:109:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:110:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:110:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:110:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:111:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:111:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:111:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:111:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:112:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:113:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:113:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:114:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:114:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:115:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:115:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:115:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:116:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:116:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:116:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:116:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:117:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:118:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:118:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:119:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:119:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:120:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:120:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:120:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:121:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:121:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:121:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:121:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:122:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:123:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:123:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:124:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:124:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:125:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:125:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:125:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:126:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:126:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:126:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:126:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:127:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:128:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:129:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:130:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:131:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:132:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:133:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:133:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:133:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:133:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:134:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:134:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:134:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:134:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:135:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:135:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:135:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:135:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:136:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:136:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:136:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:136:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:137:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:137:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:137:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:137:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:138:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:138:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:138:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:138:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:139:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:139:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:139:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:139:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:140:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:140:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:140:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:140:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:141:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:141:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:141:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:141:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:142:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:142:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:142:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:142:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:143:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:143:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:143:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:143:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:144:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:144:결의일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:144:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:144:지출완료일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:145:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:146:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:147:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:148:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:149:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:150:지급청구일:period",
+        "passed": true
+      },
+      {
+        "check": "exec:150:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:2:지출예정일:period",
+        "passed": true
+      },
+      {
+        "check": "req:2:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:3:지출예정일:period",
+        "passed": true
+      },
+      {
+        "check": "req:3:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:4:지출예정일:period",
+        "passed": true
+      },
+      {
+        "check": "req:4:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:5:지출예정일:period",
+        "passed": true
+      },
+      {
+        "check": "req:5:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:6:지출예정일:period",
+        "passed": true
+      },
+      {
+        "check": "req:6:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:7:지출예정일:period",
+        "passed": true
+      },
+      {
+        "check": "req:7:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:8:지출예정일:period",
+        "passed": true
+      },
+      {
+        "check": "req:8:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:9:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "req:10:원인발생일:period",
+        "passed": true
+      },
+      {
+        "check": "deposit:2:일자:period",
+        "passed": true
+      },
+      {
+        "check": "deposit:3:일자:period",
+        "passed": true
+      },
+      {
+        "check": "deposit:4:일자:period",
+        "passed": true
+      },
+      {
+        "check": "deposit:5:일자:period",
+        "passed": true
+      },
+      {
+        "check": "deposit:6:일자:period",
+        "passed": true
+      },
+      {
+        "check": "deposit:7:일자:period",
+        "passed": true
+      },
+      {
+        "check": "people:2:입사일:period",
+        "passed": true
+      },
+      {
+        "check": "people:3:입사일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:2:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:3:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:4:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:5:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:6:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:7:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:11:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:12:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:13:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:14:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:15:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "labor:16:지급일:period",
+        "passed": true
+      },
+      {
+        "check": "request:2:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:2:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:3:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:3:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:4:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:4:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:5:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:5:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:6:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:6:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:7:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:7:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:8:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:8:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:9:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:9:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:10:결재일:period",
+        "passed": true
+      },
+      {
+        "check": "request:10:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:11:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:12:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:13:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:14:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:15:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:16:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:17:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "request:18:신청일:period",
+        "passed": true
+      },
+      {
+        "check": "order:2:주문일:period",
+        "passed": true
+      },
+      {
+        "check": "order:3:주문일:period",
+        "passed": true
+      },
+      {
+        "check": "order:3:배송일:period",
+        "passed": true
+      },
+      {
+        "check": "evidence:2:업로드일:valid_system_date",
+        "passed": true
+      },
+      {
+        "check": "evidence:4:업로드일:valid_system_date",
+        "passed": true
+      },
+      {
+        "check": "evidence:5:업로드일:valid_system_date",
+        "passed": true
+      },
+      {
+        "check": "ratt:2:업로드일:valid_system_date",
+        "passed": true
+      },
+      {
+        "check": "ratt:3:업로드일:valid_system_date",
+        "passed": true
+      },
+      {
+        "check": "exec_date_order",
+        "passed": true
+      },
+      {
+        "check": "QA08_exact_exhaustion",
+        "passed": true
+      },
+      {
+        "check": "QA10_empty",
+        "passed": true
+      },
+      {
+        "check": "no_formulas",
+        "passed": true
+      },
+      {
+        "check": "deposit_balances",
+        "passed": true
+      },
+      {
+        "check": "evidence_number_format",
+        "passed": true
+      },
+      {
+        "check": "evidence_number_unique",
+        "passed": true
+      },
+      {
+        "check": "evidence_exec_references",
+        "passed": true
+      },
+      {
+        "check": "evidence_number_sequence",
+        "passed": true
+      },
+      {
+        "check": "evidence_list_sync",
+        "passed": true
+      },
+      {
+        "check": "ratt_request_references",
+        "passed": true
+      },
+      {
+        "check": "converted_exec_link_column",
+        "passed": true
+      },
+      {
+        "check": "link_column_references",
+        "passed": true
+      },
+      {
+        "check": "count_funds",
+        "passed": true
+      },
+      {
+        "check": "count_budget",
+        "passed": true
+      },
+      {
+        "check": "count_exec",
+        "passed": true
+      },
+      {
+        "check": "count_req",
+        "passed": true
+      },
+      {
+        "check": "count_deposit",
+        "passed": true
+      },
+      {
+        "check": "count_tags",
+        "passed": true
+      },
+      {
+        "check": "count_evidence",
+        "passed": true
+      },
+      {
+        "check": "count_people",
+        "passed": true
+      },
+      {
+        "check": "count_salary",
+        "passed": true
+      },
+      {
+        "check": "count_payee",
+        "passed": true
+      },
+      {
+        "check": "count_labor",
+        "passed": true
+      },
+      {
+        "check": "count_ladj",
+        "passed": true
+      },
+      {
+        "check": "count_request",
+        "passed": true
+      },
+      {
+        "check": "count_order",
+        "passed": true
+      },
+      {
+        "check": "count_ratt",
+        "passed": true
+      },
+      {
+        "check": "QA01_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA02_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA03_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA04_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA05_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA06_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA07_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA08_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA09_dashboard_equals_expected",
+        "passed": true
+      },
+      {
+        "check": "QA10_dashboard_equals_expected",
+        "passed": true
+      }
+    ],
+    "check_count": 620,
+    "passed": true,
+    "api_calls": 13,
+    "note": "업로드일 is the actual system upload date (outside the 1~9월 business period); excluded from the period check and validated as a date."
+  }
+}

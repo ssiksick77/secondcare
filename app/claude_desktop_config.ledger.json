@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "caih-rfm": {
+      "command": "python",
+      "args": ["<프로젝트 상위 폴더>/CAIH_회계장부_2026/app/mcp_server.py"]
+    }
+  }
+}
