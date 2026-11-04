@@ -6,10 +6,10 @@
 - 제공되지 않은 기관 규칙·재원별 집행 기준·승인 권한은 임의로 확정하지 않는다. 판단 근거가 없으면 "확인 필요"로 기록한다.
 - 실제로 수행한 테스트와 수행하지 못한 테스트를 반드시 구분한다. 수행하지 못한 항목은 실패가 아니라 "미실행 + 사유"로 적는다.
 - AI 호출(/api/ai/*)과 실제 구글 드라이브는 호출하지 않는다 (API 키 없음, 드라이브는 mock 모드).
-- 원본 프로젝트(C:\Users\parkj\Desktop\Project\01 in progress\CAIH_회계장부_2026)의 장부·app 폴더·.env는 절대 수정하지 않는다. 읽기만 한다.
+- 원본 프로젝트(<home>\CAIH_회계장부_2026)의 장부·app 폴더·.env는 절대 수정하지 않는다. 읽기만 한다.
 
 ## 환경 (모두 격리된 사본, 자유롭게 변경 가능)
-- QA 루트: C:\Users\parkj\AppData\Local\Temp\claude\c--Users-parkj-Desktop-Project-01-in-progress\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa
+- QA 루트: <home>\AppData\Local\Temp\claude\<session>\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa
 - 앱 사본: <QA루트>\app (원본 app 과 동일 코드, 비밀값 제거, 드라이브 mock)
 - 초기 장부: <QA루트>\baseline.xlsx (재원 QA01~QA10, 집행 147건, 2026-01~09)
 - 인스턴스 시작: `cd <QA루트> && python launch.py <이름> <포트> --reset`  → <QA루트>\inst_<이름>\ledger_<이름>.xlsx 로 서버 기동 (http://127.0.0.1:<포트>). `--reset`은 baseline 으로 장부를 초기화한다. 같은 이름으로 다시 실행하면 기존 서버를 죽이고 재시작한다 (초기화는 --reset 때만).

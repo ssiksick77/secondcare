@@ -1,7 +1,7 @@
 import json, hashlib, subprocess, sys, time, requests, pathlib
-QA = pathlib.Path("C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa")
+QA = pathlib.Path("<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa")
 BASE = "http://127.0.0.1:8814"
-ORIG = pathlib.Path("C:/Users/parkj/Desktop/Project/01 in progress/CAIH_회계장부_2026/QA set")
+ORIG = pathlib.Path("<home>/Desktop/Project/01 in progress/CAIH_회계장부_2026/QA set")
 def snap():
     d = requests.get(BASE + "/api/all").json()
     keys = ["funds","budget","exec","req","deposit","tags","evidence","people","salary","payee","labor","ladj","request","order","ratt"]

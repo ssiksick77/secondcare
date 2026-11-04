@@ -1,5 +1,5 @@
 from h import *
-print(json.dumps(json.load(open("C:/Users/parkj/Desktop/Project/01 in progress/CAIH_회계장부_2026/QA set/invalid_cases_NOT_SUBMITTED.json",encoding='utf-8'))[17],ensure_ascii=False)[:500])
+print(json.dumps(json.load(open("<home>/Desktop/Project/01 in progress/CAIH_회계장부_2026/QA set/invalid_cases_NOT_SUBMITTED.json",encoding='utf-8'))[17],ensure_ascii=False)[:500])
 n0=len(all_()['labor'])
 body={"이름":"등록안된인원","지급처":"QA01","지급월":"2026-09","귀속월":"2026-09","금액":10000,"상태":"예정"}
 print('X18 POST', api('POST','/api/labor',body), 'count delta', len(all_()['labor'])-n0)

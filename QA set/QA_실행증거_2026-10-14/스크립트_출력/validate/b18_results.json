@@ -8,7 +8,7 @@
     "configured": true,
     "connected": true,
     "expired": false,
-    "client_secret_path": "C:\\Users\\parkj\\AppData\\Local\\Temp\\claude\\c--Users-parkj-Desktop-Project-01-in-progress\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+    "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
     "root": "증빙관리"
    }
   }
@@ -28,13 +28,13 @@
      "비고": "QA validate B-18 upload",
      "증빙번호": "2026-QA01-001-1",
      "_row": 2,
-     "url": "file:///C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png",
+     "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png",
      "has_file": true
     }
    ],
    "folder": {
     "id": "증빙관리/2026/QA01/2026-QA01-001",
-    "url": "file:///C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001"
+    "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001"
    },
    "attached": false
   }
@@ -55,7 +55,7 @@
      "업로드일": "2026-10-14",
      "비고": "QA validate B-18 upload",
      "has_file": true,
-     "url": "file:///C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png"
+     "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png"
     }
    ],
    "drive": {
@@ -63,7 +63,7 @@
     "configured": true,
     "connected": true,
     "expired": false,
-    "client_secret_path": "C:\\Users\\parkj\\AppData\\Local\\Temp\\claude\\c--Users-parkj-Desktop-Project-01-in-progress\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+    "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
     "root": "증빙관리"
    }
   }
@@ -77,7 +77,7 @@
     "configured": true,
     "connected": true,
     "expired": false,
-    "client_secret_path": "C:\\Users\\parkj\\AppData\\Local\\Temp\\claude\\c--Users-parkj-Desktop-Project-01-in-progress\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+    "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
     "root": "증빙관리"
    }
   }
@@ -135,7 +135,7 @@
    "configured": true,
    "connected": true,
    "expired": false,
-   "client_secret_path": "C:\\Users\\parkj\\AppData\\Local\\Temp\\claude\\c--Users-parkj-Desktop-Project-01-in-progress\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+   "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
    "root": "증빙관리"
   }
  },
@@ -155,12 +155,12 @@
      "업로드일": "2026-10-14",
      "비고": "QA B-18 실물만",
      "has_file": true,
-     "url": "file:///C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E002%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%202%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11500_260115.pdf"
+     "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E002%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%202%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11500_260115.pdf"
     }
    ],
    "folder": {
     "id": "증빙관리/2026/QA01/2026-QA01-002",
-    "url": "file:///C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002"
+    "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002"
    },
    "attached": true
   }
@@ -185,7 +185,7 @@
     "업로드일": "2026-10-14",
     "비고": "QA B-18 실물만",
     "has_file": true,
-    "url": "file:///C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E002%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%202%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11500_260115.pdf"
+    "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-002/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E002%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%202%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11500_260115.pdf"
    }
   ],
   "drive": {
@@ -193,7 +193,7 @@
    "configured": true,
    "connected": true,
    "expired": false,
-   "client_secret_path": "C:\\Users\\parkj\\AppData\\Local\\Temp\\claude\\c--Users-parkj-Desktop-Project-01-in-progress\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+   "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
    "root": "증빙관리"
   }
  },
@@ -211,7 +211,7 @@
     "업로드일": "2026-10-14",
     "비고": "QA validate B-18 upload",
     "has_file": true,
-    "url": "file:///C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png"
+    "url": "file:///<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/app/drive_mock/%EC%A6%9D%EB%B9%99%EA%B4%80%EB%A6%AC/2026/QA01/2026-QA01-001/QA01_%5B%EA%B0%80%EC%83%81%20QA26JANSEP-V1%5D%20E001%20%EB%B0%98%EB%B3%B5%201%EC%9B%94%201%EC%B0%A8_%EC%98%81%EC%88%98%EC%A6%9D_11000_260105.png"
    }
   ],
   "drive": {
@@ -219,7 +219,7 @@
    "configured": true,
    "connected": true,
    "expired": false,
-   "client_secret_path": "C:\\Users\\parkj\\AppData\\Local\\Temp\\claude\\c--Users-parkj-Desktop-Project-01-in-progress\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
+   "client_secret_path": "<home>\\AppData\\Local\\Temp\\claude\\<session>\\18367f8b-184a-424d-99ad-8ce7d7ee1121\\scratchpad\\qa\\app\\google_client_secret.json",
    "root": "증빙관리"
   }
  },

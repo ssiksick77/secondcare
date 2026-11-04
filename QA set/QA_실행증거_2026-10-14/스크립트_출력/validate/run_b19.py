@@ -1,5 +1,5 @@
 import json, sys, requests, io, time
-sys.path.insert(0, "C:/Users/parkj/AppData/Local/Temp/claude/c--Users-parkj-Desktop-Project-01-in-progress/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/work")
+sys.path.insert(0, "<home>/AppData/Local/Temp/claude/<session>/18367f8b-184a-424d-99ad-8ce7d7ee1121/scratchpad/qa/work")
 from harness_common import *
 MB = 1024*1024
 out = []

@@ -1,6 +1,6 @@
 import requests,json,sys,os
 B='http://127.0.0.1:8812'
-Q=r'C:\Users\parkj\AppData\Local\Temp\claude\c--Users-parkj-Desktop-Project-01-in-progress\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa'
+Q=r'<home>\AppData\Local\Temp\claude\<session>\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa'
 SH=Q+r'\shots\budget_'
 def all_(): return requests.get(B+'/api/all').json()
 def post(k,rec,**kw):

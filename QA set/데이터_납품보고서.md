@@ -149,9 +149,9 @@
 - 본 결과는 데이터 준비 검증이다. 입력 오류를 거부하는지, UI가 표시되는지, 모든 QA 항목이 통과하는지를 판정한 결과는 아니다.
 - 최종 활성 장부를 `/api/all`로 재조회해 모든 엔터티가 가상 baseline과 동일함을 확인했다. UI 클릭·렌더링 확인은 수행하지 않았다.
 - 기존 장부는 교체 전 SHA-256 일치 백업을 만들었다. 기존 데이터는 활성 장부에서 제거되었으며 백업에 남아 있다. Drive 파일이나 외부 데이터는 삭제하지 않았다.
-- 앱 저장소: `C:\Users\parkj\Desktop\Project\01 in progress\CAIH_회계장부_2026\의료인공지능센터_지출장부_2026.xlsx`
-- 기존 장부 백업: `C:\Users\parkj\Desktop\Project\01 in progress\CAIH_회계장부_2026\app\backup\QA_ORIGINAL_QA26JANSEP_V1\original_ledger.xlsx`
-- 기존 설정 백업: `C:\Users\parkj\Desktop\Project\01 in progress\CAIH_회계장부_2026\app\backup\QA_ORIGINAL_QA26JANSEP_V1\original.env`
+- 앱 저장소: `<home>\CAIH_회계장부_2026\의료인공지능센터_지출장부_2026.xlsx`
+- 기존 장부 백업: `<home>\CAIH_회계장부_2026\app\backup\QA_ORIGINAL_QA26JANSEP_V1\original_ledger.xlsx`
+- 기존 설정 백업: `<home>\CAIH_회계장부_2026\app\backup\QA_ORIGINAL_QA26JANSEP_V1\original.env`
 - 기존 장부 SHA-256: `699bb9da0ead83649e32824ef8f1da73f342c58ee984d012d949b40797a3c7b8`
 - 설치된 가상 장부 SHA-256: `8fabdc865602bf5aa35d9b8f878cc66da700f43e80d7cf15b383345b44912100`
 

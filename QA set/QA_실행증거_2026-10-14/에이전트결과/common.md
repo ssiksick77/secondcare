@@ -13,7 +13,7 @@
 | 스크린샷 | `<QA루트>\shots\common_*.png` |
 | 초기화 시점 | 시작 시 `--reset`. C-10 전(수식 주입 전)과 C-11 전(수식 제거)에 다시 `--reset`. 그 밖의 항목은 재원을 나눠 사용(C-02·C-12·C-14·C-15: QA10, C-04: QA09, C-05: QA08, C-07: QA07/QA06, C-08: QA05, C-09: QA04, C-10: QA03, C-13: QA01) |
 
-<QA루트> = `C:\Users\parkj\AppData\Local\Temp\claude\c--Users-parkj-Desktop-Project-01-in-progress\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa`
+<QA루트> = `<home>\AppData\Local\Temp\claude\c--Users-parkj-Desktop-Project-01-in-progress\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa`
 
 AI API와 실제 구글 드라이브는 호출하지 않았다. 증빙 항목은 파일 없이 `/entry`만 만들었다. 원본 프로젝트 폴더는 읽기만 했다.
 

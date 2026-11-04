@@ -1,1 +1,0 @@
-../../../.claude/agents/impeccable-asset-producer.md

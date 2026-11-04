@@ -28,3 +28,9 @@ app/.impeccable/cache/
 .claude/session-base.txt
 app/tray.log
 deploy/.env
+# 개발 전용 (하네스·진행 기록·디자인 도구 상태): 저장소에 올리지 않음 (2026-11-04, 사용자)
+CLAUDE.md
+progress.md
+ideas.md
+.claude/
+app/.impeccable/

@@ -2358,7 +2358,7 @@
   "invalid_submitted": 0,
   "warning_submitted": 0,
   "baseline_sha256": "8fabdc865602bf5aa35d9b8f878cc66da700f43e80d7cf15b383345b44912100",
-  "target_path": "C:\\Users\\parkj\\Desktop\\Project\\01 in progress\\CAIH_회계장부_2026\\의료인공지능센터_지출장부_2026.xlsx",
+  "target_path": "<home>\\CAIH_회계장부_2026\\의료인공지능센터_지출장부_2026.xlsx",
   "original_sha256": "699bb9da0ead83649e32824ef8f1da73f342c58ee984d012d949b40797a3c7b8",
   "source_sha256": {
     "store.py": "d42877f6a27e9c1e72839e102acfcd01567efe2d744e85e55df6e4f76451bc97",

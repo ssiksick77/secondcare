@@ -3,7 +3,7 @@ stopped 14176
 
 cell before: N38 31000
 cell after: =1000*2 f
-up: http://127.0.0.1:8811 pid=26020 ledger=C:\Users\parkj\AppData\Local\Temp\claude\c--Users-parkj-Desktop-Project-01-in-progress\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa\inst_common\ledger_common.xlsx
+up: http://127.0.0.1:8811 pid=26020 ledger=<home>\AppData\Local\Temp\claude\<session>\18367f8b-184a-424d-99ad-8ce7d7ee1121\scratchpad\qa\inst_common\ledger_common.xlsx
 
 meta formula_count: 1 ['집행내역!N38']
 exec row 38: [('2026-QA03-001', 0)]

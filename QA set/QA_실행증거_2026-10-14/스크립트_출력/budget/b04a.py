@@ -1,7 +1,7 @@
 from h import *
 import json,re
 from playwright.sync_api import sync_playwright
-e=json.load(open(r'C:\Users\parkj\Desktop\Project\01 in progress\CAIH_회계장부_2026\QA set\expected_totals.json',encoding='utf-8'))
+e=json.load(open(r'<home>\CAIH_회계장부_2026\QA set\expected_totals.json',encoding='utf-8'))
 with sync_playwright() as p:
     b=p.chromium.launch(); pg=b.new_page(viewport={'width':1500,'height':1000}); pg.goto(B); pg.wait_for_timeout(1200)
     print('years',[o.inner_text() for o in pg.query_selector_all('#dash-year option')])

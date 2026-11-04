@@ -1,1 +1,0 @@
-../../../.claude/agents/impeccable-documenter.md
