@@ -58,9 +58,16 @@ SHEET_RATT = "신청첨부"
 SHEET_META = "메타"  # 숨김 시트: 키/값 (연도별 신청번호 최고값 등)
 
 BUDGET_ITEMS = [
-    "내부인건비(공통)", "외부인건비(공통)", "연구시설.장비비", "연구활동비",
+    "내부인건비(공통)", "외부인건비(공통)", "연구시설.장비비", "연구활동비", "연구혁신비",
     "연구재료비", "연구수당", "위탁연구개발비", "국제공동연구개발비", "연구개발부담비", "간접비(공통)", "발생이자",
-]  # 국제공동연구개발비·연구개발부담비는 2026-10-14 추가: 이전 장부의 예산변동에는 _ensure_structure 가 맨 끝 열로 붙인다
+]  # 국제공동연구개발비·연구개발부담비는 2026-10-14 추가, 연구혁신비는 2026-11-05 추가: 이전 장부의 예산변동에는 _ensure_structure 가 맨 끝 열로 붙인다
+BUDGET_ITEMS_FROM = {"연구혁신비": "2027"}  # 이 연도부터 쓰는 예산목 (직접비 신설). 그 전 연도 장부에서는 화면·입력에서 뺀다 (열은 그대로)
+
+
+def budget_items(year: str | None = None) -> list[str]:
+    """그 연도 장부에서 쓰는 예산목 (year 가 없으면 현재 장부)."""
+    y = year or ledger_year()
+    return [i for i in BUDGET_ITEMS if y >= BUDGET_ITEMS_FROM.get(i, "")]
 PAY_METHODS = ["연구비카드", "계좌이체", "연구자선지출", "공금통장", "적립금", "기타"]
 REQ_STATUS = ["대기", "집행완료", "취소"]
 BUDGET_ROUNDS = ["이월", "당초"]  # 그 외에는 1,2,3... 숫자 회차
@@ -1051,7 +1058,7 @@ def _derive(data: dict, meta: dict) -> dict:
         "labor_status": LABOR_STATUS,
         "dep_types": DEP_TYPES,
         "dep_status": DEP_STATUS,
-        "budget_items": BUDGET_ITEMS,
+        "budget_items": budget_items(),
         "fund_types": FUND_TYPES,
         "memo_kinds": MEMO_KINDS,
         "fund_type_pool": FUND_TYPE_POOL,
@@ -1843,8 +1850,8 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
             raise ValueError("재원은 필수입니다.")
         if not str(rec.get("예산목") or "").strip():
             raise ValueError("예산목을 고르세요.")
-        if rec.get("예산목") not in BUDGET_ITEMS:
-            raise ValueError(f"예산목 '{rec.get('예산목') or ''}' 은 목록에 없습니다. 가능한 값: {', '.join(BUDGET_ITEMS)}")
+        if rec.get("예산목") not in budget_items():
+            raise ValueError(f"예산목 '{rec.get('예산목') or ''}' 은 목록에 없습니다. 가능한 값: {', '.join(budget_items())}")
         if not _to_date(rec.get("원인발생일")):
             raise ValueError("원인발생일은 필수입니다.")
         if _to_num(rec.get("금액")) == 0:

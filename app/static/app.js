@@ -2322,6 +2322,7 @@ const VOUCHER_GROUPS = [
   ["국제공동연구개발비", ["국제공동연구개발비"]],
   ["연구개발부담비", ["연구개발부담비"]],
   ["연구활동비", ["연구활동비"]],
+  ["연구혁신비", ["연구혁신비"]],  // 2027 부터 (meta.budget_items 에 없는 연도에는 줄을 빼서 9줄)
   ["연구수당", ["연구수당"]],
   ["간접비", ["간접비(공통)"]],
 ];
@@ -2362,7 +2363,7 @@ function voucherFund(r) {
     return { rows: [{ label: "공금 잔액", own: true, cur, after, before: after + cur }], own: true, before: after + cur, cur, after, pool: true };
   }
   const bal = i => budgetUpTo(fund, i, r["원인발생일"]) - execs.filter(x => x["예산목"] === i).reduce((a, x) => a + (x["금액"] || 0), 0);
-  const rows = VOUCHER_GROUPS.map(([label, items]) => {
+  const rows = VOUCHER_GROUPS.filter(([, items]) => items.some(i => DATA.meta.budget_items.includes(i))).map(([label, items]) => {
     const own = items.includes(r["예산목"]), cur = own ? (r["금액"] || 0) : 0, after = items.reduce((a, i) => a + bal(i), 0);
     return { label, own, cur, after, before: after + cur };
   });
