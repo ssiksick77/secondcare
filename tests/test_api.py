@@ -488,6 +488,7 @@ def main() -> int:
             ck("연도: 2027 생성 후 전환", s == 200 and r["year"] == "2027" and "2027" in r["years"], (s, r))
             s, r = sv.call("GET", "/api/all", cookie=ck_)
             ck("연도: 새 장부는 재원 복사·집행 비움", len(r["funds"]) == n_funds and not r["exec"] and n_exec > 0 and r["meta"]["year"] == "2027", (len(r["funds"]), len(r["exec"]), r["meta"].get("year")))
+            ck("연도: 2027 장부에는 연구혁신비 (연구활동비 다음)", "연구혁신비" in r["meta"]["budget_items"] and r["meta"]["budget_items"].index("연구혁신비") == r["meta"]["budget_items"].index("연구활동비") + 1, r["meta"]["budget_items"])
             want = [s for s in r0["salary"] if s["종료월"] >= "2027-01"]
             ck("연도: 2027 에 걸친 기준급여만 복사", len(r["salary"]) == len(want) and not r["labor"], (len(r["salary"]), len(want), len(r["labor"])))
             s, r = sv.call("POST", "/api/year", {"year": "2027", "create": True}, cookie=ck_)
@@ -497,6 +498,9 @@ def main() -> int:
             s, r = sv.call("POST", "/api/year", {"year": r0["meta"]["year"]}, cookie=ck_)
             s, r = sv.call("GET", "/api/all", cookie=ck_)
             ck("연도: 원래 연도로 복귀", s == 200 and len(r["exec"]) == n_exec, len(r.get("exec", [])))
+            ck("연도: 2026 장부에는 연구혁신비 없음", "연구혁신비" not in r["meta"]["budget_items"], r["meta"]["budget_items"])
+            s, r = sv.call("POST", "/api/exec", {"재원": "QA01", "예산목": "연구혁신비", "원인발생일": "2026-03-02", "거래처": "검사", "금액": 1000, "적요": "검사"}, cookie=ck_)
+            ck("연도: 2026 에 연구혁신비 집행 → 400", s == 400, (s, r))
             # 옛 스키마의 연도 파일(열이 빠짐)로 전환해도 읽힌다: 전환 때 빠진 열을 덧붙인다 (2026-11-03 회귀)
             import sqlite3
             p27 = sv.store_env["LEDGER_DB"][:-len(".sqlite")] + "_2027.sqlite"  # db.year_path: 연도가 없는 이름은 _YYYY 를 붙임
