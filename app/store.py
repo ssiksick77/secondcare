@@ -598,7 +598,7 @@ def exec_req_link(rec: dict) -> str:
 
 def _backup():
     """저장 직전 상태를 app/backup 에 복사. SQLite 는 커밋된 상태를 백업 API 로 복사 (쓰기 중인 트랜잭션은 제외)."""
-    BACKUP_DIR.mkdir(exist_ok=True)
+    BACKUP_DIR.resolve().mkdir(parents=True, exist_ok=True)  # Docker: backup 은 /data/backup 으로 가는 링크, 대상이 없으면 만든다
     stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     dst = BACKUP_DIR / f"{DATA_PATH.stem}_{stamp}{DATA_PATH.suffix}"
     if USE_DB:
