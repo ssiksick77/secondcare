@@ -343,7 +343,7 @@ function renderList(kind) {
   const sort = SORT[kind] || (defKey ? { k: defKey, dir: -1 } : null);
   if (sort) {
     const col = cols.find(c => c.k === sort.k);
-    const val = r => col?.calc ? col.calc(r) : r[sort.k];
+    const val = r => col?.sortVal ? col.sortVal(r) : col?.calc ? col.calc(r) : r[sort.k];
     rows.sort((a, b) => { const va = val(a), vb = val(b); const c = (typeof va === "number" && typeof vb === "number") ? va - vb : String(va ?? "").localeCompare(String(vb ?? ""), "ko"); return (c || (a._row - b._row)) * sort.dir; });
   }
   const table = $(`#${kind}-table`);
@@ -742,6 +742,7 @@ function openForm(kind, row, preset, opts = {}) {
     const id = "f-" + f.k;
     const lab = `${esc(f.label || f.k)}${f.req === true ? ' <span class="req" aria-hidden="true">*</span>' : ""}`;
     let input;
+    if (f.type === "head") return `<div class="wide fld-head">${lab}</div>`;  // 구역 제목 (입력 없음, 2026-11-06)
     if (f.type === "check") return `<label class="${f.cls || ""} chk" for="${id}" data-dep="${esc(f.dep || "")}"><input id="${id}" name="${esc(f.k)}" type="checkbox"${v === true || v === "Y" ? " checked" : ""}> ${lab}</label>`;
     if (f.type === "ro") input = `<input id="${id}" name="${esc(f.k)}" type="text" value="${esc(v || "(자동)")}" readonly tabindex="-1">`;
     else if (f.type === "select" && f.groups) input = `<select id="${id}" name="${esc(f.k)}"><option value="">(선택)</option>${(v && !f.opts.includes(v)) ? `<option value="${esc(v)}" selected>${esc(v)} (목록 외)</option>` : ""}${Object.entries(f.groups).map(([g, names]) => `<optgroup label="${esc(g)}">${names.map(o => `<option value="${esc(o)}"${o === v ? " selected" : ""}>${esc(o)}</option>`).join("")}</optgroup>`).join("")}</select>`;
