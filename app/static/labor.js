@@ -215,7 +215,7 @@ function renderLaborRate() {
   const head = `<thead><tr><th>이름</th>${months.map((m, i) => `<th class="num${i === 0 ? " amt" : ""}">${i + 1}월</th>`).join("")}</tr></thead>`;
   const body = people.map(p => `<tr><td>${esc(p["이름"])}</td>${months.map((m, i) => {
     const rows = DATA.labor.filter(r => r["이름"] === p["이름"] && r["귀속월"] === m && r["계상률"]);
-    const sum = rows.reduce((a, r) => a + Number(r["계상률"]), 0);
+    const sum = Math.round(rows.reduce((a, r) => a + Number(r["계상률"]), 0) * 100) / 100;
     const cls = rows.length ? (sum > 100 ? " over" : " ok") : " none";
     return `<td class="num cell${cls}${i === 0 ? " amt" : ""}" data-name="${esc(p["이름"])}" data-month="${m}" tabindex="0" role="button" aria-label="${esc(`${p["이름"]} ${i + 1}월 내역, ${rows.length ? sum + "%" : "계상률 없음"}`)}" title="${esc(p["이름"])} ${m} · 클릭하여 내역 보기">${rows.length ? `${sum}%` : '<span class="muted">—</span>'}</td>`;
   }).join("")}</tr>`).join("");

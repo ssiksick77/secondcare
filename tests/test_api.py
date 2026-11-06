@@ -301,6 +301,8 @@ def main() -> int:
         ck("지급 계상률: 100 초과 → 400", s == 400, (s, r))
         s, r = sv.call("POST", "/api/labor", {"이름": "검사기타", "귀속월": "2026-03", "지급월": "2026-03", "지급처": "QA01", "금액": 1000, "계상률": 40})
         ck("지급 계상률: 40 저장", s == 200 and float(r.get("계상률") or 0) == 40, (s, r))
+        s, r2 = sv.call("PUT", f"/api/labor/{r['_row']}", {"rec": {**{k: v for k, v in r.items() if not k.startswith("_")}, "계상률": "33.337"}})
+        ck("지급 계상률: 소수 둘째 자리로 반올림", s == 200 and float(r2.get("계상률") or 0) == 33.34, (s, r2))
         lb_row = r.get("_row")
         s, r = sv.call("POST", f"/api/labor/{lb_row}/action", {"action": "confirm", "pay_date": "2026-03-25"})
         s, r = sv.call("GET", "/api/all")
