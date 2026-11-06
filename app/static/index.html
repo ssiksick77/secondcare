@@ -49,6 +49,7 @@
     <li><button role="tab" id="ltab-ledger" aria-controls="lpanel-ledger" aria-selected="false">지급 원장</button></li>
     <li><button role="tab" id="ltab-people" aria-controls="lpanel-people" aria-selected="false">인원</button></li>
     <li><button role="tab" id="ltab-payee" aria-controls="lpanel-payee" aria-selected="false">지급처</button></li>
+    <li><button role="tab" id="ltab-rate" aria-controls="lpanel-rate" aria-selected="false">계상률 관리</button></li>
   </ul>
   <label class="tabs-year">연도 <select id="labor-year"></select></label>
 </nav>
@@ -84,6 +85,13 @@
     </div>
     <p class="toolbar-note defs plan-legend"><span class="lg ok">소요 일치</span> <span class="lg short">부족</span> <span class="lg over">초과</span> <span class="lg none">미배정</span> <span class="lg off">재직 아님</span> <span class="lg done">확정 포함</span> · 칸을 클릭하면 그 달 배분을 편집합니다.</p>
     <div class="table-wrap"><table class="grid plan" id="labor-plan"></table></div>
+  </section>
+
+  <!-- 인건비: 계상률 관리 -->
+  <section id="lpanel-rate" role="tabpanel" aria-labelledby="ltab-rate" hidden>
+    <h2 style="margin-top:0">인원별 계상률 <span class="muted" style="font-weight:400">(귀속월 기준)</span></h2>
+    <p class="toolbar-note defs">칸 = 그 달 지급 건의 계상률 합, 작은 글자 = 지급처별 계상률. 합이 100%를 넘으면 붉게 표시합니다. 계상률은 [지급 추가]·지급 건 수정에서 입력합니다.</p>
+    <div class="table-wrap"><table class="grid plan" id="labor-rate"></table></div>
   </section>
 
   <!-- 인건비: 지급 원장 -->
