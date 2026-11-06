@@ -1,8 +1,8 @@
-/* 집행내역 편집 모드 (팝업 격자) — 엑셀처럼 셀 단위로 고치고 [저장]으로 한 번에 반영 */
+/* 편집 모드 (팝업 격자) — 집행내역·지급 원장을 엑셀처럼 셀 단위로 고치고 [저장]으로 한 번에 반영 */
 "use strict";
 
 // 시트 열 순서 그대로 (거래번호·상태·증빙 열은 읽기 전용)
-const EDIT_COLS = [
+const EDIT_COLS_EXEC = [
   { k: "거래번호", ro: true, w: 120 }, { k: "상태", ro: true, w: 56, calc: r => STATUS_LABEL[execStatusOf(r)] || "" },
   { k: "원인발생일", t: "date", w: 104, req: true }, { k: "지급청구일", t: "date", w: 104 }, { k: "지출완료일", t: "date", w: 104 }, { k: "결의일", t: "date", w: 104 },
   { k: "재원", t: "select", opts: () => fundOptions(), w: 90, req: true }, { k: "예산목", t: "select", opts: () => DATA.meta.budget_items, w: 120, req: true },
@@ -10,14 +10,28 @@ const EDIT_COLS = [
   { k: "거래처", w: 110 }, { k: "적요", w: 200 }, { k: "금액", t: "num", w: 100, req: true }, { k: "사용자", w: 80 },
   { k: "태그", t: "select", opts: () => DATA.tags.length ? DATA.tags.map(t => t["태그명"]) : null, w: 90 }, { k: "관리번호", w: 110 }, { k: "비고", w: 160 },
 ];
-const EDIT_LOCKED = ["재원", "예산목", "금액", "거래처", "원인발생일"];
+// 종류별 설정: 열, 잠긴 행의 잠긴 열, 저장 API, 정렬, 새 행 기본값, 오류 메시지의 행 표지 (2026-11-06 지급 원장 추가)
+const EDIT_KINDS = {
+  exec: { title: "집행내역 편집 모드", cols: EDIT_COLS_EXEC, locked: ["재원", "예산목", "금액", "거래처", "원인발생일"], api: "/api/exec/batch",
+    sort: (a, b) => (b["원인발생일"] || "").localeCompare(a["원인발생일"] || "") || b._row - a._row, isLocked: r => !!execOrigin(r)?.locked,
+    defaults: () => ({ 재원: FILTERS.exec?.["재원"] || "" }), tagOf: r => r["거래번호"] },
+  labor: { title: "지급 원장 편집 모드", api: "/api/labor/batch",
+    cols: [{ k: "지급월", t: "month", w: 90, req: true }, { k: "귀속월", t: "month", w: 90, req: true }, { k: "이름", t: "select", opts: () => peopleNames(), w: 100, req: true },
+      { k: "지급처", t: "select", opts: () => payeeOptions(), w: 110, req: true }, { k: "금액", t: "num", w: 110, req: true }, { k: "계상률", t: "num", w: 70 },
+      { k: "상태", ro: true, w: 56 }, { k: "지급일", ro: true, w: 100 }, { k: "연결거래번호", ro: true, w: 150 }, { k: "비고", w: 200 }],
+    locked: ["지급월", "귀속월", "이름", "지급처", "금액", "계상률", "비고"], sort: (a, b) => (b["지급월"] || "").localeCompare(a["지급월"] || "") || b._row - a._row,
+    isLocked: r => r["상태"] === "확정", defaults: () => ({ 지급월: curMonth(), 귀속월: curMonth(), 지급처: FILTERS.labor?.["지급처"] || "", 이름: FILTERS.labor?.["이름"] || "" }),
+    tagOf: r => `${r["지급월"]} ${r["이름"]}` },
+};
 function execStatusOf(r) { if (r["결의일"]) return "결의"; if (r["지출완료일"]) return "완료"; if (r["지급청구일"]) return r["상태"] === "보완" ? "보완" : "청구"; return "발생"; }
 
-const ED = { rows: [], undo: [], focus: null, anchor: null, editing: null, open: false, op: null };
+const ED = { kind: "exec", k: EDIT_KINDS.exec, cols: EDIT_KINDS.exec.cols, first: 0, last: 0, rows: [], undo: [], focus: null, anchor: null, editing: null, open: false, op: null };
 
-function openEditMode() {
-  const src = filtered("exec").slice().sort((a, b) => (b["원인발생일"] || "").localeCompare(a["원인발생일"] || "") || b._row - a._row);
-  ED.rows = src.map(r => ({ _row: r._row, orig: r, cur: { ...r }, isNew: false, del: false, locked: !!execOrigin(r)?.locked, err: null, bad: null }));
+function openEditMode(kind = "exec") {
+  ED.kind = kind; ED.k = EDIT_KINDS[kind]; ED.cols = ED.k.cols; ED.first = ED.cols.findIndex(c => !c.ro); ED.last = ED.cols.length - 1;
+  $("#edit-title").textContent = ED.k.title;
+  const src = filtered(kind).slice().sort(ED.k.sort);
+  ED.rows = src.map(r => ({ _row: r._row, orig: r, cur: { ...r }, isNew: false, del: false, locked: ED.k.isLocked(r), err: null, bad: null }));
   ED.rows.push(newEditRow());
   ED.undo = []; ED.op = null; ED.focus = null; ED.anchor = null; ED.editing = null; ED.open = true;
   $("#edit-note").textContent = `${src.length}건 (현재 필터 기준). 더블클릭·Enter·글자 입력으로 편집, Tab/방향키 이동, Ctrl+V 로 엑셀 붙여넣기, Ctrl+D 위 칸 채우기, Ctrl+Z 되돌리기, Ctrl+S 저장. 맨 아래 빈 행에 입력하면 새 행이 됩니다.`;
@@ -26,22 +40,20 @@ function openEditMode() {
   focusCell(0, 2);
 }
 function newEditRow() {
-  const cur = Object.fromEntries(EDIT_COLS.map(c => [c.k, ""]));
-  cur["원인발생일"] = ""; cur["재원"] = FILTERS.exec?.["재원"] || "";
+  const cur = { ...Object.fromEntries(ED.cols.map(c => [c.k, ""])), ...ED.k.defaults() };
   return { _row: null, orig: null, cur, isNew: true, del: false, locked: false, err: null, bad: null, blank: true };
 }
-const EDIT_FIRST = EDIT_COLS.findIndex(c => !c.ro), EDIT_LAST = EDIT_COLS.length - 1;  // Tab 줄바꿈 기준 열
-const isEditable = (row, c) => !c.ro && !row.del && !(row.locked && EDIT_LOCKED.includes(c.k));
+const isEditable = (row, c) => !c.ro && !row.del && !(row.locked && ED.k.locked.includes(c.k));
 function cellVal(row, c) { return c.calc ? c.calc(row.cur) : row.cur[c.k]; }
 function fmtCell(row, c) { const v = cellVal(row, c); if (v == null || v === "") return ""; return c.t === "num" ? fmt(v) : String(v); }
 function isChanged(row, k) { return !row.isNew && row.orig && String(row.orig[k] ?? "") !== String(row.cur[k] ?? ""); }
 
 function editRowHtml(row, ri) {
-  return `<tr data-ri="${ri}" class="${row.del ? "del" : ""}${row.isNew && !row.blank ? " new" : ""}${row.err ? " err" : ""}"${row.err ? ` title="${esc(row.err)}"` : ""}><td class="sel"><input type="checkbox" data-sel="${ri}" ${row.del ? "checked" : ""} ${row.blank ? "disabled" : ""} aria-label="이 행 삭제 표시"></td>${EDIT_COLS.map((c, ci) => { const bad = row.bad?.[ci]; return `<td data-ri="${ri}" data-ci="${ci}" tabindex="-1" class="${c.t === "num" ? "num" : ""}${isEditable(row, c) ? "" : " ro"}${isChanged(row, c.k) ? " chg" : ""}${bad ? " bad" : ""}"${bad ? ` title="${esc(bad)}"` : ""}>${esc(fmtCell(row, c))}</td>`; }).join("")}</tr>`;
+  return `<tr data-ri="${ri}" class="${row.del ? "del" : ""}${row.isNew && !row.blank ? " new" : ""}${row.err ? " err" : ""}"${row.err ? ` title="${esc(row.err)}"` : ""}><td class="sel"><input type="checkbox" data-sel="${ri}" ${row.del ? "checked" : ""} ${row.blank ? "disabled" : ""} aria-label="이 행 삭제 표시"></td>${ED.cols.map((c, ci) => { const bad = row.bad?.[ci]; return `<td data-ri="${ri}" data-ci="${ci}" tabindex="-1" class="${c.t === "num" ? "num" : ""}${isEditable(row, c) ? "" : " ro"}${isChanged(row, c.k) ? " chg" : ""}${bad ? " bad" : ""}"${bad ? ` title="${esc(bad)}"` : ""}>${esc(fmtCell(row, c))}</td>`; }).join("")}</tr>`;
 }
 function renderEditGrid() {
   const live = ED.rows.filter(r => !r.blank), allDel = live.length > 0 && live.every(r => r.del);
-  const head = `<thead><tr><th class="sel"><label><input type="checkbox" id="edit-all" aria-label="모든 행 삭제 표시"${allDel ? " checked" : ""}>삭제</label></th>${EDIT_COLS.map(c => `<th style="width:${c.w}px"${c.t === "num" ? ' class="num"' : ""}>${esc(c.k)}${c.req ? ' <span class="req">*</span>' : ""}</th>`).join("")}</tr></thead>`;
+  const head = `<thead><tr><th class="sel"><label><input type="checkbox" id="edit-all" aria-label="모든 행 삭제 표시"${allDel ? " checked" : ""}>삭제</label></th>${ED.cols.map(c => `<th style="width:${c.w}px"${c.t === "num" ? ' class="num"' : ""}>${esc(c.k)}${c.req ? ' <span class="req">*</span>' : ""}</th>`).join("")}</tr></thead>`;
   $("#edit-grid").innerHTML = head + `<tbody>${ED.rows.map(editRowHtml).join("")}</tbody>`;
   updateEditCount();
 }
@@ -52,13 +64,13 @@ function updateEditRow(ri) {
   if (tr) tr.outerHTML = editRowHtml(row, ri); else $("#edit-grid tbody").insertAdjacentHTML("beforeend", editRowHtml(row, ri));
 }
 function updateEditCount() {
-  const n = ED.rows.filter(r => r.del && !r.blank).length, m = ED.rows.filter(r => !r.isNew && !r.del && EDIT_COLS.some(c => isChanged(r, c.k))).length, a = ED.rows.filter(r => r.isNew && !r.blank && !r.del).length;
+  const n = ED.rows.filter(r => r.del && !r.blank).length, m = ED.rows.filter(r => !r.isNew && !r.del && ED.cols.some(c => isChanged(r, c.k))).length, a = ED.rows.filter(r => r.isNew && !r.blank && !r.del).length;
   $("#edit-count").textContent = (m || a || n) ? `수정 ${m} · 추가 ${a} · 삭제 ${n}` : "변경 없음";
   $("#edit-save").disabled = !(m || a || n);
 }
 function cellEl(ri, ci) { return $(`#edit-grid td[data-ri="${ri}"][data-ci="${ci}"]`); }
 function focusCell(ri, ci, extend = false) {
-  ri = Math.max(0, Math.min(ED.rows.length - 1, ri)); ci = Math.max(0, Math.min(EDIT_COLS.length - 1, ci));
+  ri = Math.max(0, Math.min(ED.rows.length - 1, ri)); ci = Math.max(0, Math.min(ED.cols.length - 1, ci));
   if (!extend || !ED.anchor) ED.anchor = [ri, ci];
   ED.focus = [ri, ci];
   $$("#edit-grid td.cur, #edit-grid td.rng").forEach(td => td.classList.remove("cur", "rng"));
@@ -69,8 +81,8 @@ function focusCell(ri, ci, extend = false) {
 function rangeBounds() { const [a, f] = [ED.anchor || ED.focus, ED.focus]; return [Math.min(a[0], f[0]), Math.max(a[0], f[0]), Math.min(a[1], f[1]), Math.max(a[1], f[1])]; }
 // Tab 이동: 끝 열에서 다음 행 첫 편집 열로, 첫 편집 열에서 이전 행 끝 열로. 격자 끝을 넘으면 null (격자 밖으로)
 function tabTarget(ri, ci, back) {
-  if (!back) { if (ci < EDIT_LAST) return [ri, Math.max(ci + 1, EDIT_FIRST)]; return ri < ED.rows.length - 1 ? [ri + 1, EDIT_FIRST] : null; }
-  if (ci > EDIT_FIRST) return [ri, ci - 1]; return ri > 0 ? [ri - 1, EDIT_LAST] : null;
+  if (!back) { if (ci < ED.last) return [ri, Math.max(ci + 1, ED.first)]; return ri < ED.rows.length - 1 ? [ri + 1, ED.first] : null; }
+  if (ci > ED.first) return [ri, ci - 1]; return ri > 0 ? [ri - 1, ED.last] : null;
 }
 function leaveGrid(back) {
   if (back) { $("#edit-all")?.focus(); return; }
@@ -94,10 +106,10 @@ function endOp() {
 // 모든 값이 빈 새 행은 다시 빈 행으로, 맨 아래 빈 행은 정확히 하나만. 반환: 행 구성이 바뀌었는지
 function normalizeBlankRows() {
   let changed = false;
-  const defFund = FILTERS.exec?.["재원"] || "";
+  const defs = ED.k.defaults();
   ED.rows.forEach(r => {
     if (!r.isNew || r.blank) return;
-    if (EDIT_COLS.every(c => c.ro || r.cur[c.k] === "" || r.cur[c.k] == null || (c.k === "재원" && r.cur[c.k] === defFund))) { r.blank = true; r.del = false; r.err = null; r.bad = null; changed = true; }
+    if (ED.cols.every(c => c.ro || r.cur[c.k] === "" || r.cur[c.k] == null || r.cur[c.k] === defs[c.k])) { r.blank = true; r.del = false; r.err = null; r.bad = null; changed = true; }
   });
   while (ED.rows.length > 1 && ED.rows[ED.rows.length - 1].blank && ED.rows[ED.rows.length - 2].blank) { ED.rows.pop(); changed = true; }
   if (!ED.rows.length || !ED.rows[ED.rows.length - 1].blank) { ED.rows.push(newEditRow()); changed = true; }
@@ -111,7 +123,7 @@ function undoEdit() {
   op.rows.forEach((s, ri) => { Object.assign(ED.rows[ri], { cur: { ...s.cur }, isNew: s.isNew, blank: s.blank, del: s.del, bad: s.bad, err: null }); });
   normalizeBlankRows();
   renderEditGrid();
-  const f = op.focus || [0, EDIT_FIRST]; focusCell(f[0], f[1]);
+  const f = op.focus || [0, ED.first]; focusCell(f[0], f[1]);
 }
 
 // ---------- 값 해석 ----------
@@ -140,13 +152,14 @@ function parseAmount(raw) {
 function parseCell(c, raw) {
   if (c.t === "num") return parseAmount(raw);
   if (c.t === "date") { const v = normDate(raw); return v === null ? { err: "날짜 형식이 아닙니다 (YYYY-MM-DD)" } : { v }; }
+  if (c.t === "month") { const v = String(raw ?? "").trim().replace(/[./]/g, "-").replace(/^(\d{4})-(\d)$/, "$1-0$2"); return v !== "" && !/^\d{4}-(0[1-9]|1[0-2])$/.test(v) ? { err: "월 형식이 아닙니다 (YYYY-MM)" } : { v }; }
   return { v: String(raw ?? "").trim() };
 }
 
 // ---------- 값 설정 (현재 작업에 스냅샷 기록 + 빈 행 자동 추가) ----------
 // 반환: { ok: true, changed } | { ok: false, why: "locked" | "format", msg }
 function setCell(ri, ci, val, { quiet = false } = {}) {
-  const row = ED.rows[ri], c = EDIT_COLS[ci]; if (!row || !c) return { ok: false, why: "locked" };
+  const row = ED.rows[ri], c = ED.cols[ci]; if (!row || !c) return { ok: false, why: "locked" };
   if (!isEditable(row, c)) return { ok: false, why: "locked" };
   const p = parseCell(c, val);
   if (p.err) { if (!quiet) showAlert(`${c.k}: ${p.err}`, "warn"); return { ok: false, why: "format", msg: p.err }; }
@@ -161,13 +174,13 @@ function markBad(ri, ci, msg) { const row = ED.rows[ri]; snapRow(ri); row.bad = 
 
 // ---------- 셀 편집기 ----------
 function startEdit(ri, ci, initial) {
-  const row = ED.rows[ri], c = EDIT_COLS[ci]; if (!isEditable(row, c)) return;
+  const row = ED.rows[ri], c = ED.cols[ci]; if (!isEditable(row, c)) return;
   if (ED.editing) commitEdit();
   const td = cellEl(ri, ci); const cur = row.cur[c.k] ?? "";
   let inp;
   const opts = c.t === "select" ? c.opts() : null;
   if (opts) { inp = document.createElement("select"); inp.innerHTML = `<option value="">(없음)</option>` + opts.map(o => `<option value="${esc(o)}"${o === cur ? " selected" : ""}>${esc(o)}</option>`).join("") + (cur && !opts.includes(cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (목록 외)</option>` : ""); }
-  else { inp = document.createElement("input"); inp.type = c.t === "date" ? "date" : "text"; inp.value = initial != null ? initial : (c.t === "num" ? (cur === "" ? "" : String(cur)) : String(cur)); if (c.t === "num") inp.inputMode = "numeric"; }
+  else { inp = document.createElement("input"); inp.type = c.t === "date" ? "date" : c.t === "month" ? "month" : "text"; inp.value = initial != null ? initial : (c.t === "num" ? (cur === "" ? "" : String(cur)) : String(cur)); if (c.t === "num") inp.inputMode = "numeric"; }
   inp.className = "cell-input"; inp.setAttribute("aria-label", c.k); td.textContent = ""; td.appendChild(inp); td.classList.add("editing");
   ED.editing = { ri, ci, inp };
   inp.focus(); if (inp.select && initial == null && c.t !== "date") inp.select();
@@ -248,14 +261,14 @@ function clearRange() {
 function fillDown() {
   const [r0, r1, c0, c1] = rangeBounds();
   beginOp();
-  for (let c = c0; c <= c1; c++) { const src = r0 > 0 && r0 === r1 ? ED.rows[r0 - 1].cur[EDIT_COLS[c].k] : ED.rows[r0].cur[EDIT_COLS[c].k]; const start = r0 === r1 ? r0 : r0 + 1; for (let r = start; r <= r1; r++) setCell(r, c, src ?? "", { quiet: true }); }
+  for (let c = c0; c <= c1; c++) { const src = r0 > 0 && r0 === r1 ? ED.rows[r0 - 1].cur[ED.cols[c].k] : ED.rows[r0].cur[ED.cols[c].k]; const start = r0 === r1 ? r0 : r0 + 1; for (let r = start; r <= r1; r++) setCell(r, c, src ?? "", { quiet: true }); }
   endOp();
   renderEditGrid(); focusCell(ED.focus[0], ED.focus[1], true);
 }
 function copyRange(e) {
   const [r0, r1, c0, c1] = rangeBounds(); const lines = [];
   const q = v => /[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;  // 엑셀과 같은 따옴표 규칙
-  for (let r = r0; r <= r1; r++) { const cells = []; for (let c = c0; c <= c1; c++) { const v = ED.rows[r].cur[EDIT_COLS[c].k]; cells.push(q(v == null ? "" : String(v))); } lines.push(cells.join("\t")); }
+  for (let r = r0; r <= r1; r++) { const cells = []; for (let c = c0; c <= c1; c++) { const v = ED.rows[r].cur[ED.cols[c].k]; cells.push(q(v == null ? "" : String(v))); } lines.push(cells.join("\t")); }
   const text = lines.join("\n");
   try { navigator.clipboard.writeText(text); e.preventDefault(); showAlert(`${lines.length}행 복사`, "ok"); } catch { }
 }
@@ -288,8 +301,8 @@ $("#edit-grid").addEventListener("paste", e => {
   grid.forEach((cells, dr) => {
     const r = ri + dr; while (ED.rows.length <= r) ED.rows.push(newEditRow());
     cells.forEach((v, dc) => {
-      const c = ci + dc; if (c >= EDIT_COLS.length) return;
-      const row = ED.rows[r], col = EDIT_COLS[c];
+      const c = ci + dc; if (c >= ED.cols.length) return;
+      const row = ED.rows[r], col = ED.cols[c];
       const res = setCell(r, c, v, { quiet: true });
       if (res.ok) return;
       const t = String(v).trim();
@@ -300,7 +313,7 @@ $("#edit-grid").addEventListener("paste", e => {
   });
   endOp();
   renderEditGrid(); ED.anchor = [ri, ci];
-  focusCell(Math.min(ED.rows.length - 1, ri + grid.length - 1), Math.min(EDIT_COLS.length - 1, ci + Math.max(...grid.map(l => l.length)) - 1), true);
+  focusCell(Math.min(ED.rows.length - 1, ri + grid.length - 1), Math.min(ED.cols.length - 1, ci + Math.max(...grid.map(l => l.length)) - 1), true);
   const parts = [`${grid.length}행 붙여넣기`];
   if (bad.length) parts.push(`형식 오류 ${bad.length}칸 건너뜀 — ${bad.slice(0, 3).join(", ")}${bad.length > 3 ? ` 외 ${bad.length - 3}칸` : ""}`);
   if (locked) parts.push(`잠긴 칸 ${locked}개 건너뜀`);
@@ -313,9 +326,9 @@ function editChanges() {
   ED.rows.forEach(row => {
     if (row.blank) return;
     if (row.isNew) { if (!row.del) creates.push({ ...row.cur }); return; }
-    if (row.del) { deletes.push({ row: row._row, expect: expectOf("exec", row.orig) }); return; }
-    const rec = {}; EDIT_COLS.forEach(c => { if (!c.ro && isChanged(row, c.k)) rec[c.k] = row.cur[c.k]; });
-    if (Object.keys(rec).length) updates.push({ row: row._row, rec, expect: expectOf("exec", row.orig) });
+    if (row.del) { deletes.push({ row: row._row, expect: expectOf(ED.kind, row.orig) }); return; }
+    const rec = {}; ED.cols.forEach(c => { if (!c.ro && isChanged(row, c.k)) rec[c.k] = row.cur[c.k]; });
+    if (Object.keys(rec).length) updates.push({ row: row._row, rec, expect: expectOf(ED.kind, row.orig) });
   });
   return { updates, creates, deletes };
 }
@@ -324,19 +337,19 @@ $("#edit-save").addEventListener("click", async () => {
   const ch = editChanges();
   // 클라이언트 필수 검사
   let firstBad = null;
-  ED.rows.forEach((row, ri) => { row.err = null; if (row.blank || row.del || (!row.isNew && !EDIT_COLS.some(c => isChanged(row, c.k)))) return; const miss = EDIT_COLS.filter(c => c.req && (row.cur[c.k] === "" || row.cur[c.k] == null)); if (miss.length) { row.err = `입력 필요: ${miss.map(c => c.k).join(", ")}`; firstBad = firstBad ?? ri; } });
+  ED.rows.forEach((row, ri) => { row.err = null; if (row.blank || row.del || (!row.isNew && !ED.cols.some(c => isChanged(row, c.k)))) return; const miss = ED.cols.filter(c => c.req && (row.cur[c.k] === "" || row.cur[c.k] == null)); if (miss.length) { row.err = `입력 필요: ${miss.map(c => c.k).join(", ")}`; firstBad = firstBad ?? ri; } });
   if (firstBad != null) { renderEditGrid(); focusCell(firstBad, 2); showAlert(ED.rows[firstBad].err, "warn"); return; }
   if (!(ch.updates.length || ch.creates.length || ch.deletes.length)) { showAlert("변경이 없습니다.", "warn"); return; }
   if (ch.deletes.length && !await confirmDlg({ title: "편집 내용 저장", body: `수정 ${ch.updates.length}건 · 추가 ${ch.creates.length}건 · 삭제 ${ch.deletes.length}건을 한 번에 저장합니다. 삭제는 되돌리기로 복구할 수 있습니다.`, verb: "저장", danger: true })) return;
   const btn = $("#edit-save"); btn.disabled = true; btn.textContent = "저장 중…";
   try {
-    const res = await api("POST", "/api/exec/batch", ch);
+    const res = await api("POST", ED.k.api, ch);
     $("#dlg-edit").close(); ED.open = false;
     showAlert(`저장했습니다. 수정 ${res.updated} · 추가 ${res.created.length} · 삭제 ${res.deleted}`, "ok", { undo: true });
     await load();
   } catch (err) {
-    const m = /^(행 (\S+)|새 행 (\d+)):\s*/.exec(err.message);
-    if (m) { const ri = m[2] ? ED.rows.findIndex(r => r.orig && r.orig["거래번호"] === m[2]) : (() => { let n = 0; return ED.rows.findIndex(r => r.isNew && !r.blank && !r.del && ++n === +m[3]); })(); if (ri >= 0) { ED.rows[ri].err = err.message; renderEditGrid(); focusCell(ri, 2); } }
+    const m = /^(행 (.+?)|새 행 (\d+)):\s*/.exec(err.message);
+    if (m) { const ri = m[2] ? ED.rows.findIndex(r => r.orig && ED.k.tagOf(r.orig) === m[2]) : (() => { let n = 0; return ED.rows.findIndex(r => r.isNew && !r.blank && !r.del && ++n === +m[3]); })(); if (ri >= 0) { ED.rows[ri].err = err.message; renderEditGrid(); focusCell(ri, 2); } }
     showAlert("저장 실패: " + err.message + " (아무것도 저장되지 않았습니다)", "error");
   } finally { btn.disabled = false; btn.textContent = "저장"; updateEditCount(); }
 });
@@ -350,4 +363,4 @@ $("#edit-close").addEventListener("click", closeEditMode);
 $("#dlg-edit").addEventListener("cancel", e => { e.preventDefault(); closeEditMode(); });
 $("#edit-add").addEventListener("click", () => { const last = ED.rows.length - 1; focusCell(last, 2); startEdit(last, 2); });
 $("#edit-del").addEventListener("click", () => { if (!ED.focus) return; const [r0, r1] = rangeBounds(); const f = [...ED.focus]; toggleDel(Array.from({ length: r1 - r0 + 1 }, (_, i) => r0 + i)); focusCell(f[0], f[1]); });
-document.addEventListener("click", e => { if (e.target.closest("#btn-edit-mode")) openEditMode(); });
+document.addEventListener("click", e => { const b = e.target.closest("[data-edit-mode]"); if (b) openEditMode(b.dataset.editMode); });

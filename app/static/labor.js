@@ -5,7 +5,7 @@
 Object.assign(IDENT, { people: ["이름"], salary: ["이름", "시작월"], payee: ["지급처코드"], labor: ["지급월", "귀속월", "이름", "지급처"], ladj: ["월", "이름", "금액"] });
 FILTERS.labor = {}; FILTERS.people = {}; FILTERS.salary = {};  // salary 이름 = 인원 목록에서 고른 사람 (비면 기준급여 목록도 비움)
 Object.assign(COLS, {
-  labor: [{ k: "지급월" }, { k: "귀속월" }, { k: "이름" }, { k: "지급처" }, { k: "지급처명", calc: r => payeeName(r["지급처"]), wrap: true }, { k: "금액", t: "num", amt: true }, { k: "계상률", html: r => r["계상률"] === "" || r["계상률"] == null ? "" : `${r["계상률"]}%` },
+  labor: [{ k: "지급월" }, { k: "귀속월" }, { k: "이름" }, { k: "지급처" }, { k: "지급처명", calc: r => payeeName(r["지급처"]), wrap: true }, { k: "금액", t: "num", amt: true }, { k: "계상률", html: r => !r["계상률"] ? "" : `${r["계상률"]}%` },
     { k: "상태", t: "badge" }, { k: "지급일", t: "date" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
   people: [{ k: "이름", html: r => `${esc(r["이름"])}${r["숨김"] === "Y" ? ' <span class="muted">(숨김)</span>' : ""}` }, { k: "인건비구분", label: "구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
     { k: "이월선급", t: "num", amt: true, title: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", wrap: true }],
@@ -214,7 +214,7 @@ function renderLaborRate() {
   const people = DATA.people.filter(p => DATA.labor.some(r => r["이름"] === p["이름"] && r["귀속월"].startsWith(y)));
   const head = `<thead><tr><th>이름</th>${months.map((m, i) => `<th class="num${i === 0 ? " amt" : ""}">${i + 1}월</th>`).join("")}</tr></thead>`;
   const body = people.map(p => `<tr><td>${esc(p["이름"])}</td>${months.map((m, i) => {
-    const rows = DATA.labor.filter(r => r["이름"] === p["이름"] && r["귀속월"] === m && r["계상률"] !== "" && r["계상률"] != null);
+    const rows = DATA.labor.filter(r => r["이름"] === p["이름"] && r["귀속월"] === m && r["계상률"]);
     const sum = rows.reduce((a, r) => a + Number(r["계상률"]), 0);
     const cls = rows.length ? (sum > 100 ? " over" : " ok") : " none";
     return `<td class="num cell${cls}${i === 0 ? " amt" : ""}" data-name="${esc(p["이름"])}" data-month="${m}" tabindex="0" role="button" aria-label="${esc(`${p["이름"]} ${i + 1}월 내역, ${rows.length ? sum + "%" : "계상률 없음"}`)}" title="${esc(p["이름"])} ${m} · 클릭하여 내역 보기">${rows.length ? `${sum}%` : '<span class="muted">—</span>'}</td>`;
@@ -314,7 +314,7 @@ function refreshCellDialog() {
   const sal = salaryFor(CELL.name, CELL.month), sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
   $("#cell-title").textContent = `${CELL.name} · ${CELL.month} 배분`;
   $("#cell-note").textContent = (sal != null ? `기준급여 ${fmt(sal)}원 · ` : "기준급여 없음 · ") + `배분 합계 ${fmt(sum)}원` + (sal != null && sum !== sal ? ` (${sum < sal ? "부족" : "초과"} ${fmt(Math.abs(sal - sum))}원)` : "");
-  $("#cell-table").innerHTML = `<thead><tr><th>지급월</th><th>지급처</th><th class="num amt">금액</th><th class="num">계상률</th><th>상태</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r["지급월"]}</td><td>${esc(r["지급처"])} <span class="muted">${esc(payeeName(r["지급처"]))}</span></td><td class="num amt">${fmt(r["금액"])}</td><td class="num">${r["계상률"] === "" || r["계상률"] == null ? "" : `${r["계상률"]}%`}</td><td><span class="badge ${r["상태"]}">${r["상태"]}</span>${r["지급일"] ? ` <span class="muted">${esc(mmdd(r["지급일"]))}</span>` : ""}</td><td class="actions">${r["상태"] === "예정"
+  $("#cell-table").innerHTML = `<thead><tr><th>지급월</th><th>지급처</th><th class="num amt">금액</th><th class="num">계상률</th><th>상태</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r["지급월"]}</td><td>${esc(r["지급처"])} <span class="muted">${esc(payeeName(r["지급처"]))}</span></td><td class="num amt">${fmt(r["금액"])}</td><td class="num">${!r["계상률"] ? "" : `${r["계상률"]}%`}</td><td><span class="badge ${r["상태"]}">${r["상태"]}</span>${r["지급일"] ? ` <span class="muted">${esc(mmdd(r["지급일"]))}</span>` : ""}</td><td class="actions">${r["상태"] === "예정"
     ? `<button type="button" class="btn btn-sm" data-cell="edit" data-row="${r._row}">수정</button><button type="button" class="btn btn-sm" data-cell="confirm" data-row="${r._row}">확정</button>`
     : `<button type="button" class="btn btn-sm" data-cell="unconfirm" data-row="${r._row}">확정 취소</button>`}<button type="button" class="btn btn-sm btn-danger" data-cell="del" data-row="${r._row}">삭제</button></td></tr>`).join("") || '<tr><td class="empty" colspan="6">이 달 배분이 없습니다.</td></tr>'}</tbody>`;
 }
