@@ -33,7 +33,7 @@ const LABOR_FORMS = {
     { k: "이름", type: "select", opts: peopleNames(), req: true },
     { k: "귀속월", type: "month", req: true, hint: "급여가 발생한 달" }, { k: "지급월", type: "month", req: true },
     { k: "지급처", type: "select", opts: payeeOptions(), req: true, hint: "재원코드 또는 외부 지급처" },
-    { k: "금액", type: "num", req: true, focus: true }, { k: "계상률", type: "text", hint: "이 지급처(재원)에 계상한 비율 % (0~100)" }, { k: "비고", type: "text" },
+    { k: "금액", type: "num", req: true, focus: true }, { k: "계상률", type: "text" }, { k: "비고", type: "text" },
   ],
   ladj: () => [
     { k: "월", type: "month", req: true }, { k: "이름", type: "select", opts: peopleNames(), req: true },
@@ -208,7 +208,7 @@ function renderLaborPlan() {
   $("#labor-plan").closest(".table-wrap").classList.toggle("empty", !people.length);
   $("#labor-plan-note").textContent = `${y}년 귀속월 기준 · 칸 = 예정+확정 배분 합계, 작은 글자 = 기준급여 대비 · 선급/미지급은 직전 달(${through.endsWith("-00") ? "없음" : through})까지 누적 (확정 지급 − 기준급여 발생)`;
 }
-// 계상률 관리: 인원×귀속월, 칸 = 지급 건의 지급처별 계상률, 합이 100% 를 넘으면 over (2026-11-06)
+// 계상률: 인원×귀속월, 칸 = 그 달 지급 건의 계상률 합 (100% 초과 over), 클릭하면 계획표와 같은 배분 대화상자 (2026-11-06)
 function renderLaborRate() {
   const y = laborYear(), months = monthsOf(y);
   const people = DATA.people.filter(p => DATA.labor.some(r => r["이름"] === p["이름"] && r["귀속월"].startsWith(y)));
@@ -216,10 +216,10 @@ function renderLaborRate() {
   const body = people.map(p => `<tr><td>${esc(p["이름"])}</td>${months.map((m, i) => {
     const rows = DATA.labor.filter(r => r["이름"] === p["이름"] && r["귀속월"] === m && r["계상률"] !== "" && r["계상률"] != null);
     const sum = rows.reduce((a, r) => a + Number(r["계상률"]), 0);
-    const cls = rows.length ? (sum > 100 ? " cell over" : " cell ok") : "";
-    return `<td class="num${cls}${i === 0 ? " amt" : ""}" title="${esc(p["이름"])} ${m}">${rows.length ? `${sum}%` : '<span class="muted">—</span>'}<small>${esc(rows.map(r => `${r["지급처"]} ${r["계상률"]}%`).join(" · "))}</small></td>`;
+    const cls = rows.length ? (sum > 100 ? " over" : " ok") : " none";
+    return `<td class="num cell${cls}${i === 0 ? " amt" : ""}" data-name="${esc(p["이름"])}" data-month="${m}" tabindex="0" role="button" aria-label="${esc(`${p["이름"]} ${i + 1}월 내역, ${rows.length ? sum + "%" : "계상률 없음"}`)}" title="${esc(p["이름"])} ${m} · 클릭하여 내역 보기">${rows.length ? `${sum}%` : '<span class="muted">—</span>'}</td>`;
   }).join("")}</tr>`).join("");
-  $("#labor-rate").innerHTML = head + `<tbody>${body || `<tr><td class="empty" colspan="13">계상률이 입력된 지급 건이 없습니다. [지급 추가]에서 계상률을 함께 입력하세요.</td></tr>`}</tbody>`;
+  $("#labor-rate").innerHTML = head + `<tbody>${body || `<tr><td class="empty" colspan="13">계상률이 입력된 지급 건이 없습니다.</td></tr>`}</tbody>`;
   $("#labor-rate").closest(".table-wrap").classList.toggle("empty", !people.length);
 }
 function renderPrepaid() {
@@ -314,9 +314,9 @@ function refreshCellDialog() {
   const sal = salaryFor(CELL.name, CELL.month), sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
   $("#cell-title").textContent = `${CELL.name} · ${CELL.month} 배분`;
   $("#cell-note").textContent = (sal != null ? `기준급여 ${fmt(sal)}원 · ` : "기준급여 없음 · ") + `배분 합계 ${fmt(sum)}원` + (sal != null && sum !== sal ? ` (${sum < sal ? "부족" : "초과"} ${fmt(Math.abs(sal - sum))}원)` : "");
-  $("#cell-table").innerHTML = `<thead><tr><th>지급월</th><th>지급처</th><th class="num amt">금액</th><th>상태</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r["지급월"]}</td><td>${esc(r["지급처"])} <span class="muted">${esc(payeeName(r["지급처"]))}</span></td><td class="num amt">${fmt(r["금액"])}</td><td><span class="badge ${r["상태"]}">${r["상태"]}</span>${r["지급일"] ? ` <span class="muted">${esc(mmdd(r["지급일"]))}</span>` : ""}</td><td class="actions">${r["상태"] === "예정"
+  $("#cell-table").innerHTML = `<thead><tr><th>지급월</th><th>지급처</th><th class="num amt">금액</th><th class="num">계상률</th><th>상태</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r["지급월"]}</td><td>${esc(r["지급처"])} <span class="muted">${esc(payeeName(r["지급처"]))}</span></td><td class="num amt">${fmt(r["금액"])}</td><td class="num">${r["계상률"] === "" || r["계상률"] == null ? "" : `${r["계상률"]}%`}</td><td><span class="badge ${r["상태"]}">${r["상태"]}</span>${r["지급일"] ? ` <span class="muted">${esc(mmdd(r["지급일"]))}</span>` : ""}</td><td class="actions">${r["상태"] === "예정"
     ? `<button type="button" class="btn btn-sm" data-cell="edit" data-row="${r._row}">수정</button><button type="button" class="btn btn-sm" data-cell="confirm" data-row="${r._row}">확정</button>`
-    : `<button type="button" class="btn btn-sm" data-cell="unconfirm" data-row="${r._row}">확정 취소</button>`}<button type="button" class="btn btn-sm btn-danger" data-cell="del" data-row="${r._row}">삭제</button></td></tr>`).join("") || '<tr><td class="empty" colspan="5">이 달 배분이 없습니다.</td></tr>'}</tbody>`;
+    : `<button type="button" class="btn btn-sm" data-cell="unconfirm" data-row="${r._row}">확정 취소</button>`}<button type="button" class="btn btn-sm btn-danger" data-cell="del" data-row="${r._row}">삭제</button></td></tr>`).join("") || '<tr><td class="empty" colspan="6">이 달 배분이 없습니다.</td></tr>'}</tbody>`;
 }
 $("#dlg-cell").addEventListener("click", async e => {
   const b = e.target.closest("button[data-cell]"); if (!b) return;
@@ -336,14 +336,14 @@ $("#dlg-cell").addEventListener("click", async e => {
 });
 $("#dlg-cell").addEventListener("close", () => { if (!$("#dlg").open) CELL.name = null; });
 document.addEventListener("click", e => {
-  const td = e.target.closest("#labor-plan td.cell"); if (td) openCellDialog(td.dataset.name, td.dataset.month);
+  const td = e.target.closest("#labor-plan td.cell, #labor-rate td.cell"); if (td) openCellDialog(td.dataset.name, td.dataset.month);
 });
 // 키보드: 계획표 칸에서 Enter/Space → 배분 편집
-$("#labor-plan").addEventListener("keydown", e => {
+$$("#labor-plan, #labor-rate").forEach(t => t.addEventListener("keydown", e => {
   if (e.key !== "Enter" && e.key !== " ") return;
   const td = e.target.closest("td.cell"); if (!td) return;
   e.preventDefault(); openCellDialog(td.dataset.name, td.dataset.month);
-});
+}));
 
 // ---------- 기간 일괄 생성 ----------
 function openBulk() {
