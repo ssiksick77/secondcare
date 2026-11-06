@@ -17,7 +17,7 @@ const EDIT_KINDS = {
     defaults: () => ({ 재원: FILTERS.exec?.["재원"] || "" }), tagOf: r => r["거래번호"] },
   labor: { title: "지급 원장 편집 모드", api: "/api/labor/batch",
     cols: [{ k: "지급월", t: "month", w: 90, req: true }, { k: "귀속월", t: "month", w: 90, req: true }, { k: "이름", t: "select", opts: () => peopleNames(), w: 100, req: true },
-      { k: "지급처", t: "select", opts: () => payeeOptions(), w: 110, req: true }, { k: "금액", t: "num", w: 110, req: true }, { k: "계상률", t: "num", w: 70 },
+      { k: "지급처", t: "select", opts: () => payeeOptions(), w: 110, req: true }, { k: "금액", t: "num", w: 110, req: true }, { k: "계상률", t: "num", dec: 2, w: 70 },
       { k: "상태", ro: true, w: 56 }, { k: "지급일", ro: true, w: 100 }, { k: "연결거래번호", ro: true, w: 150 }, { k: "비고", w: 200 }],
     locked: ["지급월", "귀속월", "이름", "지급처", "금액", "계상률", "비고"], sort: (a, b) => (b["지급월"] || "").localeCompare(a["지급월"] || "") || b._row - a._row,
     isLocked: r => r["상태"] === "확정", defaults: () => ({ 지급월: curMonth(), 귀속월: curMonth(), 지급처: FILTERS.labor?.["지급처"] || "", 이름: FILTERS.labor?.["이름"] || "" }),
@@ -45,7 +45,7 @@ function newEditRow() {
 }
 const isEditable = (row, c) => !c.ro && !row.del && !(row.locked && ED.k.locked.includes(c.k));
 function cellVal(row, c) { return c.calc ? c.calc(row.cur) : row.cur[c.k]; }
-function fmtCell(row, c) { const v = cellVal(row, c); if (v == null || v === "") return ""; return c.t === "num" ? fmt(v) : String(v); }
+function fmtCell(row, c) { const v = cellVal(row, c); if (v == null || v === "") return ""; return c.t === "num" && !c.dec ? fmt(v) : String(v); }
 function isChanged(row, k) { return !row.isNew && row.orig && String(row.orig[k] ?? "") !== String(row.cur[k] ?? ""); }
 
 function editRowHtml(row, ri) {
@@ -150,6 +150,7 @@ function parseAmount(raw) {
   const n = Math.round(Number(t)); return { v: neg ? -n : n };
 }
 function parseCell(c, raw) {
+  if (c.t === "num" && c.dec) { const t = String(raw ?? "").trim().replace(/[,\s%]/g, ""); if (t === "") return { v: "" }; if (!/^-?\d+(\.\d+)?$/.test(t)) return { err: "숫자가 아닙니다" }; return { v: Math.round(Number(t) * 10 ** c.dec) / 10 ** c.dec }; }
   if (c.t === "num") return parseAmount(raw);
   if (c.t === "date") { const v = normDate(raw); return v === null ? { err: "날짜 형식이 아닙니다 (YYYY-MM-DD)" } : { v }; }
   if (c.t === "month") { const v = String(raw ?? "").trim().replace(/[./]/g, "-").replace(/^(\d{4})-(\d)$/, "$1-0$2"); return v !== "" && !/^\d{4}-(0[1-9]|1[0-2])$/.test(v) ? { err: "월 형식이 아닙니다 (YYYY-MM)" } : { v }; }

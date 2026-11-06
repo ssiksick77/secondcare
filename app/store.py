@@ -1928,8 +1928,11 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
             raise ValueError("지급처는 필수입니다.")
         if _to_num(rec.get("금액")) <= 0:
             raise ValueError("금액은 0보다 커야 합니다.")
-        if rec.get("계상률") not in (None, "") and not 0 <= _to_num(rec.get("계상률")) <= 100:
-            raise ValueError("계상률은 0~100 사이여야 합니다.")
+        if rec.get("계상률") not in (None, ""):  # 소수점 둘째 자리까지 (2026-11-06)
+            rate = round(_to_num(rec.get("계상률"), strict=True, label="계상률"), 2)
+            if not 0 <= rate <= 100:
+                raise ValueError("계상률은 0~100 사이여야 합니다.")
+            rec["계상률"] = int(rate) if rate.is_integer() else rate
         rec["상태"] = rec.get("상태") or "예정"
         if rec["상태"] not in LABOR_STATUS:
             raise ValueError("상태는 예정/확정 중 하나여야 합니다.")
