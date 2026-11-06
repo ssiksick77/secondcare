@@ -7,18 +7,28 @@ FILTERS.labor = {}; FILTERS.people = {}; FILTERS.salary = {};  // salary 이름 
 Object.assign(COLS, {
   labor: [{ k: "지급월" }, { k: "귀속월" }, { k: "이름" }, { k: "지급처" }, { k: "지급처명", calc: r => payeeName(r["지급처"]), wrap: true }, { k: "금액", t: "num", amt: true }, { k: "계상률", html: r => !r["계상률"] ? "" : `${r["계상률"]}%` },
     { k: "상태", t: "badge" }, { k: "지급일", t: "date" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
-  people: [{ k: "이름", html: r => `${esc(r["이름"])}${r["숨김"] === "Y" ? ' <span class="muted">(숨김)</span>' : ""}` }, { k: "인건비구분", label: "구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
+  people: [{ k: "이름", html: r => `${esc(r["이름"])}${r["숨김"] === "Y" ? ' <span class="muted">(숨김)</span>' : ""}` },
+    { k: "직위", sortVal: r => { const i = (DATA.meta.positions || []).indexOf(r["직위"]); return i < 0 ? 99 : i; } }, { k: "인건비구분", label: "구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
     { k: "이월선급", t: "num", amt: true, title: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", wrap: true }],
   salary: [{ k: "이름", hide: true }, { k: "시작월" }, { k: "종료월" }, { k: "월액", label: "월지급액", t: "num", amt: true }, { k: "비고", wrap: true }],
   payee: [{ k: "지급처코드" }, { k: "지급처명", wrap: true }, { k: "인건비예산", t: "num", amt: true }, { k: "사용건수", t: "num", calc: r => DATA.labor.filter(x => x["지급처"] === r["지급처코드"]).length }, { k: "비고", wrap: true }],
   ladj: [{ k: "월" }, { k: "이름" }, { k: "금액", t: "num", amt: true }, { k: "사유", wrap: true }],
 });
+SORT.people = { k: "직위", dir: 1 };  // 인원 기본 정렬: 직위순 (2026-11-06)
 const LABOR_TITLES = { people: "인원", salary: "기준급여", payee: "지급처", labor: "인건비 지급", ladj: "조정" };
 const LABOR_FORMS = {
-  people: () => [
-    { k: "이름", type: "text", req: true, focus: true }, { k: "인건비구분", label: "구분", type: "select", opts: DATA.meta.labor_kinds, req: true, hint: "확정 시 예산목 결정 · 기타는 외부인건비" },
-    { k: "입사일", type: "date" }, { k: "퇴사일", type: "date", hint: "예정일도 가능" },
-    { k: "이월선급", type: "num", hint: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", type: "text", cls: "wide" },
+  people: () => [  // 구역: 기본 / 인적사항 / 학력 / 회계 (2026-11-06)
+    { k: "_h1", type: "head", label: "기본" },
+    { k: "이름", type: "text", req: true, focus: true }, { k: "사번", type: "text" }, { k: "직위", type: "select", opts: DATA.meta.positions },
+    { k: "인건비구분", label: "구분", type: "select", opts: DATA.meta.labor_kinds, req: true, hint: "확정 시 예산목 결정 · 기타는 외부인건비" },
+    { k: "입사일", type: "date" }, { k: "퇴사일", type: "date", hint: "예정일도 가능" }, { k: "국가연구자번호", type: "text" },
+    { k: "_h2", type: "head", label: "인적사항" },
+    { k: "생년월일", type: "date" }, { k: "연락처", type: "text", hint: "000-0000-0000" }, { k: "내선", type: "text", hint: "숫자 4자리" },
+    { k: "주소", type: "text", cls: "wide" },
+    { k: "_h3", type: "head", label: "학력" },
+    { k: "최종학력", type: "select", opts: DATA.meta.degrees }, { k: "전공명", type: "text" }, { k: "취득년도", type: "text", hint: "YYYY" },
+    { k: "_h4", type: "head", label: "회계" },
+    { k: "이월선급", type: "num", hint: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", type: "text", cls: "mid" },
     { k: "숨김", type: "check", cls: "wide", label: "숨기기 — 인원 목록과 지급·기준급여·조정 입력의 이름 목록에서 뺍니다 (기록은 그대로)" },
   ],
   salary: () => [

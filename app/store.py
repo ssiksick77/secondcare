@@ -79,12 +79,14 @@ FUND_TYPES = ["국책", "교육", "원내", "위탁", "연구지원", "공금", 
 FUND_TYPE_DEFAULT = "국책"
 FUND_TYPE_POOL = "공금"
 # 인건비 (인건비_설계_2026-10-13.md)
-PEOPLE_COLS = ["이름", "인건비구분", "입사일", "퇴사일", "이월선급", "비고", "숨김"]  # 화면 머리글은 '구분'. 숨김 = "Y" 면 인원 목록·이름 선택 목록에서 뺌 (2026-10-20)
+PEOPLE_COLS = ["이름", "인건비구분", "입사일", "퇴사일", "이월선급", "비고", "숨김", "사번", "직위", "국가연구자번호", "생년월일", "주소", "내선", "연락처", "최종학력", "전공명", "취득년도"]  # 화면 머리글은 '구분'. 숨김 = "Y" 면 인원 목록·이름 선택 목록에서 뺌 (2026-10-20)
 SALARY_COLS = ["이름", "시작월", "종료월", "월액", "비고"]
 PAYEE_COLS = ["지급처코드", "지급처명", "인건비예산", "비고"]
 LABOR_COLS = ["지급월", "귀속월", "이름", "지급처", "금액", "계상률", "지급구분", "상태", "지급일", "연결거래번호", "비고"]  # 계상률 = 그 재원에 계상한 비율(%), 비워도 됨 (2026-11-06)
 LADJ_COLS = ["월", "이름", "금액", "사유"]
 LABOR_KINDS = ["내부", "외부", "기타"]
+POSITIONS = ["센터장", "실무위원", "선임연구원", "매니저", "연구원(연구)", "연구원(행정)"]  # 인원 직위, 목록 기본 정렬 순서 (2026-11-06)
+DEGREES = ["고졸이하", "학사과정", "학사", "석사과정", "석사", "박사과정", "박사", "POSTDOC"]
 LABOR_STATUS = ["예정", "확정"]
 LABOR_ITEM = {"내부": "내부인건비(공통)", "외부": "외부인건비(공통)", "기타": "외부인건비(공통)"}  # 기타는 외부인건비로 (2026-10-20 사용자 결정)
 MONTH_COLS = {"지급월", "귀속월", "시작월", "종료월", "월"}
@@ -155,7 +157,7 @@ LINK_RE = re.compile(r"^https?://\S", re.I)
 BUDGET_HEAD_ROW = 8
 BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGET_ITEMS + ["입금"]  # 새 장부: A~D + E~O (+ 입금: 공금 재원 전용, 맨 끝 열). 읽기·쓰기는 8행 머리글 이름 기준 (열 순서 무관)
 
-DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일", "발주일", "결제일", "수령일",
+DATE_COLS = {"생년월일", "원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일", "발주일", "결제일", "수령일",
              "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일", "작성일"}
 NUM_COLS = {"금액", "계상률", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기", "부가세액", "입금"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
@@ -484,7 +486,7 @@ def _ensure_structure(wb) -> bool:
     if _ensure_request_numbers(wb):
         changed = True
 
-    for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30, 8)),
+    for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30, 8, 12, 12, 16, 12, 30, 8, 14, 10, 16, 8)),
                                (SHEET_SALARY, SALARY_COLS, (14, 10, 10, 14, 30)),
                                (SHEET_PAYEE, PAYEE_COLS, (14, 30, 16, 30)),
                                (SHEET_LABOR, LABOR_COLS, (10, 10, 14, 16, 14, 8, 8, 8, 12, 18, 30)),
@@ -504,7 +506,7 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10), (SHEET_PEOPLE, "숨김", 8), (SHEET_LABOR, "계상률", 8), (SHEET_LABOR, "지급구분", 8), (SHEET_EVID, "실물", 6),
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10), (SHEET_PEOPLE, "숨김", 8), (SHEET_PEOPLE, "사번", 12), (SHEET_PEOPLE, "직위", 12), (SHEET_PEOPLE, "국가연구자번호", 12), (SHEET_PEOPLE, "생년월일", 12), (SHEET_PEOPLE, "주소", 12), (SHEET_PEOPLE, "내선", 12), (SHEET_PEOPLE, "연락처", 12), (SHEET_PEOPLE, "최종학력", 12), (SHEET_PEOPLE, "전공명", 12), (SHEET_PEOPLE, "취득년도", 12), (SHEET_LABOR, "계상률", 8), (SHEET_LABOR, "지급구분", 8), (SHEET_EVID, "실물", 6),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
                                    (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12), (SHEET_EXEC, "증빙완료", 8)):
         ws = wb[sheet]
@@ -1055,6 +1057,7 @@ def _derive(data: dict, meta: dict) -> dict:
     data["meta"] = {
         "authors": author_names(),  # 이메일 → 이름 (결의서 담당 칸 등)
         "labor_kinds": LABOR_KINDS,
+        "positions": POSITIONS, "degrees": DEGREES,
         "labor_status": LABOR_STATUS,
         "dep_types": DEP_TYPES,
         "dep_status": DEP_STATUS,
@@ -1903,6 +1906,19 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
         rec["숨김"] = "Y" if _yes(rec.get("숨김")) else ""  # 화면 체크(true/false)·API Y/N 모두 받음
         if rec.get("입사일") and rec.get("퇴사일") and _to_date(rec["퇴사일"]) < _to_date(rec["입사일"]):
             raise ValueError("퇴사일은 입사일 이후여야 합니다.")
+        # 인적·학력 항목 (2026-11-06): 모두 선택 입력, 형식만 검사
+        for c in ("사번", "직위", "국가연구자번호", "주소", "내선", "연락처", "최종학력", "전공명", "취득년도"):
+            rec[c] = str(rec.get(c) or "").strip()
+        if rec["직위"] and rec["직위"] not in POSITIONS:
+            raise ValueError("직위는 " + "/".join(POSITIONS) + " 중 하나여야 합니다.")
+        if rec["최종학력"] and rec["최종학력"] not in DEGREES:
+            raise ValueError("최종학력은 " + "/".join(DEGREES) + " 중 하나여야 합니다.")
+        if rec["내선"] and not re.fullmatch(r"\d{4}", rec["내선"]):
+            raise ValueError("내선은 숫자 4자리입니다 (예: 1234).")
+        if rec["연락처"] and not re.fullmatch(r"\d{3}-\d{4}-\d{4}", rec["연락처"]):
+            raise ValueError("연락처는 000-0000-0000 형식입니다.")
+        if rec["취득년도"] and not re.fullmatch(r"(19|20)\d{2}", rec["취득년도"]):
+            raise ValueError("취득년도는 연도 4자리입니다 (예: 2020).")
     elif kind == "salary":
         if not str(rec.get("이름") or "").strip():
             raise ValueError("이름은 필수입니다.")

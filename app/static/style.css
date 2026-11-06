@@ -475,6 +475,8 @@ dialog .fld input, dialog .fld select { font-size: 13px; }
 .fields label .req { color: var(--alert); margin-left: 2px; }
 .fields > .wide { grid-column: span 3; }
 .fields > .mid { grid-column: span 2; }
+.fields > .fld-head { grid-column: span 3; margin-top: 6px; padding-bottom: 2px; border-bottom: 1px solid var(--rule); font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.fields > .fld-head:first-child { margin-top: 0; }
 .fields .fld { margin: 0; gap: 3px; }
 .fields input, .fields select, .fields textarea { color: var(--ink); font-size: 13px; }
 .fields input.locked, .fields select.locked { background: var(--bg-head); color: var(--ink-2); cursor: not-allowed; }
