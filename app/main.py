@@ -332,6 +332,12 @@ def exec_batch(body: dict):
     return store.exec_batch(body.get("creates") or [], body.get("updates") or [], body.get("deletes") or [])
 
 
+@app.post("/api/labor/batch")
+def labor_batch(body: dict):
+    """지급 원장 편집 모드 일괄 저장 (전부 성공 또는 전부 취소)."""
+    return store.labor_batch(body.get("creates") or [], body.get("updates") or [], body.get("deletes") or [])
+
+
 @app.post("/api/labor/bulk")
 def labor_bulk(body: dict):
     return store.labor_bulk(body.get("rows") or [], bool(body.get("skip_dup")))

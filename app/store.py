@@ -2613,6 +2613,70 @@ def exec_batch(creates: list[dict], updates: list[dict], deletes: list[dict]) ->
         return {"updated": len(prepared_u), "created": numbers, "deleted": len(prepared_d)}
 
 
+def labor_batch(creates: list[dict], updates: list[dict], deletes: list[dict]) -> dict:
+    """지급 원장 편집 모드 일괄 저장 (exec_batch 와 같은 규칙). 확정 건은 수정·삭제 불가, 새 행은 예정.
+    오류 메시지는 '행 <지급월 이름>|새 행 N: ...' 형식."""
+    if len(creates) + len(updates) + len(deletes) == 0:
+        raise ValueError("저장할 변경이 없습니다.")
+    if len(creates) + len(updates) + len(deletes) > 2000:
+        raise ValueError("한 번에 2,000건까지만 저장할 수 있습니다.")
+    editable = [c for c in LABOR_COLS if c not in ("상태", "지급일", "연결거래번호")]
+    with _write_session() as wb:
+        ws = wb[SHEET_LABOR]
+        cur = _rows(ws, LABOR_COLS)
+        by_row = {r["_row"]: r for r in cur}
+        pool = {r["_row"]: r for r in cur}  # 중복 검사용: 수정·추가 반영 후의 행들
+        prepared_u, prepared_d, prepared_c = [], [], []
+        for u in updates:
+            ex = by_row.get(int(u.get("row", 0)))
+            if ex is None:
+                raise NotFound(f"행 {u.get('row')}: 행을 찾을 수 없습니다. 편집 모드를 닫고 새로고침하세요.")
+            tag = f"행 {ex['지급월']} {ex['이름']}"
+            try:
+                _check_expect("labor", ex, u.get("expect"))
+                if ex["상태"] == "확정":
+                    raise ValueError("확정된 지급 건은 수정할 수 없습니다. 먼저 '확정 취소'를 하세요.")
+                rec = {c: ex.get(c) for c in LABOR_COLS}
+                rec.update({c: v for c, v in (u.get("rec") or {}).items() if c in editable})
+                _validate("labor", rec)
+                _validate_labor_refs(wb, rec, [r for k, r in pool.items() if k != ex["_row"]])
+            except (ValueError, NotFound) as e:
+                raise type(e)(f"{tag}: {e}") from None
+            pool[ex["_row"]] = rec
+            prepared_u.append((ex["_row"], rec))
+        for d in deletes:
+            ex = by_row.get(int(d.get("row", 0)))
+            if ex is None:
+                raise NotFound(f"행 {d.get('row')}: 행을 찾을 수 없습니다. 편집 모드를 닫고 새로고침하세요.")
+            try:
+                _check_expect("labor", ex, d.get("expect"))
+                if ex["상태"] == "확정":
+                    raise ValueError("확정된 지급 건은 삭제할 수 없습니다. 먼저 '확정 취소'를 하세요.")
+            except (ValueError, NotFound) as e:
+                raise type(e)(f"행 {ex['지급월']} {ex['이름']}: {e}") from None
+            pool.pop(ex["_row"], None)
+            prepared_d.append(ex["_row"])
+        for i, c in enumerate(creates, 1):
+            rec = {col: "" for col in LABOR_COLS}
+            rec.update({k: v for k, v in (c or {}).items() if k in editable})
+            rec["상태"] = "예정"
+            try:
+                _validate("labor", rec)
+                _validate_labor_refs(wb, rec, list(pool.values()))
+            except ValueError as e:
+                raise ValueError(f"새 행 {i}: {e}") from None
+            pool[f"new{i}"] = rec
+            prepared_c.append(rec)
+        for row, rec in prepared_u:
+            _write_row(ws, LABOR_COLS, row, rec)
+        for rec in prepared_c:
+            _write_row(ws, LABOR_COLS, _next_row(ws), rec)
+        for row in sorted(prepared_d, reverse=True):
+            _delete_row(ws, row)
+        _save(wb)
+        return {"updated": len(prepared_u), "created": [f"{r['지급월']} {r['이름']}" for r in prepared_c], "deleted": len(prepared_d)}
+
+
 def _rename_tag(wb, old: str, new: str):
     """태그명 변경 시 집행·품의·적립금의 태그 값을 함께 바꾼다."""
     for sheet in (SHEET_EXEC, SHEET_REQ, SHEET_DEP):

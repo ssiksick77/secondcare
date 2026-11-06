@@ -313,6 +313,30 @@ def main() -> int:
         s, r = sv.call("GET", "/api/all")
         ck("인원 숨김: 다시 읽어도 Y", next(x for x in r["people"] if x["_row"] == pe_row).get("숨김") == "Y")
         sv.call("POST", f"/api/labor/{lb_row}/action", {"action": "unconfirm"})
+        # 지급 원장 편집 모드 일괄 저장 (2026-11-06): 추가 2 · 수정 1 · 삭제 1, 확정 건은 잠김, 오류면 전부 취소
+        s, r = sv.call("POST", "/api/labor/batch", {"creates": [
+            {"이름": "검사기타", "귀속월": "2026-04", "지급월": "2026-04", "지급처": "QA01", "금액": 2000, "계상률": 20},
+            {"이름": "검사기타", "귀속월": "2026-05", "지급월": "2026-05", "지급처": "QA01", "금액": 3000}]})
+        ck("지급 batch: 추가 2", s == 200 and len(r.get("created") or []) == 2, (s, r))
+        s, r = sv.call("GET", "/api/all")
+        b4 = next(x for x in r["labor"] if x["이름"] == "검사기타" and x["귀속월"] == "2026-04")
+        b5 = next(x for x in r["labor"] if x["이름"] == "검사기타" and x["귀속월"] == "2026-05")
+        s, r = sv.call("POST", "/api/labor/batch", {"updates": [{"row": b4["_row"], "rec": {"금액": 2500}, "expect": {"지급월": b4["지급월"], "귀속월": b4["귀속월"], "이름": b4["이름"], "지급처": b4["지급처"]}}],
+                                                   "deletes": [{"row": b5["_row"], "expect": {"지급월": b5["지급월"], "귀속월": b5["귀속월"], "이름": b5["이름"], "지급처": b5["지급처"]}}]})
+        ck("지급 batch: 수정 1 · 삭제 1", s == 200 and r.get("updated") == 1 and r.get("deleted") == 1, (s, r))
+        s, r = sv.call("GET", "/api/all")
+        b4 = next(x for x in r["labor"] if x["이름"] == "검사기타" and x["귀속월"] == "2026-04")
+        ck("지급 batch: 금액 2500, 5월 행 없음", int(b4["금액"]) == 2500 and not any(x["이름"] == "검사기타" and x["귀속월"] == "2026-05" for x in r["labor"]), b4)
+        s, r = sv.call("POST", "/api/labor/batch", {"creates": [{"이름": "검사기타", "귀속월": "2026-06", "지급월": "2026-06", "지급처": "QA01", "금액": 100}],
+                                                   "updates": [{"row": lb_row, "rec": {"금액": 0}}]})
+        ck("지급 batch: 한 건 오류 → 400, 행 표지", s == 400 and "행 2026-03" in str(r), (s, r))
+        s, r = sv.call("GET", "/api/all")
+        ck("지급 batch: 오류 시 추가도 취소", not any(x["이름"] == "검사기타" and x["귀속월"] == "2026-06" for x in r["labor"]))
+        sv.call("POST", f"/api/labor/{b4['_row']}/action", {"action": "confirm", "pay_date": "2026-04-25"})
+        s, r = sv.call("POST", "/api/labor/batch", {"deletes": [{"row": b4["_row"]}]})
+        ck("지급 batch: 확정 건 삭제 → 400", s == 400 and "확정" in str(r), (s, r))
+        sv.call("POST", f"/api/labor/{b4['_row']}/action", {"action": "unconfirm"})
+        sv.call("DELETE", f"/api/labor/{b4['_row']}", {})
         sv.call("DELETE", f"/api/labor/{lb_row}", {})
         s, r = sv.call("DELETE", f"/api/people/{pe_row}", {})
         ck("인원 검사 행 정리", s == 200, (s, r))
