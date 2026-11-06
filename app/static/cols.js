@@ -13,20 +13,28 @@ const COLW = {  // 열 폭(px). 폭이 없는 열(적요 등)이 남는 폭을 �
   deposit: { 적립번호: 150, 일자: 64, 거래처: 110, 구분: 60, 상태: 96, 금액: 104, 사용자: 90, 작성자: 80, 증빙번호: 130, 연결거래번호: 120, 증빙: 44, 비고: 120, _actions: 110, _flex: "적요", _min: 160 },
   budget: { 변경회차: 60, 신청일자: 64, 변경사유: 160, _num: 104, _actions: 110 },  // 숫자 열은 모두 104
   dash: { 재원: 72, 항목: 84, _num: 108, 합계: 116 },
+  // 인건비 화면 (2026-11-06): 집행·품의와 같은 열 폭·숨기기 규칙
+  labor: { 지급월: 64, 귀속월: 64, 이름: 90, 지급처: 84, 금액: 104, 계상률: 70, 상태: 80, 지급일: 64, 연결거래번호: 130, 비고: 140, _actions: 150, _flex: "지급처명", _min: 120 },
+  people: { 이름: 110, 직위: 100, 인건비구분: 56, 입사일: 90, 퇴사일: 90, 기준급여: 104, 이월선급: 104, _actions: 150, _flex: "비고", _min: 120 },
+  payee: { 지급처코드: 100, 인건비예산: 104, 사용건수: 70, 비고: 160, _actions: 110, _flex: "지급처명", _min: 140 },
+  ladj: { 월: 64, 이름: 90, 금액: 104, _actions: 110, _flex: "사유", _min: 160 },
 };
 // 숨길 수 없는 열
-const COL_FIXED = { exec: ["거래번호"], req: ["품의번호"], deposit: ["적립번호"], budget: [], dash: ["재원", "항목"] };
+const COL_FIXED = { exec: ["거래번호"], req: ["품의번호"], deposit: ["적립번호"], budget: [], dash: ["재원", "항목"], labor: ["지급월", "이름"], people: ["이름"], payee: ["지급처코드"], ladj: ["월", "이름"] };
 // 기본 숨김(스텁) 열: 옛 '상세 열'
 // 비고는 집행 표에서 아예 없음 (적요 칸의 메모 표시·툴팁, 2026-10-21)
-const COL_MINOR = { exec: ["관리번호", "세세목", "사용자"], req: [], deposit: [], budget: [], dash: [] };
+const COL_MINOR = { exec: ["관리번호", "세세목", "사용자"], req: [], deposit: [], budget: [], dash: [], labor: [], people: [], payee: [], ladj: [] };
 // 본문 폭에 따른 자동 접기 (폭 < 기준 이면 스텁). 날짜 열은 접지 않는다 (비평 P1)
 const COL_FOLD = {
   exec: [[1300, ["결제수단", "예산목 잔액"]], [1100, ["세목", "태그", "작성자"]], [900, ["재원", "증빙"]], [760, ["예산목"]]],
   req: [[1500, ["비고", "세세목", "결제수단"]], [1300, ["세목", "품의자", "작성자"]], [1100, ["태그"]], [900, ["재원", "거래처"]], [760, ["예산목"]]],
   deposit: [[1400, ["비고", "연결거래번호"]], [1100, ["사용자", "작성자", "증빙번호"]], [900, ["상태", "증빙"]]],
   budget: [], dash: [],
+  labor: [[1300, ["비고"]], [1100, ["연결거래번호", "지급일"]], [900, ["계상률", "귀속월"]]],
+  people: [[1200, ["비고"]], [1000, ["이월선급", "퇴사일"]]],
+  payee: [[1000, ["비고"]]], ladj: [],
 };
-const COL_TABLE = { exec: "#exec-table", req: "#req-table", deposit: "#deposit-table", budget: "#budget-table", dash: "#dash-table" };
+const COL_TABLE = { exec: "#exec-table", req: "#req-table", deposit: "#deposit-table", budget: "#budget-table", dash: "#dash-table", labor: "#labor-table", people: "#people-table", payee: "#payee-table", ladj: "#ladj-table" };
 const STUB_W = 10;
 
 function colPrefs(kind) { try { return JSON.parse(sessionStorage.getItem("ledger-cols-" + kind) || "{}"); } catch { return {}; } }
