@@ -315,6 +315,13 @@ def main() -> int:
         s, r = sv.call("GET", "/api/all")
         ck("인원 숨김: 다시 읽어도 Y", next(x for x in r["people"] if x["_row"] == pe_row).get("숨김") == "Y")
         sv.call("POST", f"/api/labor/{lb_row}/action", {"action": "unconfirm"})
+        # 미지급 건 (2026-11-06): 지급구분 저장, 확정 불가
+        s, r = sv.call("POST", "/api/labor", {"이름": "검사기타", "귀속월": "2026-07", "지급월": "2026-07", "지급처": "QA01", "금액": 1, "지급구분": "미지급", "계상률": 10})
+        ck("미지급: 저장", s == 200 and r.get("지급구분") == "미지급", (s, r))
+        un_row = r.get("_row")
+        s, r = sv.call("POST", f"/api/labor/{un_row}/action", {"action": "confirm", "pay_date": "2026-07-25"})
+        ck("미지급: 확정 → 400", s == 400 and "미지급" in str(r), (s, r))
+        sv.call("DELETE", f"/api/labor/{un_row}", {})
         # 지급 원장 편집 모드 일괄 저장 (2026-11-06): 추가 2 · 수정 1 · 삭제 1, 확정 건은 잠김, 오류면 전부 취소
         s, r = sv.call("POST", "/api/labor/batch", {"creates": [
             {"이름": "검사기타", "귀속월": "2026-04", "지급월": "2026-04", "지급처": "QA01", "금액": 2000, "계상률": 20},

@@ -97,6 +97,10 @@
   <!-- 인건비: 지급 원장 -->
   <section id="lpanel-ledger" role="tabpanel" aria-labelledby="ltab-ledger" hidden>
     <div class="toolbar">
+      <div class="subtabs" id="ledger-seg" role="tablist" aria-label="지급 원장 보기">
+        <button type="button" role="tab" data-sub="지급" aria-selected="true">지급</button>
+        <button type="button" role="tab" data-sub="미지급" aria-selected="false" title="내부 인원의 계상률만 기록 (금액 합계·확정 제외)">미지급</button>
+      </div>
       <label>연도 <select data-filter="year" data-kind="labor"><option value="">전체</option></select></label>
       <label>지급월 <select data-filter="month" data-kind="labor"><option value="">전체</option></select></label>
       <label>이름 <select data-filter="이름" data-kind="labor"><option value="">전체</option></select></label>
@@ -108,7 +112,8 @@
       <button type="button" class="btn" data-csv="labor" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
     </div>
-    <p class="toolbar-note" style="margin:0 0 8px">확정하면 집행내역에 건별 1행(재원 = 지급처, 예산목 = 인원의 구분: 내부 → 내부인건비, 외부·기타 → 외부인건비)이 생기고 지급 건은 잠깁니다. 수정은 확정 취소 후, 취소·삭제 시 연결 집행도 함께 지워집니다.</p>
+    <p class="toolbar-note" style="margin:0 0 8px" id="ledger-note-paid">확정하면 집행내역에 건별 1행(재원 = 지급처, 예산목 = 인원의 구분: 내부 → 내부인건비, 외부·기타 → 외부인건비)이 생기고 지급 건은 잠깁니다. 수정은 확정 취소 후, 취소·삭제 시 연결 집행도 함께 지워집니다.</p>
+    <p class="toolbar-note" style="margin:0 0 8px" id="ledger-note-unpaid" hidden>미지급 건은 내부 인원의 계상률만 기록합니다. 금액은 참고용이며 지급처별 현황·계획표·선급/미지급 합계에 들어가지 않고, 확정할 수 없습니다.</p>
     <div class="table-wrap"><table class="grid" id="labor-table"></table></div>
   </section>
 

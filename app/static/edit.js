@@ -20,7 +20,7 @@ const EDIT_KINDS = {
       { k: "지급처", t: "select", opts: () => payeeOptions(), w: 110, req: true }, { k: "금액", t: "num", w: 110, req: true }, { k: "계상률", t: "num", dec: 2, w: 70 },
       { k: "상태", ro: true, w: 56 }, { k: "지급일", ro: true, w: 100 }, { k: "연결거래번호", ro: true, w: 150 }, { k: "비고", w: 200 }],
     locked: ["지급월", "귀속월", "이름", "지급처", "금액", "계상률", "비고"], sort: (a, b) => (b["지급월"] || "").localeCompare(a["지급월"] || "") || b._row - a._row,
-    isLocked: r => r["상태"] === "확정", defaults: () => ({ 지급월: curMonth(), 귀속월: curMonth(), 지급처: FILTERS.labor?.["지급처"] || "", 이름: FILTERS.labor?.["이름"] || "" }),
+    isLocked: r => r["상태"] === "확정", defaults: () => ({ 지급월: curMonth(), 귀속월: curMonth(), 지급처: FILTERS.labor?.["지급처"] || "", 이름: FILTERS.labor?.["이름"] || "", 지급구분: FILTERS.labor?.["지급구분"] || "지급" }),
     tagOf: r => `${r["지급월"]} ${r["이름"]}` },
 };
 function execStatusOf(r) { if (r["결의일"]) return "결의"; if (r["지출완료일"]) return "완료"; if (r["지급청구일"]) return r["상태"] === "보완" ? "보완" : "청구"; return "발생"; }
