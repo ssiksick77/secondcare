@@ -5,7 +5,7 @@
 Object.assign(IDENT, { people: ["이름"], salary: ["이름", "시작월"], payee: ["지급처코드"], labor: ["지급월", "귀속월", "이름", "지급처"], ladj: ["월", "이름", "금액"] });
 FILTERS.labor = {}; FILTERS.people = {}; FILTERS.salary = {};  // salary 이름 = 인원 목록에서 고른 사람 (비면 기준급여 목록도 비움)
 Object.assign(COLS, {
-  labor: [{ k: "지급월" }, { k: "귀속월" }, { k: "이름" }, { k: "지급처" }, { k: "지급처명", calc: r => payeeName(r["지급처"]), wrap: true }, { k: "금액", t: "num", amt: true },
+  labor: [{ k: "지급월" }, { k: "귀속월" }, { k: "이름" }, { k: "지급처" }, { k: "지급처명", calc: r => payeeName(r["지급처"]), wrap: true }, { k: "금액", t: "num", amt: true }, { k: "계상률", html: r => r["계상률"] === "" || r["계상률"] == null ? "" : `${r["계상률"]}%` },
     { k: "상태", t: "badge" }, { k: "지급일", t: "date" }, { k: "연결거래번호" }, { k: "비고", wrap: true }],
   people: [{ k: "이름", html: r => `${esc(r["이름"])}${r["숨김"] === "Y" ? ' <span class="muted">(숨김)</span>' : ""}` }, { k: "인건비구분", label: "구분" }, { k: "입사일", t: "date" }, { k: "퇴사일", t: "date" }, { k: "기준급여", t: "num", calc: r => salaryFor(r["이름"], curMonth()), title: "이번 달 기준급여" },
     { k: "이월선급", t: "num", amt: true, title: "연초 이월 선급(+) / 미지급(−)" }, { k: "비고", wrap: true }],
@@ -33,7 +33,7 @@ const LABOR_FORMS = {
     { k: "이름", type: "select", opts: peopleNames(), req: true },
     { k: "귀속월", type: "month", req: true, hint: "급여가 발생한 달" }, { k: "지급월", type: "month", req: true },
     { k: "지급처", type: "select", opts: payeeOptions(), req: true, hint: "재원코드 또는 외부 지급처" },
-    { k: "금액", type: "num", req: true, focus: true }, { k: "비고", type: "text" },
+    { k: "금액", type: "num", req: true, focus: true }, { k: "계상률", type: "text", hint: "이 지급처(재원)에 계상한 비율 % (0~100)" }, { k: "비고", type: "text" },
   ],
   ladj: () => [
     { k: "월", type: "month", req: true }, { k: "이름", type: "select", opts: peopleNames(), req: true },
@@ -153,7 +153,7 @@ function fillLaborSelects() {
   $$("select[data-filter='지급처']").forEach(sel => setOptions(sel, ["", ...payees], ["전체", ...payees]));
 }
 function renderLabor() {
-  renderLaborFunds(); renderLaborPlan();
+  renderLaborFunds(); renderLaborPlan(); renderLaborRate();
   renderList("labor"); renderPeople(); renderList("payee"); renderList("ladj");
   renderPrepaid();
 }
@@ -207,6 +207,20 @@ function renderLaborPlan() {
   $("#labor-plan").innerHTML = head + `<tbody>${body || `<tr><td class="empty" colspan="18">인원이 없습니다. [인원] 탭에서 지급 대상을 먼저 등록하세요.</td></tr>`}</tbody>` + foot;
   $("#labor-plan").closest(".table-wrap").classList.toggle("empty", !people.length);
   $("#labor-plan-note").textContent = `${y}년 귀속월 기준 · 칸 = 예정+확정 배분 합계, 작은 글자 = 기준급여 대비 · 선급/미지급은 직전 달(${through.endsWith("-00") ? "없음" : through})까지 누적 (확정 지급 − 기준급여 발생)`;
+}
+// 계상률 관리: 인원×귀속월, 칸 = 지급 건의 지급처별 계상률, 합이 100% 를 넘으면 over (2026-11-06)
+function renderLaborRate() {
+  const y = laborYear(), months = monthsOf(y);
+  const people = DATA.people.filter(p => DATA.labor.some(r => r["이름"] === p["이름"] && r["귀속월"].startsWith(y)));
+  const head = `<thead><tr><th>이름</th>${months.map((m, i) => `<th class="num${i === 0 ? " amt" : ""}">${i + 1}월</th>`).join("")}</tr></thead>`;
+  const body = people.map(p => `<tr><td>${esc(p["이름"])}</td>${months.map((m, i) => {
+    const rows = DATA.labor.filter(r => r["이름"] === p["이름"] && r["귀속월"] === m && r["계상률"] !== "" && r["계상률"] != null);
+    const sum = rows.reduce((a, r) => a + Number(r["계상률"]), 0);
+    const cls = rows.length ? (sum > 100 ? " cell over" : " cell ok") : "";
+    return `<td class="num${cls}${i === 0 ? " amt" : ""}" title="${esc(p["이름"])} ${m}">${rows.length ? `${sum}%` : '<span class="muted">—</span>'}<small>${esc(rows.map(r => `${r["지급처"]} ${r["계상률"]}%`).join(" · "))}</small></td>`;
+  }).join("")}</tr>`).join("");
+  $("#labor-rate").innerHTML = head + `<tbody>${body || `<tr><td class="empty" colspan="13">계상률이 입력된 지급 건이 없습니다. [지급 추가]에서 계상률을 함께 입력하세요.</td></tr>`}</tbody>`;
+  $("#labor-rate").closest(".table-wrap").classList.toggle("empty", !people.length);
 }
 function renderPrepaid() {
   const y = laborYear(), through = closedMonth();

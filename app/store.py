@@ -82,7 +82,7 @@ FUND_TYPE_POOL = "공금"
 PEOPLE_COLS = ["이름", "인건비구분", "입사일", "퇴사일", "이월선급", "비고", "숨김"]  # 화면 머리글은 '구분'. 숨김 = "Y" 면 인원 목록·이름 선택 목록에서 뺌 (2026-10-20)
 SALARY_COLS = ["이름", "시작월", "종료월", "월액", "비고"]
 PAYEE_COLS = ["지급처코드", "지급처명", "인건비예산", "비고"]
-LABOR_COLS = ["지급월", "귀속월", "이름", "지급처", "금액", "상태", "지급일", "연결거래번호", "비고"]
+LABOR_COLS = ["지급월", "귀속월", "이름", "지급처", "금액", "계상률", "상태", "지급일", "연결거래번호", "비고"]  # 계상률 = 그 재원에 계상한 비율(%), 비워도 됨 (2026-11-06)
 LADJ_COLS = ["월", "이름", "금액", "사유"]
 LABOR_KINDS = ["내부", "외부", "기타"]
 LABOR_STATUS = ["예정", "확정"]
@@ -157,7 +157,7 @@ BUDGET_COLS = ["재원", "변경회차", "신청일자", "변경사유"] + BUDGE
 
 DATE_COLS = {"원인발생일", "지급청구일", "결의일", "지출완료일", "시작일", "종료일", "신청일자", "지출예정일", "일자", "입사일", "퇴사일", "지급일", "발주일", "결제일", "수령일",
              "신청일", "희망일", "결재일", "주문일", "배송일", "업로드일", "작성일"}
-NUM_COLS = {"금액", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기", "부가세액", "입금"} | set(BUDGET_ITEMS)
+NUM_COLS = {"금액", "계상률", "인건비예산", "월액", "이월선급", "단가", "수량", "주문금액", "결제금액", "크기", "부가세액", "입금"} | set(BUDGET_ITEMS)
 # 행 식별(동시 수정·행 밀림 감지)에 쓰는 열: 키가 없는 시트는 내용 조합
 IDENT_COLS = {
     "funds": ["재원코드"], "exec": ["거래번호"], "req": ["품의번호"], "tags": ["태그명"],
@@ -487,7 +487,7 @@ def _ensure_structure(wb) -> bool:
     for name, cols, widths in ((SHEET_PEOPLE, PEOPLE_COLS, (14, 10, 12, 12, 14, 30, 8)),
                                (SHEET_SALARY, SALARY_COLS, (14, 10, 10, 14, 30)),
                                (SHEET_PAYEE, PAYEE_COLS, (14, 30, 16, 30)),
-                               (SHEET_LABOR, LABOR_COLS, (10, 10, 14, 16, 14, 8, 12, 18, 30)),
+                               (SHEET_LABOR, LABOR_COLS, (10, 10, 14, 16, 14, 8, 8, 12, 18, 30)),
                                (SHEET_LADJ, LADJ_COLS, (10, 14, 14, 30)),
                                (SHEET_RQ, REQUEST_COLS, (14, 8, 10, 10, 12, 16, 30, 20, 12, 8, 14, 8, 12, 30,
                                                          12, 14, 14, 30, 12, 10, 12, 24, 18, 18, 30, 30, 20, 24)),
@@ -504,7 +504,7 @@ def _ensure_structure(wb) -> bool:
             ws.freeze_panes = "A2"
             changed = True
 
-    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10), (SHEET_PEOPLE, "숨김", 8), (SHEET_EVID, "실물", 6),
+    for sheet, col_name, width in ((SHEET_REQ, "상태", 10), (SHEET_DEP, "태그", 14), (SHEET_DEP, DEP_NO, 14), (SHEET_DEP, "발주일", 12), (SHEET_DEP, "결제일", 12), (SHEET_DEP, "수령일", 12), (SHEET_DEP, "상태", 8), (SHEET_FUND, "인건비예산", 16), (SHEET_FUND, "종류", 10), (SHEET_FUND, "잔액미관리", 10), (SHEET_PEOPLE, "숨김", 8), (SHEET_LABOR, "계상률", 8), (SHEET_EVID, "실물", 6),
                                    (SHEET_EXEC, "상태", 8), (SHEET_EXEC, "증빙폴더", 30), (SHEET_EXEC, "증빙목록", 30),
                                    (SHEET_EXEC, "결의일", 12), (SHEET_EXEC, "결제수단", 12), (SHEET_EXEC, "증빙완료", 8)):
         ws = wb[sheet]
@@ -1928,6 +1928,8 @@ def _validate(kind: str, rec: dict, existing: dict | None = None):
             raise ValueError("지급처는 필수입니다.")
         if _to_num(rec.get("금액")) <= 0:
             raise ValueError("금액은 0보다 커야 합니다.")
+        if rec.get("계상률") not in (None, "") and not 0 <= _to_num(rec.get("계상률")) <= 100:
+            raise ValueError("계상률은 0~100 사이여야 합니다.")
         rec["상태"] = rec.get("상태") or "예정"
         if rec["상태"] not in LABOR_STATUS:
             raise ValueError("상태는 예정/확정 중 하나여야 합니다.")
