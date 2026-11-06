@@ -108,6 +108,7 @@
       <label>상태 <select data-filter="상태" data-kind="labor"><option value="">전체</option><option>예정</option><option>확정</option></select></label>
       <label>검색 <input type="search" data-filter="q" data-kind="labor" placeholder="이름, 지급처, 비고"></label>
       <span class="toolbar-sum" id="labor-sum"></span>
+      <button type="button" class="btn" data-labor="bulk" title="인원·기간·지급처별 배분액으로 여러 달 예정 건을 한 번에 생성">기간 일괄 생성</button>
       <button type="button" class="btn" data-edit-mode="labor" title="현재 필터의 지급 건을 팝업 격자에서 엑셀처럼 한꺼번에 편집">편집 모드</button>
       <button type="button" class="btn" data-csv="labor" title="현재 필터의 목록을 CSV로 저장">CSV 저장</button>
       <button type="button" class="btn btn-primary" data-add="labor">지급 추가</button>
@@ -523,7 +524,7 @@
       <label class="fld">지급월<select id="bulk-offset"><option value="0">귀속월과 같은 달</option><option value="1">귀속월 다음 달</option></select></label>
       <label class="fld mid">비고<input type="text" id="bulk-memo"></label>
     </div>
-    <p class="lab" style="margin:10px 0 4px;font-size:12px;font-weight:600">지급처별 월 배분액</p>
+    <p class="lab" style="margin:10px 0 4px;font-size:12px;font-weight:600">지급처별 월 배분액 · 계상률(%)</p>
     <div id="bulk-rows" class="bulk-rows"></div>
     <button type="button" class="btn btn-sm" data-bulk="add">배분 행 추가</button>
     <p class="toolbar-note" id="bulk-preview" style="margin:10px 0 0"></p>

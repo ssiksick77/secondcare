@@ -682,7 +682,7 @@ table.grid.plan td.cell:focus-visible { outline: 2px solid var(--primary); outli
 .plan-legend .lg.off { background: var(--bg-head); color: var(--ink-3); }
 .plan-legend .lg.done { box-shadow: inset 0 -2px 0 var(--ok); }
 .bulk-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-.bulk-row { display: grid; grid-template-columns: 1fr 160px auto; gap: 8px; align-items: center; }
+.bulk-row { display: grid; grid-template-columns: 1fr 160px 90px auto; gap: 8px; align-items: center; }
 .bulk-row input { text-align: right; }
 
 /* ---------- 신청 화면 ---------- */

@@ -363,21 +363,24 @@ $$("#labor-plan, #labor-rate").forEach(t => t.addEventListener("keydown", e => {
 }));
 
 // ---------- 기간 일괄 생성 ----------
-function openBulk() {
-  const d = $("#dlg-bulk");
-  setOptions($("#bulk-name"), ["", ...peopleNames()], ["(선택)", ...peopleNames()]);
+const BULK = { unpaid: false };  // 지급 원장의 미지급 하위 탭에서 열면 미지급 건을 만든다 (2026-11-06)
+function openBulk(unpaid = false) {
+  const d = $("#dlg-bulk"); BULK.unpaid = unpaid;
+  const names = peopleNames(unpaid ? "내부" : null);
+  $("#bulk-title").textContent = unpaid ? "기간 일괄 생성 (미지급)" : "기간 일괄 생성";
+  setOptions($("#bulk-name"), ["", ...names], ["(선택)", ...names]);
   $("#bulk-name").value = ""; $("#bulk-from").value = curMonth(); $("#bulk-to").value = `${laborYear()}-12`; $("#bulk-memo").value = "";
   $("#bulk-rows").innerHTML = ""; addBulkRow(); updateBulkPreview();
   d.showModal(); $("#bulk-name").focus();
 }
-function addBulkRow(code = "", amt = "") {
+function addBulkRow(code = "", amt = "", rate = "") {
   const opts = payeeOptions();
   const div = document.createElement("div"); div.className = "bulk-row";
-  div.innerHTML = `<select aria-label="지급처"><option value="">(지급처)</option>${opts.map(o => `<option value="${esc(o)}"${o === code ? " selected" : ""}>${esc(o)} ${esc(payeeName(o))}</option>`).join("")}</select><input type="text" inputmode="numeric" class="num-input" placeholder="월 배분액" aria-label="월 배분액" value="${amt === "" ? "" : fmt(amt)}"><button type="button" class="btn btn-sm btn-danger" data-bulk="remove" aria-label="배분 행 삭제">삭제</button>`;
+  div.innerHTML = `<select aria-label="지급처"><option value="">(지급처)</option>${opts.map(o => `<option value="${esc(o)}"${o === code ? " selected" : ""}>${esc(o)} ${esc(payeeName(o))}</option>`).join("")}</select><input type="text" inputmode="numeric" class="num-input" placeholder="월 배분액" aria-label="월 배분액" value="${amt === "" ? "" : fmt(amt)}"><input type="text" inputmode="decimal" class="num-input" placeholder="계상률 %" aria-label="계상률 %" value="${esc(String(rate))}"><button type="button" class="btn btn-sm btn-danger" data-bulk="remove" aria-label="배분 행 삭제">삭제</button>`;
   $("#bulk-rows").appendChild(div);
 }
 function bulkRows() {
-  return $$("#bulk-rows .bulk-row").map(div => ({ code: div.querySelector("select").value, amt: (v => { const ev = evalAmount(v); return ev != null ? ev : Number(String(v).replace(/[,\s원]/g, "")) || 0; })(div.querySelector("input").value) })).filter(x => x.code || x.amt);
+  return $$("#bulk-rows .bulk-row").map(div => ({ code: div.querySelector("select").value, amt: (v => { const ev = evalAmount(v); return ev != null ? ev : Number(String(v).replace(/[,\s원]/g, "")) || 0; })(div.querySelector("input").value), rate: div.querySelectorAll("input")[1].value.trim().replace("%", "") })).filter(x => x.code || x.amt);
 }
 function updateBulkPreview() {
   const from = $("#bulk-from").value, to = $("#bulk-to").value, name = $("#bulk-name").value;
@@ -400,7 +403,7 @@ function bulkPlanRows() {
   const name = $("#bulk-name").value, from = $("#bulk-from").value, to = $("#bulk-to").value, offset = Number($("#bulk-offset").value), memo = $("#bulk-memo").value.trim();
   const rows = bulkRows(); const out = [];
   if (!name || !from || !to || from > to) return { out, dup: [] };
-  for (let m = from; m <= to && out.length < 1300; m = addMonth(m, 1)) rows.forEach(r => out.push({ 귀속월: m, 지급월: addMonth(m, offset), 이름: name, 지급처: r.code, 금액: r.amt, 비고: memo }));
+  for (let m = from; m <= to && out.length < 1300; m = addMonth(m, 1)) rows.forEach(r => out.push({ 귀속월: m, 지급월: addMonth(m, offset), 이름: name, 지급처: r.code, 금액: r.amt, 계상률: r.rate, 지급구분: BULK.unpaid ? "미지급" : "지급", 비고: memo }));
   const dup = out.filter(o => DATA.labor.some(x => x["이름"] === o.이름 && x["귀속월"] === o.귀속월 && x["지급월"] === o.지급월 && x["지급처"] === o.지급처));
   return { out, dup };
 }
@@ -439,7 +442,7 @@ async function copyPrevMonth() {
 }
 document.addEventListener("click", e => {
   const b = e.target.closest("button[data-labor]"); if (!b) return;
-  if (b.dataset.labor === "bulk") openBulk();
+  if (b.dataset.labor === "bulk") openBulk(!!b.closest("#lpanel-ledger") && unpaidMode());
   if (b.dataset.labor === "copy") copyPrevMonth();
   if (b.dataset.labor === "confirm") laborConfirm(Number(b.dataset.row));
   if (b.dataset.labor === "unconfirm") laborUnconfirm(Number(b.dataset.row));

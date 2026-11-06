@@ -322,6 +322,13 @@ def main() -> int:
         s, r = sv.call("POST", f"/api/labor/{un_row}/action", {"action": "confirm", "pay_date": "2026-07-25"})
         ck("미지급: 확정 → 400", s == 400 and "미지급" in str(r), (s, r))
         sv.call("DELETE", f"/api/labor/{un_row}", {})
+        # 기간 일괄 생성이 계상률·지급구분을 받는지 (2026-11-06)
+        s, r = sv.call("POST", "/api/labor/bulk", {"rows": [{"이름": "검사기타", "귀속월": "2026-08", "지급월": "2026-08", "지급처": "QA01", "금액": 1, "계상률": 25, "지급구분": "미지급"}]})
+        ck("일괄 생성: 계상률·미지급", s == 200 and r.get("created") == 1, (s, r))
+        s, r = sv.call("GET", "/api/all")
+        bk = next((x for x in r["labor"] if x["이름"] == "검사기타" and x["귀속월"] == "2026-08"), {})
+        ck("일괄 생성: 저장된 값", float(bk.get("계상률") or 0) == 25 and bk.get("지급구분") == "미지급", bk)
+        sv.call("DELETE", f"/api/labor/{bk.get('_row')}", {})
         # 지급 원장 편집 모드 일괄 저장 (2026-11-06): 추가 2 · 수정 1 · 삭제 1, 확정 건은 잠김, 오류면 전부 취소
         s, r = sv.call("POST", "/api/labor/batch", {"creates": [
             {"이름": "검사기타", "귀속월": "2026-04", "지급월": "2026-04", "지급처": "QA01", "금액": 2000, "계상률": 20},
