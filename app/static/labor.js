@@ -30,7 +30,8 @@ const LABOR_FORMS = {
     { k: "인건비예산", type: "num", hint: "비우면 예산 미입력 (잔액 계산 제외)" }, { k: "비고", type: "text", cls: "mid" },
   ],
   labor: () => [
-    { k: "이름", type: "select", opts: peopleNames(), req: true },
+    { k: "지급구분", type: "select", opts: ["지급", "미지급"], req: true, hint: "미지급: 내부 인원의 계상률만 기록 (금액 합계·확정 제외)" },
+    { k: "이름", type: "select", opts: peopleNames(unpaidMode() ? "내부" : null), req: true },
     { k: "귀속월", type: "month", req: true, hint: "급여가 발생한 달" }, { k: "지급월", type: "month", req: true },
     { k: "지급처", type: "select", opts: payeeOptions(), req: true, hint: "재원코드 또는 외부 지급처" },
     { k: "금액", type: "num", req: true, focus: true }, { k: "계상률", type: "text" }, { k: "비고", type: "text" },
@@ -42,7 +43,7 @@ const LABOR_FORMS = {
 };
 function laborDefaults(kind) {
   const m = curMonth();
-  if (kind === "labor") return { 귀속월: m, 지급월: m, 지급처: FILTERS.labor["지급처"] || "", 이름: FILTERS.labor["이름"] || "" };
+  if (kind === "labor") return { 귀속월: m, 지급월: m, 지급처: FILTERS.labor["지급처"] || "", 이름: FILTERS.labor["이름"] || "", 지급구분: unpaidMode() ? "미지급" : "지급" };
   if (kind === "ladj") return { 월: m };
   if (kind === "salary") return { 시작월: `${laborYear()}-01`, 종료월: `${laborYear()}-12`, 이름: FILTERS.salary["이름"] || "" };
   if (kind === "people") return { 인건비구분: "내부" };
@@ -56,7 +57,7 @@ function laborIdent(kind, r) {
   return "";
 }
 function laborLabel(kind, r) {
-  if (kind === "labor") return `${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원 (${r["상태"]})`;
+  if (kind === "labor") return `${r["지급월"]} ${r["이름"]} · ${r["지급처"]} ${fmt(r["금액"])}원 (${r["지급구분"] === "미지급" ? "미지급" : r["상태"]})`;
   if (kind === "people") return `인원 ${r["이름"]}`;
   if (kind === "salary") return `${r["이름"]} 기준급여 ${r["시작월"]}~${r["종료월"]} ${fmt(r["월액"])}원`;
   if (kind === "payee") return `지급처 ${r["지급처코드"]} ${r["지급처명"] || ""}`;
@@ -72,7 +73,10 @@ function closedMonth() { const y = laborYear(), now = new Date(); return y === S
 const monthsOf = y => Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, "0")}`);
 const addMonth = (ym, n) => { let y = +ym.slice(0, 4), m = +ym.slice(5, 7) + n; while (m > 12) { m -= 12; y++; } while (m < 1) { m += 12; y--; } return `${y}-${String(m).padStart(2, "0")}`; };
 // 이름 선택 목록: 숨긴 인원은 빼고 가나다순 (2026-10-20)
-const peopleNames = () => DATA.people.filter(p => p["숨김"] !== "Y").map(p => p["이름"]).sort((a, b) => String(a).localeCompare(String(b), "ko"));
+// 지급구분: 미지급 = 내부 인원의 계상률만 기록 (금액 합계·확정 제외). 지급 원장 하위 탭이 FILTERS.labor.지급구분 으로 가른다 (2026-11-06)
+const unpaidMode = () => FILTERS.labor["지급구분"] === "미지급";
+const paidLabor = () => DATA.labor.filter(r => r["지급구분"] !== "미지급");
+const peopleNames = (kind) => DATA.people.filter(p => p["숨김"] !== "Y" && (!kind || p["인건비구분"] === kind)).map(p => p["이름"]).sort((a, b) => String(a).localeCompare(String(b), "ko"));
 const payeeOptions = () => [...DATA.funds.map(f => f["재원코드"]), ...DATA.payee.map(p => p["지급처코드"])];
 function payeeName(code) { const f = DATA.funds.find(x => x["재원코드"] === code); if (f) return f["과제명"] || ""; const p = DATA.payee.find(x => x["지급처코드"] === code); return p ? (p["지급처명"] || "") : "(미등록)"; }
 function laborBudget(code) {
@@ -93,7 +97,7 @@ function prepaid(p, year, through) {
   monthsOf(year).filter(m => m <= through).forEach(m => { if (activeIn(p, m)) accrued += salaryFor(p["이름"], m) || 0; });
   // 발생은 직전 달(through)까지, 확정 지급·조정은 이번 달까지 → 이번 달 지급은 선급으로 잡힘
   const payThrough = year === String(new Date().getFullYear()) ? curMonth() : `${year}-12`;
-  DATA.labor.forEach(r => { if (r["이름"] === p["이름"] && r["상태"] === "확정" && r["지급월"].startsWith(year) && r["지급월"] <= payThrough) paid += r["금액"] || 0; });
+  paidLabor().forEach(r => { if (r["이름"] === p["이름"] && r["상태"] === "확정" && r["지급월"].startsWith(year) && r["지급월"] <= payThrough) paid += r["금액"] || 0; });
   DATA.ladj.forEach(r => { if (r["이름"] === p["이름"] && r["월"].startsWith(year) && r["월"] <= payThrough) adj += r["금액"] || 0; });
   return { opening: p["이월선급"] || 0, accrued, paid, adj, balance: (p["이월선급"] || 0) + paid - accrued + adj };
 }
@@ -131,6 +135,18 @@ function switchLaborTab(name) {
   try { localStorage.setItem("ledger-ltab", name); } catch { }
 }
 $$("#labor-tabs [role=tab]").forEach(b => b.addEventListener("click", () => switchLaborTab(b.id.replace("ltab-", ""))));
+// 지급 원장 하위 탭: 지급 / 미지급
+function switchLedgerSub(name) {
+  FILTERS.labor["지급구분"] = name;
+  $$("#ledger-seg [role=tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.sub === name));
+  const un = name === "미지급";
+  $("#lpanel-ledger label:has([data-filter='상태'])").hidden = un;
+  $("#lpanel-ledger [data-add=labor]").textContent = un ? "미지급 추가" : "지급 추가";
+  $("#ledger-note-paid").hidden = un; $("#ledger-note-unpaid").hidden = !un;
+  if (DATA) renderList("labor");
+}
+$$("#ledger-seg [role=tab]").forEach(b => b.addEventListener("click", () => switchLedgerSub(b.dataset.sub)));
+FILTERS.labor["지급구분"] = "지급";
 $("#btn-mode").addEventListener("click", () => setMode(document.body.classList.contains("labor-mode") ? "fund" : "labor"));
 window.addEventListener("popstate", () => setMode(pathMode(), false));
 try { const t = localStorage.getItem("ledger-ltab"); if (t && $("#ltab-" + t)) switchLaborTab(t); } catch { }
@@ -159,9 +175,9 @@ function renderLabor() {
 }
 function renderLaborFunds() {
   const y = laborYear();
-  const codes = payeeOptions().filter(c => laborBudget(c) != null || DATA.labor.some(r => r["지급처"] === c && r["지급월"].startsWith(y)));
+  const codes = payeeOptions().filter(c => laborBudget(c) != null || paidLabor().some(r => r["지급처"] === c && r["지급월"].startsWith(y)));
   const rows = codes.map(c => {
-    const mine = DATA.labor.filter(r => r["지급처"] === c && r["지급월"].startsWith(y));
+    const mine = paidLabor().filter(r => r["지급처"] === c && r["지급월"].startsWith(y));
     const done = mine.filter(r => r["상태"] === "확정").reduce((a, r) => a + (r["금액"] || 0), 0);
     const plan = mine.filter(r => r["상태"] === "예정").reduce((a, r) => a + (r["금액"] || 0), 0);
     const b = laborBudget(c);
@@ -176,12 +192,13 @@ function renderLaborFunds() {
 }
 function renderLaborPlan() {
   const y = laborYear(), months = monthsOf(y), through = closedMonth();
-  const people = DATA.people.filter(p => months.some(m => activeIn(p, m)) || DATA.labor.some(r => r["이름"] === p["이름"] && r["귀속월"].startsWith(y)));
+  // 내부 인원은 계획표에서 뺀다: 지급 없이 계상률만 관리 (2026-11-06)
+  const people = DATA.people.filter(p => p["인건비구분"] !== "내부" && (months.some(m => activeIn(p, m)) || paidLabor().some(r => r["이름"] === p["이름"] && r["귀속월"].startsWith(y))));
   const head = `<thead><tr><th>이름</th><th>구분</th>${months.map((m, i) => `<th class="num${i === 0 ? " amt" : ""}">${i + 1}월</th>`).join("")}<th class="num amt">연간 배분</th><th class="num">확정</th><th class="num">예정</th><th class="num">선급 / 미지급</th></tr></thead>`;
   const body = people.map(p => {
     let year = 0, done = 0, plan = 0;
     const cells = months.map((m, i) => {
-      const rows = DATA.labor.filter(r => r["이름"] === p["이름"] && r["귀속월"] === m);
+      const rows = paidLabor().filter(r => r["이름"] === p["이름"] && r["귀속월"] === m);
       const sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
       year += sum; done += rows.filter(r => r["상태"] === "확정").reduce((a, r) => a + r["금액"], 0); plan += rows.filter(r => r["상태"] === "예정").reduce((a, r) => a + r["금액"], 0);
       const sal = salaryFor(p["이름"], m), act = activeIn(p, m);
@@ -201,8 +218,8 @@ function renderLaborPlan() {
     const ppTxt = pp.balance > 0 ? `<span class="muted">선급</span> ${fmt(pp.balance)}` : pp.balance < 0 ? `<span class="neg">미지급</span> ${fmt(-pp.balance)}` : "-";
     return `<tr><td>${esc(p["이름"])}</td><td class="muted">${esc(p["인건비구분"])}</td>${cells}<td class="num amt">${fmt(year)}</td><td class="num">${fmt(done)}</td><td class="num">${fmt(plan)}</td><td class="num" title="${through}까지: 이월 ${fmt(pp.opening)} + 확정지급 ${fmt(pp.paid)} − 발생 ${fmt(pp.accrued)} + 조정 ${fmt(pp.adj)}">${ppTxt}</td></tr>`;
   }).join("");
-  const tot = months.map(m => DATA.labor.filter(r => r["귀속월"] === m).reduce((a, r) => a + (r["금액"] || 0), 0));
-  const all = DATA.labor.filter(r => r["귀속월"].startsWith(y));
+  const tot = months.map(m => paidLabor().filter(r => r["귀속월"] === m).reduce((a, r) => a + (r["금액"] || 0), 0));
+  const all = paidLabor().filter(r => r["귀속월"].startsWith(y));
   const foot = people.length ? `<tfoot><tr class="total"><td>합계</td><td></td>${tot.map((v, i) => `<td class="num${i === 0 ? " amt" : ""}">${fmt(v)}</td>`).join("")}<td class="num amt">${fmt(tot.reduce((a, b) => a + b, 0))}</td><td class="num">${fmt(all.filter(r => r["상태"] === "확정").reduce((a, r) => a + r["금액"], 0))}</td><td class="num">${fmt(all.filter(r => r["상태"] === "예정").reduce((a, r) => a + r["금액"], 0))}</td><td></td></tr></tfoot>` : "";
   $("#labor-plan").innerHTML = head + `<tbody>${body || `<tr><td class="empty" colspan="18">인원이 없습니다. [인원] 탭에서 지급 대상을 먼저 등록하세요.</td></tr>`}</tbody>` + foot;
   $("#labor-plan").closest(".table-wrap").classList.toggle("empty", !people.length);
@@ -310,12 +327,12 @@ function openCellDialog(name, month) {
 function refreshCellDialog() {
   if (!CELL.name || !$("#dlg-cell").open && !document.body.contains($("#dlg-cell"))) return;
   if (!CELL.name) return;
-  const rows = DATA.labor.filter(r => r["이름"] === CELL.name && r["귀속월"] === CELL.month);
-  const sal = salaryFor(CELL.name, CELL.month), sum = rows.reduce((a, r) => a + (r["금액"] || 0), 0);
+  const rows = DATA.labor.filter(r => r["이름"] === CELL.name && r["귀속월"] === CELL.month);  // 미지급 건도 보이되 합계에서는 뺌
+  const sal = salaryFor(CELL.name, CELL.month), sum = rows.filter(r => r["지급구분"] !== "미지급").reduce((a, r) => a + (r["금액"] || 0), 0);
   $("#cell-title").textContent = `${CELL.name} · ${CELL.month} 배분`;
   $("#cell-note").textContent = (sal != null ? `기준급여 ${fmt(sal)}원 · ` : "기준급여 없음 · ") + `배분 합계 ${fmt(sum)}원` + (sal != null && sum !== sal ? ` (${sum < sal ? "부족" : "초과"} ${fmt(Math.abs(sal - sum))}원)` : "");
-  $("#cell-table").innerHTML = `<thead><tr><th>지급월</th><th>지급처</th><th class="num amt">금액</th><th class="num">계상률</th><th>상태</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r["지급월"]}</td><td>${esc(r["지급처"])} <span class="muted">${esc(payeeName(r["지급처"]))}</span></td><td class="num amt">${fmt(r["금액"])}</td><td class="num">${!r["계상률"] ? "" : `${r["계상률"]}%`}</td><td><span class="badge ${r["상태"]}">${r["상태"]}</span>${r["지급일"] ? ` <span class="muted">${esc(mmdd(r["지급일"]))}</span>` : ""}</td><td class="actions">${r["상태"] === "예정"
-    ? `<button type="button" class="btn btn-sm" data-cell="edit" data-row="${r._row}">수정</button><button type="button" class="btn btn-sm" data-cell="confirm" data-row="${r._row}">확정</button>`
+  $("#cell-table").innerHTML = `<thead><tr><th>지급월</th><th>지급처</th><th class="num amt">금액</th><th class="num">계상률</th><th>상태</th><th class="actions">작업</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r["지급월"]}</td><td>${esc(r["지급처"])} <span class="muted">${esc(payeeName(r["지급처"]))}</span></td><td class="num amt">${fmt(r["금액"])}</td><td class="num">${!r["계상률"] ? "" : `${r["계상률"]}%`}</td><td>${r["지급구분"] === "미지급" ? '<span class="badge">미지급</span>' : `<span class="badge ${r["상태"]}">${r["상태"]}</span>`}${r["지급일"] ? ` <span class="muted">${esc(mmdd(r["지급일"]))}</span>` : ""}</td><td class="actions">${r["상태"] === "예정"
+    ? `<button type="button" class="btn btn-sm" data-cell="edit" data-row="${r._row}">수정</button>${r["지급구분"] === "미지급" ? "" : `<button type="button" class="btn btn-sm" data-cell="confirm" data-row="${r._row}">확정</button>`}`
     : `<button type="button" class="btn btn-sm" data-cell="unconfirm" data-row="${r._row}">확정 취소</button>`}<button type="button" class="btn btn-sm btn-danger" data-cell="del" data-row="${r._row}">삭제</button></td></tr>`).join("") || '<tr><td class="empty" colspan="6">이 달 배분이 없습니다.</td></tr>'}</tbody>`;
 }
 $("#dlg-cell").addEventListener("click", async e => {
@@ -414,7 +431,7 @@ async function copyPrevMonth() {
   if (!target) return;
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(target)) return showAlert("월 형식은 YYYY-MM 입니다.", "warn");
   const src = addMonth(target, -1);
-  const rows = DATA.labor.filter(r => r["귀속월"] === src).map(r => ({ 귀속월: target, 지급월: addMonth(r["지급월"], 1), 이름: r["이름"], 지급처: r["지급처"], 금액: r["금액"], 비고: r["비고"] || "" }));
+  const rows = paidLabor().filter(r => r["귀속월"] === src).map(r => ({ 귀속월: target, 지급월: addMonth(r["지급월"], 1), 이름: r["이름"], 지급처: r["지급처"], 금액: r["금액"], 비고: r["비고"] || "" }));
   if (!rows.length) return showAlert(`${src} 귀속 지급 건이 없어 복사할 것이 없습니다.`, "warn");
   if (!await confirmDlg({ title: "전월 계획 복사", body: `${src} → ${target}: ${rows.length}건을 예정으로 복사합니다.`, verb: `${rows.length}건 복사` })) return;
   try { const res = await api("POST", "/api/labor/bulk", { rows, skip_dup: true }); showAlert(`${res.created}건 복사` + (res.skipped.length ? `, 이미 있는 ${res.skipped.length}건 건너뜀` : ""), "ok"); await load(); }

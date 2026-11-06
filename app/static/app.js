@@ -295,6 +295,7 @@ function filtered(kind) {
     if (f["구분"] && r["구분"] !== f["구분"]) return false;
     if (f["이름"] && r["이름"] !== f["이름"]) return false;
     if (f["지급처"] && r["지급처"] !== f["지급처"]) return false;
+    if (f["지급구분"] && (r["지급구분"] || "지급") !== f["지급구분"]) return false;
     if (f["신청인"] && r["신청인"] !== f["신청인"]) return false;
     if (f["관련과제"] && r["관련과제"] !== f["관련과제"]) return false;
     if (f["구매처"] && r["구매처"] !== f["구매처"]) return false;
@@ -394,7 +395,7 @@ function renderList(kind) {
     const extra = kind === "req" && r["상태"] === "대기"
       ? `<button type="button" class="btn btn-sm" data-act="toexec" data-row="${r._row}" title="이 품의를 집행으로 전환">집행</button>`
       : kind === "people" ? `<button type="button" class="btn btn-sm btn-ghost" data-labor="hide" data-row="${r._row}" aria-label="${esc(r["이름"])} ${r["숨김"] === "Y" ? "다시 보이기" : "숨기기"}">${r["숨김"] === "Y" ? "보이기" : "숨기기"}</button>`
-      : kind === "labor" ? (r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
+      : kind === "labor" ? (r["지급구분"] === "미지급" ? "" : r["상태"] === "예정" ? `<button type="button" class="btn btn-sm" data-labor="confirm" data-row="${r._row}" title="지급일을 입력하고 확정 (집행내역에 기록)">확정</button>` : `<button type="button" class="btn btn-sm" data-labor="unconfirm" data-row="${r._row}" title="예정으로 되돌리고 연결 집행 삭제">확정 취소</button>`) : "";
     const editBtn = kind === "labor" && r["상태"] === "확정" ? "" : `<button type="button" class="btn btn-sm" data-act="edit" data-kind="${kind}" data-row="${r._row}">수정</button>`;
     return `<tr data-kind="${kind}" data-row="${r._row}" class="${kind === XD.kind && XD.row === r._row ? "selected" : ""}${kind === "exec" && r["상태"] === "보완" ? " row-alert" : ""}${kind === "exec" && r["상태"] === "취소" ? " row-cancel" : ""}${SEL_HOOK[kind]?.rowCls(r) || ""}">${SEL_HOOK[kind]?.cell(r) || ""}${kind === "exec" && DELMODE ? `<td class="sel">${execOrigin(r)?.locked ? '<input type="checkbox" disabled title="인건비·적립금과 연결된 집행은 원본 화면에서 처리">' : `<input type="checkbox" data-selrow="${r._row}" aria-label="${esc(r["거래번호"])} 삭제 선택"${DELSEL.has(r._row) ? " checked" : ""}>`}</td>` : ""}${tds}${noAct ? "" : `<td class="actions">${extra}${editBtn}<button type="button" class="btn btn-sm btn-danger" data-act="del" data-kind="${kind}" data-row="${r._row}">삭제</button></td>`}</tr>`;
   }
@@ -553,7 +554,7 @@ function renderDashboard() {
   // 예정액 = 대기 품의 + 인건비 예정 지급 (2026-10-21 사용자). 인건비 예정 건은 확정 시 생기는 집행과 같은 재원(지급처)·예산목(인건비구분)으로 집계
   const LABOR_ITEM = { 내부: "내부인건비(공통)", 외부: "외부인건비(공통)", 기타: "외부인건비(공통)" };
   const kindOf = {}; (DATA.people || []).forEach(p => kindOf[p["이름"]] = p["인건비구분"]);
-  const laborPlan = (DATA.labor || []).filter(r => r["상태"] === "예정" && inScope(r["지급처"])).map(r => ({ 재원: r["지급처"], 예산목: LABOR_ITEM[kindOf[r["이름"]] || "내부"], 금액: r["금액"] }));
+  const laborPlan = (DATA.labor || []).filter(r => r["상태"] === "예정" && r["지급구분"] !== "미지급" && inScope(r["지급처"])).map(r => ({ 재원: r["지급처"], 예산목: LABOR_ITEM[kindOf[r["이름"]] || "내부"], 금액: r["금액"] }));
   const addPlan = r => { if (isUntrackedFund(r["재원"])) return; if (pm[r["재원"]]) { pm[r["재원"]].p += r["금액"] || 0; return; } !isExcludedExec(r) && m[r["재원"]]?.[r["예산목"]] && (m[r["재원"]][r["예산목"]].p += r["금액"] || 0); };
   reqs.forEach(addPlan); laborPlan.forEach(addPlan);
   const add = (t, c) => { t.b += c.b; t.s += c.s; t.sm += c.sm; t.sa += c.sa; t.p += c.p; };
