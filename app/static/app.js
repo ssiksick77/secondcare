@@ -369,7 +369,7 @@ function renderList(kind) {
   function cellHtml(c, r, v) {
       if (c.html) return `<td class="${c.wrap ? "wrap" : ""}${minorCls(c)}">${c.html(r)}</td>`;  // 열 정의가 직접 그리는 칸 (값은 함수 안에서 esc)
       if (c.t === "num") return `<td class="num${c.amt ? " amt" : ""}${minorCls(c)}${typeof v === "number" && v < 0 ? " neg" : ""}">${v == null ? '<span class="muted" title="예산 미입력">-</span>' : fmt(v)}</td>`;
-      if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit" || kind === "request")) {
+      if (c.t === "date" && v && (kind === "exec" || kind === "req" || kind === "budget" || kind === "deposit" || kind === "request" || kind === "labor")) {
         return `<td title="${esc(v)}">${esc(mmdd(v))}</td>`;  // 내역 탭은 MM/DD, 전체 날짜는 툴팁
       }
       if (c.t === "badge" && kind === "deposit" && c.k === "상태") {
