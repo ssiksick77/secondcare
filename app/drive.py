@@ -1,7 +1,7 @@
 """Google Drive 연동 (OAuth, drive.file 범위).
 
-- 자격증명: app/google_client_secret.json (Google Cloud 콘솔에서 받은 데스크톱 앱 OAuth 클라이언트)
-- 토큰: app/google_token.json (최초 1회 브라우저 로그인 후 저장, 자동 갱신)
+- 자격증명: 로그인과 같은 OAuth 클라이언트 (auth.client_path(): LEDGER_OAUTH_CLIENT, 기본 app/google_client_secret.json)
+- 토큰: app/google_token.json (설정의 '드라이브 연결'로 사용자 브라우저에서 동의한 뒤 저장, 자동 갱신)
 - 루트: 내 드라이브/증빙관리 (앱이 생성). 아래에 YYYY/재원코드/거래번호 폴더.
 - LEDGER_DRIVE_MOCK=1 이면 드라이브 대신 app/drive_mock/ 로컬 폴더에 저장 (테스트·오프라인용).
   LEDGER_DRIVE_MOCK_DIR 로 그 폴더를 바꿀 수 있다 (상대 경로는 app 폴더 기준).
@@ -12,12 +12,14 @@ import io
 import json
 import os
 import re
+import secrets
 import shutil
 import threading
 from pathlib import Path
 
+import auth
+
 APP_DIR = Path(__file__).resolve().parent
-CLIENT_SECRET = APP_DIR / "google_client_secret.json"
 TOKEN_PATH = APP_DIR / "google_token.json"
 FOLDER_CACHE = APP_DIR / "drive_folders.json"
 _MOCK_ENV = os.environ.get("LEDGER_DRIVE_MOCK_DIR", "").strip()
@@ -39,7 +41,7 @@ def mock() -> bool:
 
 
 def configured() -> bool:
-    return mock() or CLIENT_SECRET.exists()
+    return mock() or auth.client_path().exists()
 
 
 def connected() -> bool:
@@ -57,13 +59,18 @@ def _mark_expired():
     EXPIRED_FLAG.write_text("expired", encoding="utf-8")
 
 
+def _rm(p: Path):
+    """Docker 에서는 이 파일들이 /data 로 가는 심볼릭 링크다: 링크가 아니라 가리키는 파일을 지운다."""
+    p.resolve().unlink(missing_ok=True)
+
+
 def _clear_expired():
-    EXPIRED_FLAG.unlink(missing_ok=True)
+    _rm(EXPIRED_FLAG)
 
 
 def status() -> dict:
     return {"mock": mock(), "configured": configured(), "connected": connected(), "expired": _expired_flag(),
-            "client_secret_path": str(CLIENT_SECRET), "root": ROOT_NAME}
+            "client_secret_path": str(auth.client_path()), "root": ROOT_NAME}
 
 
 # ---------- 인증 ----------
@@ -87,24 +94,65 @@ def _creds():
     return creds
 
 
-def connect() -> dict:
-    """브라우저를 열어 OAuth 동의 후 토큰 저장 (서버 PC에서 실행)."""
-    if mock():
-        return status()
-    if not CLIENT_SECRET.exists():
-        raise DriveError(f"OAuth 클라이언트 파일이 없습니다: {CLIENT_SECRET.name}. README 의 발급 절차를 따라 설정에서 업로드하세요.")
-    from google_auth_oauthlib.flow import InstalledAppFlow
-    flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_SECRET), SCOPES)
+def _flow(state: str | None = None):
+    """로그인과 같은 OAuth 클라이언트·리다이렉트 URI 를 쓴다 (auth.py): 구글 콘솔에 등록된 주소가 그것뿐이고,
+    서버(Docker)에는 브라우저가 없어 run_local_server 를 쓸 수 없다 (2026-11-12)."""
+    from google_auth_oauthlib.flow import Flow
     try:
-        creds = flow.run_local_server(port=0, open_browser=True, prompt="consent", timeout_seconds=180,
-                                      success_message="드라이브 연결이 완료되었습니다. 이 창을 닫고 앱으로 돌아가세요.")
+        info = auth.client_info()
+    except auth.AuthError as e:
+        raise DriveError(str(e)) from e
+    uri = auth.redirect_uri()
+    if uri.startswith("http://"):  # 로컬(루프백)은 http. oauthlib 기본은 https 만 허용
+        os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+    os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+    flow = Flow.from_client_config({"web": info}, scopes=SCOPES, state=state)
+    flow.redirect_uri = uri
+    return flow
+
+
+def connect_url() -> tuple[str, str, str]:
+    """(구글 동의 화면 주소, state, PKCE verifier). 사용자의 브라우저가 이 주소로 가고, 구글은 /auth/callback 으로 돌아온다."""
+    flow = _flow()
+    # state 의 "drive." 머리로 /auth/callback 이 로그인 콜백과 구분한다
+    url, state = flow.authorization_url(access_type="offline", prompt="select_account consent", include_granted_scopes="false",
+                                        state="drive." + secrets.token_urlsafe(24))
+    return url, state, flow.code_verifier
+
+
+def _not_found(e) -> bool:
+    """구글의 404 인가. 오류 글에는 요청 주소(파일 ID)가 들어 있어 '404' 만 찾으면 ID 에 걸린다."""
+    return "HttpError 404" in str(e) or "notFound" in str(e)
+
+
+def _check_same_drive(creds):
+    """새 토큰이 기존 '증빙관리' 폴더를 볼 수 있어야 한다. 다른 계정·다른 프로젝트의 토큰이면 기존 파일이 404 가 되고,
+    증빙 동기화(store.evidence_sync)가 장부의 증빙 행을 지운다. '연결 해제'(폴더 캐시 삭제) 뒤에는 확인하지 않는다."""
+    root = _cache_load().get(ROOT_NAME)
+    if not root:
+        return
+    from googleapiclient.discovery import build
+    try:
+        build("drive", "v3", credentials=creds, cache_discovery=False).files().get(fileId=root["id"], fields="id").execute()
     except Exception as e:
-        msg = str(e)
-        if "access_denied" in msg:
-            raise DriveError("접근이 거부되었습니다. Google Cloud 콘솔의 '대상 → 테스트 사용자'에 이 계정을 추가했는지 확인하세요.") from e
-        raise DriveError(f"로그인이 완료되지 않았습니다 (3분 초과 또는 취소). 다시 시도하세요. {msg[:120]}") from e
-    if creds is None:
-        raise DriveError("로그인이 완료되지 않았습니다 (3분 초과 또는 창 닫힘). 다시 시도하세요.")
+        if not _not_found(e):  # 네트워크 오류 등: 계정 탓이 아니다
+            raise DriveError(f"기존 '증빙관리' 폴더를 확인하지 못했습니다. 다시 시도하세요. ({str(e)[:40]} … {str(e)[-80:]})") from e
+        raise DriveError("이 구글 계정으로는 기존 '증빙관리' 폴더를 열 수 없습니다. 처음 연결한 계정으로 다시 시도하세요. "
+                         "(다른 계정으로 바꾸면 기존 증빙 파일을 볼 수 없고, 그 증빙 기록은 다음 조회 때 장부에서 지워집니다)") from e
+
+
+def finish_connect(code: str, state: str, verifier: str | None) -> dict:
+    """콜백: 코드를 토큰으로 바꿔 저장한다. state 대조는 호출자(main.py)가 서명 쿠키로 한다."""
+    flow = _flow(state=state)
+    flow.code_verifier = verifier
+    try:
+        flow.fetch_token(code=code)
+    except Exception as e:
+        raise DriveError(f"구글 토큰을 받지 못했습니다. 다시 시도하세요. {str(e)[:120]}") from e
+    creds = flow.credentials
+    if not creds.refresh_token:  # 없으면 1시간 뒤 다시 만료된다
+        raise DriveError("구글이 갱신 토큰을 주지 않았습니다. 다시 시도하세요.")
+    _check_same_drive(creds)
     TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
     _clear_expired()
     global _service
@@ -115,8 +163,8 @@ def connect() -> dict:
 def disconnect() -> dict:
     global _service
     _service = None
-    TOKEN_PATH.unlink(missing_ok=True)
-    FOLDER_CACHE.unlink(missing_ok=True)
+    _rm(TOKEN_PATH)
+    _rm(FOLDER_CACHE)
     _clear_expired()
     return status()
 
@@ -126,11 +174,13 @@ def save_client_secret(data: bytes):
         j = json.loads(data.decode("utf-8"))
     except Exception:
         raise DriveError("JSON 파일이 아닙니다.")
-    if not any(k in j for k in ("installed", "web")):
-        raise DriveError("OAuth 클라이언트 JSON 형식이 아닙니다 ('installed' 항목 필요: 데스크톱 앱 유형으로 발급하세요).")
-    if "web" in j and "installed" not in j:
-        raise DriveError("'웹 애플리케이션' 유형입니다. '데스크톱 앱' 유형으로 다시 발급하세요.")
-    CLIENT_SECRET.write_bytes(data)
+    info = j.get("web") or j.get("installed") if isinstance(j, dict) else None
+    if not isinstance(info, dict) or not all(info.get(k) for k in ("client_id", "auth_uri", "token_uri")):  # Flow 가 요구하는 항목
+        raise DriveError("OAuth 클라이언트 JSON 형식이 아닙니다 ('web' 또는 'installed' 항목에 client_id, auth_uri, token_uri 필요).")
+    uri = auth.redirect_uri()
+    if not j.get("web") and not uri.startswith(("http://127.0.0.1", "http://localhost")):
+        raise DriveError(f"'데스크톱 앱' 유형은 리다이렉트 주소 {uri} 를 받지 않습니다. '웹 애플리케이션' 유형으로 발급하세요.")
+    auth.client_path().write_bytes(data)  # 구글 로그인도 이 파일을 쓴다 (_flow)
 
 
 def _svc():
@@ -192,11 +242,12 @@ def ensure_folder(parts: list[str], root: str | None = None) -> dict:
         cache = _cache_load()
         if key in cache:
             try:  # 폴더가 휴지통/삭제됐으면 캐시를 버리고 다시 만든다
-                meta = _svc().files().get(fileId=cache[key]["id"], fields="trashed").execute()
+                meta = _guard(lambda: _svc().files().get(fileId=cache[key]["id"], fields="trashed").execute())
                 if not meta.get("trashed"):
                     return cache[key]
-            except Exception:
-                pass
+            except DriveError as e:  # 만료·네트워크 오류로는 캐시를 버리지 않는다: 다시 연결할 때 계정 확인에 쓴다 (_check_same_drive)
+                if not _not_found(e):
+                    raise
             cache = {k: v for k, v in cache.items() if not k.startswith(key.split("/")[0])}
             _cache_save(cache)
         def run():
@@ -282,7 +333,7 @@ def file_meta(file_id: str) -> dict | None:
         try:
             f = _svc().files().get(fileId=file_id, fields="name, trashed, parents").execute()
         except Exception as e:
-            if "404" in str(e) or "notFound" in str(e):
+            if _not_found(e):
                 return None
             raise
         return {"name": f.get("name") or "", "trashed": bool(f.get("trashed")), "parents": list(f.get("parents") or [])}

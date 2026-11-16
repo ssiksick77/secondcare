@@ -458,6 +458,11 @@ def main() -> int:
         ck("기본 화면 있어도 ?menu=1 은 메뉴", pg.url.endswith("/enter?menu=1") and pg.evaluate("document.querySelectorAll('.enter-btn').length") == 3, pg.url)
         if sv.mode == "db": sv.call("POST", "/api/me/home", {"home": ""})
         else: pg.evaluate("localStorage.removeItem('ledger-home')")
+        # 드라이브 연결 뒤 돌아온 화면: 새로 열린 페이지에서 설정 창이 열리고 결과가 보인다 (2026-11-12)
+        for d, want in (("err&msg=%EA%B1%B0%EB%B6%80", "연결 실패: 거부"), ("ok", "드라이브가 연결되었습니다.")):
+            pg.goto(sv.base + f"/fund?drive={d}"); pg.wait_for_timeout(1500)
+            ck(f"드라이브 결과 ({d[:3]}): 설정 창 + 문구 + 주소 정리", pg.evaluate("document.querySelector('#dlg-settings').open") and pg.inner_text("#settings-msg") == want
+               and pg.url.endswith("/fund"), (pg.url, pg.inner_text("#settings-msg")))
         b.close()
     # 우회 없는 서버: 로그인 화면 구조 (랜드마크·h1·버튼·오류 안내)
     with Server("ui-noauth", auth_bypass=False) as sv, sync_playwright() as pw:

@@ -203,6 +203,8 @@ def auth_login():
 
 @app.get("/auth/callback")
 def auth_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    if state.startswith("drive."):  # 드라이브 연결의 콜백 (같은 리다이렉트 URI 를 쓴다. drive.connect_url)
+        return _drive_callback(request, auth.verify(request.cookies.get(auth.STATE_COOKIE)) or {}, code, state, error)
     if error or not code:
         return RedirectResponse(f"/login?err=cancel", status_code=302)
     try:
@@ -219,6 +221,27 @@ def auth_callback(request: Request, code: str = "", state: str = "", error: str 
     resp = RedirectResponse("/enter", status_code=302)
     resp.set_cookie(auth.COOKIE, auth.session_token(user["email"], user["name"]), max_age=auth.SESSION_DAYS * 86400,
                     httponly=True, samesite="lax")
+    resp.delete_cookie(auth.STATE_COOKIE)
+    return resp
+
+
+def _drive_callback(request: Request, saved: dict, code: str, state: str, error: str):
+    """드라이브 연결 콜백. /auth/ 는 로그인 없이 열리는 경로라 여기서 로그인을 다시 확인한다. 결과는 /fund?drive=… 로 알린다."""
+    if not auth.user_from_request(request):
+        return RedirectResponse("/login", status_code=302)
+    try:
+        if (request.state.user or {}).get("role") == "researcher":
+            raise drive.DriveError("드라이브 연결은 담당자 이상만 바꿀 수 있습니다.")
+        if saved.get("state") != state:  # 쿠키 없음: 10분 초과, 또는 앱을 연 주소와 리다이렉트 주소의 호스트가 다름
+            raise drive.DriveError("연결 요청이 만료되었습니다. 다시 시도하세요. (앱 주소가 구글에 등록한 리다이렉트 주소와 같은지도 확인하세요)")
+        if error == "access_denied":
+            raise drive.DriveError("접근이 거부되었습니다. Google Cloud 콘솔의 '대상 → 테스트 사용자'에 이 계정을 추가했는지 확인하세요.")
+        if error or not code:
+            raise drive.DriveError("로그인이 완료되지 않았습니다. 다시 시도하세요.")
+        drive.finish_connect(code, state, saved.get("verifier"))
+        resp = RedirectResponse("/fund?drive=ok", status_code=302)
+    except drive.DriveError as e:
+        resp = RedirectResponse(f"/fund?drive=err&msg={_q(str(e))}", status_code=302)
     resp.delete_cookie(auth.STATE_COOKIE)
     return resp
 
@@ -814,19 +837,38 @@ def drive_status():
     return drive.status()
 
 
+def _drive_admin(request: Request):
+    """드라이브 연결은 앱 전체가 쓰는 토큰을 바꾼다: 연구원은 못 한다."""
+    if (getattr(request.state, "user", None) or {}).get("role") == "researcher":
+        raise HTTPException(403, "드라이브 연결은 담당자 이상만 바꿀 수 있습니다.")
+
+
 @app.post("/api/drive/client-secret")
-async def drive_client_secret(file: UploadFile = File(...)):
+async def drive_client_secret(request: Request, file: UploadFile = File(...)):
+    # 구글 로그인도 이 파일을 쓴다: 잘못 올리면 아무도 로그인하지 못한다. 마스터, 또는 로그인 우회(로컬 1인) 모드만
+    if not ((getattr(request.state, "user", None) or {}).get("is_master") or auth.bypass_email()):
+        raise HTTPException(403, "OAuth 클라이언트는 마스터 계정만 바꿀 수 있습니다 (구글 로그인도 이 파일을 씁니다).")
     drive.save_client_secret(await file.read())
     return drive.status()
 
 
 @app.post("/api/drive/connect")
-def drive_connect():
-    return drive.connect()
+def drive_connect(request: Request):
+    """구글 동의 화면 주소 {url}. 화면이 그 주소로 이동하고, 구글은 /auth/callback 으로 돌아온다 (_drive_callback)."""
+    _drive_admin(request)
+    if drive.mock():
+        return drive.status()
+    import time
+    url, state, verifier = drive.connect_url()
+    resp = JSONResponse({"url": url})
+    resp.set_cookie(auth.STATE_COOKIE, auth.sign({"state": state, "verifier": verifier, "exp": int(time.time()) + 600}),
+                    max_age=600, httponly=True, samesite="lax")
+    return resp
 
 
 @app.post("/api/drive/disconnect")
-def drive_disconnect():
+def drive_disconnect(request: Request):
+    _drive_admin(request)
     return drive.disconnect()
 
 

@@ -432,6 +432,108 @@ def main() -> int:
 
         # ---- 서명 쿠키로 로그인한 계정: 최초 로그인 이름 입력 (SQLite 만 묻는다) ----
         ck_ = sv.session_cookie()
+
+        # ---- 드라이브 연결은 브라우저 리다이렉트 (서버에서 브라우저를 열지 않는다, 2026-11-12). 구글은 부르지 않는다 ----
+        import json, time, urllib.parse
+        import auth, drive  # session_cookie 가 app 을 sys.path 에 넣고 비밀키를 맞췄다
+        st = f"{auth.STATE_COOKIE}=" + auth.sign({"state": "drive.s1", "verifier": "v", "exp": int(time.time()) + 60})
+        s, loc = sv.get_raw("/auth/callback?error=access_denied&state=drive.s1", cookie=f"{ck_}; {st}")
+        ck("드라이브 콜백: 거부 → /fund?drive=err", s == 302 and (loc or "").startswith("/fund?drive=err"), (s, loc))
+        s, loc = sv.get_raw("/auth/callback?code=x&state=drive.other", cookie=f"{ck_}; {st}")
+        ck("드라이브 콜백: state 불일치 → /fund?drive=err (만료 안내)", s == 302 and (loc or "").startswith("/fund?drive=err") and "만료" in urllib.parse.unquote(loc), (s, loc))
+        s, loc = sv.get_raw("/auth/callback?code=x&state=drive.s1", cookie=ck_)
+        ck("드라이브 콜백: state 쿠키 없음 → /fund?drive=err", s == 302 and (loc or "").startswith("/fund?drive=err"), (s, loc))
+        s, loc = sv.get_raw("/auth/callback?code=x&state=s1", cookie=f"{ck_}; {st}")
+        ck("로그인 콜백: drive. 머리가 없으면 로그인 흐름 그대로 (/login?err=)", s == 302 and (loc or "").startswith("/login?err="), (s, loc))
+        s, loc = sv.get_raw("/auth/callback?code=x&state=drive.s1", cookie=st)
+        ck("드라이브 콜백: 미로그인 → /login", s == 302 and loc == "/login", (s, loc))
+        fake = os.path.join(sv.dir, "fake_client.json")
+        with open(fake, "w", encoding="utf-8") as f:
+            json.dump({"web": {"client_id": "cid", "client_secret": "x", "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                               "token_uri": "https://oauth2.googleapis.com/token"}}, f)
+        old = {k: os.environ.get(k) for k in ("LEDGER_OAUTH_CLIENT", "LEDGER_OAUTH_REDIRECT")}
+        os.environ.update(LEDGER_OAUTH_CLIENT=fake, LEDGER_OAUTH_REDIRECT="https://app.test/auth/callback")
+        try:
+            url, state, verifier = drive.connect_url()
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        ck("드라이브 연결 주소: 앱 콜백·drive.file·offline", q.get("redirect_uri") == ["https://app.test/auth/callback"] and q.get("scope") == drive.SCOPES
+           and q.get("access_type") == ["offline"] and q.get("state") == [state] and state.startswith("drive.") and bool(verifier), q)
+
+        # 토큰 저장 (finish_connect): 구글 대신 가짜 flow. 갱신 토큰이 없거나 기존 폴더를 못 보는 계정이면 옛 토큰을 그대로 둔다
+        import pathlib, types
+        keep = (drive._flow, drive.TOKEN_PATH, drive.EXPIRED_FLAG, drive.FOLDER_CACHE, drive._check_same_drive)
+        tmp = pathlib.Path(sv.dir)
+        drive.TOKEN_PATH, drive.EXPIRED_FLAG, drive.FOLDER_CACHE = tmp / "tok.json", tmp / "tok.expired", tmp / "folders.json"
+        drive.TOKEN_PATH.write_text("old", encoding="utf-8"); drive.EXPIRED_FLAG.write_text("x", encoding="utf-8")
+        cred = types.SimpleNamespace(refresh_token=None, to_json=lambda: "new")
+        drive._flow = lambda state=None: types.SimpleNamespace(fetch_token=lambda code: None, credentials=cred)
+        def fails():
+            try:
+                drive.finish_connect("c", "drive.s", "v")
+            except drive.DriveError:
+                return drive.TOKEN_PATH.read_text(encoding="utf-8") == "old" and drive.EXPIRED_FLAG.exists()
+            return False
+        try:
+            ck("드라이브 토큰: 갱신 토큰 없음 → 오류, 옛 토큰 유지", fails())
+            cred.refresh_token = "r"
+            drive.FOLDER_CACHE.write_text(json.dumps({drive.ROOT_NAME: {"id": "root1"}}), encoding="utf-8")
+            import googleapiclient.discovery as gd
+            real_build, seen, answer = gd.build, [], [Exception("<HttpError 404 notFound>")]
+            def execute():
+                if answer[0]:
+                    raise answer[0]
+                return {"id": "root1"}
+            files = types.SimpleNamespace(get=lambda fileId, fields: seen.append(fileId) or types.SimpleNamespace(execute=execute))
+            gd.build = lambda *a, **k: types.SimpleNamespace(files=lambda: files)
+            def why():
+                try:
+                    drive.finish_connect("c", "drive.s", "v")
+                except drive.DriveError as e:
+                    return str(e)
+            try:
+                ck("드라이브 토큰: 기존 폴더 404 → 계정 안내, 옛 토큰 유지", "처음 연결한 계정" in (why() or "") and fails() and seen[0] == "root1", seen)
+                answer[0] = Exception("timed out")
+                ck("드라이브 토큰: 확인 실패(네트워크) → 다시 시도 안내, 옛 토큰 유지", "확인하지 못했습니다" in (why() or "") and fails())
+                answer[0] = None
+                drive.finish_connect("c", "drive.s", "v")
+                ck("드라이브 토큰: 기존 폴더가 보이면 저장", drive.TOKEN_PATH.read_text(encoding="utf-8") == "new" and not drive.EXPIRED_FLAG.exists())
+            finally:
+                gd.build = real_build
+            drive.TOKEN_PATH.write_text("old", encoding="utf-8"); drive.EXPIRED_FLAG.write_text("x", encoding="utf-8")
+            drive.FOLDER_CACHE.unlink()  # 폴더 캐시가 없으면(첫 연결·연결 해제 뒤) 계정 확인 없이 저장
+            drive.finish_connect("c", "drive.s", "v")
+            ck("드라이브 토큰: 저장하고 만료 표시 지움", drive.TOKEN_PATH.read_text(encoding="utf-8") == "new" and not drive.EXPIRED_FLAG.exists())
+        finally:
+            drive._flow, drive.TOKEN_PATH, drive.EXPIRED_FLAG, drive.FOLDER_CACHE, drive._check_same_drive = keep
+        # OAuth 클라이언트 업로드: 구글 로그인도 쓰는 파일이라 형식을 먼저 본다. 틀리면 파일을 건드리지 않는다
+        os.environ.update(LEDGER_OAUTH_CLIENT=fake, LEDGER_OAUTH_REDIRECT="https://app.test/auth/callback")
+        try:
+            before = open(fake, encoding="utf-8").read()
+            uris = {"auth_uri": "https://accounts.google.com/o/oauth2/auth", "token_uri": "https://oauth2.googleapis.com/token"}
+            bad = []
+            for name, body in (("client_id 없음", {"web": {}}), ("auth_uri 없음", {"web": {"client_id": "c"}}), ("HTTPS 주소에 데스크톱 유형", {"installed": dict(uris, client_id="c")}),
+                               ("빈 web + 데스크톱", {"web": {}, "installed": dict(uris, client_id="c")}), ("객체 아님", [1])):
+                try:
+                    drive.save_client_secret(json.dumps(body).encode())
+                    bad.append(name)
+                except drive.DriveError:
+                    pass
+            ck("클라이언트 업로드: 잘못된 형식은 거부, 파일 그대로", not bad and open(fake, encoding="utf-8").read() == before, bad)
+            drive.save_client_secret(json.dumps({"web": dict(uris, client_id="c2")}).encode())
+            ck("클라이언트 업로드: 로그인 클라이언트 파일에 저장", auth.client_info()["client_id"] == "c2")
+            os.environ["LEDGER_OAUTH_REDIRECT"] = "http://127.0.0.1:8791/auth/callback"
+            drive.save_client_secret(json.dumps({"installed": dict(uris, client_id="c3")}).encode())
+            ck("클라이언트 업로드: 로컬(루프백) 주소는 데스크톱 유형도 받음", auth.client_info()["client_id"] == "c3")
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        s, r = sv.call("POST", "/api/drive/connect", cookie=ck_)
+        if sv.mode != "db":  # SQLite 는 이름 입력 전이라 403 (연구원 검사는 아래에서 따로 본다)
+            ck("드라이브 연결: 모의 모드는 상태만", s == 200 and r.get("mock") is True and "url" not in r, (s, r))
+
         s, r = sv.call("GET", "/api/me", cookie=ck_)
         ck("쿠키 로그인: /api/me 이메일", s == 200 and r.get("email") == sv.TEST_EMAIL, (s, r))
         if sv.mode == "db":
@@ -499,10 +601,27 @@ def main() -> int:
             ck("추가: 이름 포함 (공백 정리)", s == 200 and r.get("added") is True, (s, r))
             s, r = sv.call("GET", "/api/me", cookie=sv.session_cookie(named))
             ck("이름 포함 계정: 이름 입력 건너뜀, 이름·역할", s == 200 and r.get("needs_name") is False and r.get("name") == "센터 장" and r.get("role") == "manager", (s, r))
+            import urllib.request, urllib.error
+            def upload(cookie):  # OAuth 클라이언트 업로드 (multipart) → (상태, 본문)
+                form = b'--b\r\nContent-Disposition: form-data; name="file"; filename="c.json"\r\nContent-Type: application/json\r\n\r\n{"web":{"client_id":"c"}}\r\n--b--\r\n'
+                try:
+                    return urllib.request.urlopen(urllib.request.Request(sv.base + "/api/drive/client-secret", data=form, method="POST",
+                                                                         headers={"Content-Type": "multipart/form-data; boundary=b", "Cookie": cookie})).status, ""
+                except urllib.error.HTTPError as e:
+                    return e.code, e.read().decode("utf-8", "replace")
+            s, r = upload(sv.session_cookie(named))
+            ck("담당자(마스터 아님): OAuth 클라이언트 업로드 403", s == 403 and "마스터" in r and not os.path.exists(os.path.join(sv.dir, "no_oauth_client.json")), (s, r))
             s, r = sv.call("DELETE", f"/api/users/{named}", cookie=ck_)
             ck("이름 포함 계정 삭제", s == 200, (s, r))
             s, r = sv.call("POST", "/api/me/name", {"name": "다른 사람"}, cookie=ck_o)
             ck("허용 뒤: 이름 저장", s == 200, (s, r))
+            for p in ("connect", "disconnect"):
+                s, r = sv.call("POST", f"/api/drive/{p}", cookie=ck_o)
+                ck(f"연구원: 드라이브 {p} 403", s == 403 and "담당자" in str(r), (s, r))
+            s, loc = sv.get_raw("/auth/callback?code=x&state=drive.s1", cookie=f"{ck_o}; {st}")
+            ck("연구원: 드라이브 콜백 → /fund?drive=err (담당자 안내)", s == 302 and (loc or "").startswith("/fund?drive=err") and "담당자" in urllib.parse.unquote(loc), (s, loc))
+            s, r = upload(ck_o)
+            ck("연구원(마스터 아님): OAuth 클라이언트 업로드 403", s == 403 and not os.path.exists(os.path.join(sv.dir, "no_oauth_client.json")), s)
             s, r = sv.call("GET", "/api/users", cookie=ck_o)
             ck("비마스터: 목록 403", s == 403, (s, r))
             s, r = sv.call("POST", "/api/users", {"email": "x@example.com"}, cookie=ck_o)

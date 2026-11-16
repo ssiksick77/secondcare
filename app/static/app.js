@@ -1270,7 +1270,7 @@ $("#dash-year").addEventListener("change", async e => {
 $("#btn-reload").addEventListener("click", load);
 // 로그인 사용자 표시 · 로그아웃 (auth.py)
 let ME = {};  // /api/me: {email, name, is_master}
-api("GET", "/api/me").then(u => { if (u && u.email) { ME = u; $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
+const ME_READY = api("GET", "/api/me").then(u => { if (u && u.email) { ME = u; $("#top-user").textContent = u.name || u.email; $("#top-user").title = `로그인 계정: ${u.email}`; } }).catch(() => { });
 $("#btn-logout").addEventListener("click", async () => { try { await api("POST", "/auth/logout"); } catch { } location.href = "/login"; });
 document.addEventListener("keydown", e => {
   if (e.key === "F5") { e.preventDefault(); load(); }
@@ -1287,7 +1287,7 @@ async function refreshIfStale() {
 document.addEventListener("visibilitychange", refreshIfStale);
 window.addEventListener("focus", refreshIfStale);
 
-load();
+const READY = load();
 
 // ================= AI 기능 =================
 let AI = { enabled: false, model: "" };
@@ -2302,14 +2302,23 @@ $("#drive-secret").addEventListener("change", async e => {
   catch (err) { setMsg("등록 실패: " + err.message, true); }
 });
 $("#drive-connect").addEventListener("click", async () => {
-  setMsg("브라우저에서 구글 로그인 창이 열립니다. 로그인 후 이 화면으로 돌아오세요…");
   $("#drive-connect").disabled = true;
-  try { await api("POST", "/api/drive/connect"); setMsg("드라이브가 연결되었습니다."); }
-  catch (err) { setMsg("연결 실패: " + err.message, true); }
-  finally { refreshDriveStatus(); }
+  try {
+    const r = await api("POST", "/api/drive/connect");
+    if (r.url) { setMsg("구글 로그인 화면으로 이동합니다…"); location.href = r.url; return; }  // 돌아오면 /fund?drive=ok|err
+    setMsg("드라이브가 연결되었습니다.");
+  } catch (err) { setMsg("연결 실패: " + err.message, true); }
+  refreshDriveStatus();
 });
+{ // 구글 동의 화면에서 돌아온 결과 (/fund?drive=ok|err&msg=…)
+  const q = new URLSearchParams(location.search), d = q.get("drive");
+  if (d) {
+    history.replaceState(null, "", location.pathname);
+    Promise.all([READY, ME_READY]).then(openSettings).then(() => setMsg(d === "ok" ? "드라이브가 연결되었습니다." : "연결 실패: " + (q.get("msg") || ""), d !== "ok"));  // 결과 문구는 설정 창 안에 있고, 설정 창은 DATA·ME 가 있어야 열린다
+  }
+}
 $("#drive-disconnect").addEventListener("click", async () => {
-  if (!await confirmDlg({ title: "드라이브 연결 해제", body: "토큰을 삭제합니다. 업로드된 파일은 드라이브에 그대로 남습니다.", verb: "연결 해제", danger: true })) return;
+  if (!await confirmDlg({ title: "드라이브 연결 해제", body: "토큰을 삭제합니다. 업로드된 파일은 드라이브에 그대로 남습니다. 다시 연결할 때는 같은 구글 계정을 쓰세요. 다른 계정은 기존 증빙 파일을 볼 수 없고, 그 증빙 기록은 다음 조회 때 장부에서 지워집니다.", verb: "연결 해제", danger: true })) return;
   try { await api("POST", "/api/drive/disconnect"); setMsg("연결을 해제했습니다."); } catch (err) { setMsg(err.message, true); }
   refreshDriveStatus();
 });
