@@ -2470,7 +2470,8 @@ window.addEventListener("afterprint", () => { if (!document.body.classList.conta
 // 실물 증빙(영수증 등)을 붙이는 A4 한 장: 위 3행 표(증빙번호·증빙종류·금액 / 거래처·적요 / 비고) + 아래 빈 부착란. 집행 단계와 무관하게 출력
 let MOUNT = null;   // { items: [증빙 행], i, btn }
 function mountHtml(e) {
-  const r = DATA.exec.find(x => x["거래번호"] === e["거래번호"]), t = x => esc(x == null ? "" : x);
+  // 증빙의 거래번호 칸은 집행이면 거래번호, 적립금이면 적립번호
+  const r = DATA.exec.find(x => x["거래번호"] === e["거래번호"]) || DATA.deposit.find(x => x["적립번호"] === e["거래번호"]), t = x => esc(x == null ? "" : x);
   const amt = r ? vcNum(r["금액"] || 0) + "원" : "";
   return `<article class="ev-mount">
   <table class="mt-f"><colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"><col class="c5"><col class="c6"><col class="c7"><col class="c8"></colgroup><tbody>

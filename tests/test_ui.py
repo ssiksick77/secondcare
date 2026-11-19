@@ -243,6 +243,8 @@ def main() -> int:
                 break
             pg.wait_for_timeout(300)
         ck("적립 증빙 항목 추가 → 목록·표 개수", n_ == 1 and pg.inner_text(f"#deposit-table tbody tr[data-row='{dep_row}'] td[data-col='증빙']").strip() == "1", n_)
+        mt = pg.evaluate(f"mountHtml(DATA.evidence.find(e=>e['거래번호']==={dep_no!r}))")
+        ck("적립 증빙 첨부 양식: 거래처·적요·금액", "검사상사" in mt and "드로어 검사" in mt and "9,000원" in mt, mt[:400])
         pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
         # ---- 적립금 단계 타임라인 (사용 행) ----
         pg.click(f"#deposit-table tbody tr[data-row='{dep_row}'] td[data-col='거래처']"); pg.wait_for_timeout(900)
